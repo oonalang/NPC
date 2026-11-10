@@ -110,7 +110,9 @@ bool HardStateBlocked(std::uintptr_t weapon) noexcept {
 }
 
 bool PhysicalFire(std::uintptr_t param) noexcept {
-    constexpr std::size_t fields[]{0x18,0x1b,0x1c,0x1e,0x20,0x24};
+    // The native button update rebuilds these fields before our hook. Preserve
+    // release edges too, so synthetic input cannot replace a user's stop command.
+    constexpr std::size_t fields[]{0x18,0x1a,0x1b,0x1c,0x1e,0x1f,0x20,0x24,0x25};
     for (auto offset : fields) if (Field<bool>(param, offset)) return true;
 
 
@@ -189,6 +191,7 @@ void Buttons(void* unit, void* param, Metadata metadata) {
         local.cancellation.Reset();
         detected.store(FireMode::Unsupported, std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext, std::memory_order_release);
+        reason.store("Waiting for local gameplay context", std::memory_order_release);
         viewportValid.store(false, std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         return;
@@ -248,19 +251,23 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     frame.fullyAimed = frame.aiming &&
         (At<BoolGetter>(0x54B5D84)(weapon,nullptr) ||
          (std::isfinite(percentage) && percentage >= 0.995f));
-    frame.shotReady = At<BoolGetter>(0x54AFFE4)(weapon,nullptr);
+    const auto klass = Field<std::uintptr_t>(weapon,0);
+    const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
+    const bool knownPrepare = prepare == library + 0x54A373C;
+    // Slot 274 has the same native table base as PrepareInputParam (slot 202).
+    // Derived CanFire handlers can impose additional restrictions; calling the
+    // base implementation would skip those checks. Support verified handlers only.
+    const auto canFire = klass ? Field<std::uintptr_t>(klass,0x11F0) : 0;
+    const bool knownReadiness = canFire == library + 0x54AFFE4;
+    frame.shotReady = knownReadiness && At<BoolGetter>(0x54AFFE4)(weapon,nullptr);
 
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
     const bool burst = At<BoolGetter>(0x5474344)(weapon,nullptr);
-    const auto klass = Field<std::uintptr_t>(weapon,0);
-    const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
-    const bool knownPrepare = prepare == library + 0x54A373C;
     const bool potentiallyRelease = At<BoolGetter>(0x547496C)(weapon,nullptr);
     const bool release = !knownPrepare || (potentiallyRelease &&
         At<BoolGetter>(0xC916900)(controller,nullptr));
-    const bool ordinaryGun = knownPrepare &&
-        At<BoolGetter>(0x5473F58)(weapon,nullptr);
+    const bool ordinaryGun = knownPrepare && knownReadiness && frame.ammoAvailable;
     if (component && ordinaryGun && !burst && !release) {
         frame.fireMode = At<BoolGetter>(0x5474278)(weapon,nullptr)
             ? FireMode::Single : FireMode::Automatic;
@@ -290,6 +297,7 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     else if (frame.manualActive) detail = "Manual fire active";
     else if (!frame.ammoAvailable) detail = "Weapon cannot fire or out of ammo";
     else if (!knownPrepare) detail = "Unsupported weapon input handler";
+    else if (!knownReadiness) detail = "Unsupported weapon readiness handler";
     else if (release) detail = "Release-to-fire mode unsupported";
     else if (burst) detail = "Burst mode unsupported";
     else if (frame.fireMode == FireMode::Unsupported) detail = "Unsupported weapon fire mode";
