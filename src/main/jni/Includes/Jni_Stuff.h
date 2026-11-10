@@ -9,6 +9,10 @@
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #include <openssl/md5.h>
+#include <openssl/ssl.h>
+#include <openssl/x509_vfy.h>
+#include <dirent.h>
+#include <cstdio>
 #include <iomanip>
 #include <sstream>
 #include <ctime>
@@ -344,6 +348,38 @@ static bool BuildLicenseSerial(const char *userKey, std::string &serial) {
     return success;
 }
 
+// OpenSSL looks CA files up by its own SHA-1 subject hash while Android names the
+// system certificates with the legacy MD5 hash, so CURLOPT_CAPATH cannot use the
+// platform store. Load the certificates into the SSL context instead.
+inline CURLcode LoadAndroidTrustStore(CURL * /*curl*/, void *sslContext, void * /*user*/
+) {
+    auto *context = static_cast<SSL_CTX *>(sslContext);
+    X509_STORE *store = context ? SSL_CTX_get_cert_store(context) : nullptr;
+    if (!store) return CURLE_SSL_CACERT;
+    // Android 14 moved the updatable store into the Conscrypt APEX; the system
+    // directory remains as the fallback location.
+    const char *directories[] = {"/apex/com.android.conscrypt/cacerts",
+                                 "/system/etc/security/cacerts"};
+    std::size_t loaded = 0;
+    for (const char *directory : directories) {
+        DIR *dir = opendir(directory);
+        if (!dir) continue;
+        while (dirent *entry = readdir(dir)) {
+            if (entry->d_name[0] == '.') continue;
+            const std::string path = std::string(directory) + "/" + entry->d_name;
+            FILE *file = std::fopen(path.c_str(), "rb");
+            if (!file) continue;
+            X509 *certificate = PEM_read_X509(file, nullptr, nullptr, nullptr);
+            std::fclose(file);
+            if (!certificate) continue;
+            if (X509_STORE_add_cert(store, certificate) == 1) ++loaded;
+            X509_free(certificate);
+        }
+        closedir(dir);
+    }
+    return loaded > 0 ? CURLE_OK : CURLE_SSL_CACERT;
+}
+
 std::string Login(const char *user_key) {
     bValid = false;
     g_Token.clear();
@@ -393,6 +429,9 @@ std::string Login(const char *user_key) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &chunk);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    // The bundled OpenSSL ships without roots and Android has no /etc/ssl/certs,
+    // so without this a valid key still fails with a connection error.
+    curl_easy_setopt(curl, CURLOPT_SSL_CTX_FUNCTION, LoadAndroidTrustStore);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 25L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
