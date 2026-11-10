@@ -2,6 +2,8 @@
 
 #include "../AstralPrtctn/json.hpp"
 #include "AntiChangePanel.h"
+#include "PanelLicense.h"
+#include <limits>
 #include <jni.h>
 #include <curl/curl.h>
 #include <openssl/rsa.h>
@@ -133,17 +135,18 @@ struct MemoryStruct {
 };
 
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
-    size_t realsize = size * nmemb;
-    struct MemoryStruct *mem = (struct MemoryStruct *) userp;
-    
-    mem->memory = (char *) realloc(mem->memory, mem->size + realsize + 1);
-    if (mem->memory == NULL) {
-        return 0;
-    }
-    memcpy(&(mem->memory[mem->size]), contents, realsize);
-    mem->size += realsize;
-    mem->memory[mem->size] = 0;
-    return realsize;
+    constexpr size_t maximumResponse = 32768;
+    auto *mem = static_cast<MemoryStruct *>(userp);
+    if (!mem || (nmemb && size > std::numeric_limits<size_t>::max() / nmemb)) return 0;
+    const size_t count = size * nmemb;
+    if (mem->size > maximumResponse || count > maximumResponse - mem->size) return 0;
+    auto *expanded = static_cast<char *>(realloc(mem->memory, mem->size + count + 1));
+    if (!expanded) return 0;
+    mem->memory = expanded;
+    memcpy(mem->memory + mem->size, contents, count);
+    mem->size += count;
+    mem->memory[mem->size] = '\0';
+    return count;
 }
 
 int ShowSoftKeyboardInput() {
@@ -266,59 +269,109 @@ std::string getClipboard() {
     return result.c_str();
 }
 
+// Reproduce the existing device identifier while keeping all JNI references
+// and thread attachment scoped to this request.
+static bool BuildLicenseSerial(const char *userKey, std::string &serial) {
+    if (!jvm || !userKey) return false;
+    JNIEnv *env = nullptr;
+    const jint status = jvm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
+    const bool attached = status == JNI_EDETACHED;
+    if (attached && jvm->AttachCurrentThread(&env, nullptr) != JNI_OK) return false;
+    if (!attached && status != JNI_OK) return false;
+    if (!env) return false;
+    if (env->PushLocalFrame(32) < 0) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (attached) jvm->DetachCurrentThread();
+        return false;
+    }
+    const bool success = [&]() -> bool {
+        const auto copyString = [&](jstring text, std::string &out) -> bool {
+            if (!text || env->ExceptionCheck()) return false;
+            const char *value = env->GetStringUTFChars(text, nullptr);
+            if (!value) return false;
+            out = value;
+            env->ReleaseStringUTFChars(text, value);
+            return !env->ExceptionCheck();
+        };
+        jclass threadClass = env->FindClass("android/app/ActivityThread");
+        if (!threadClass) return false;
+        jfieldID threadField = env->GetStaticFieldID(threadClass, "sCurrentActivityThread", "Landroid/app/ActivityThread;");
+        if (!threadField) return false;
+        jobject thread = env->GetStaticObjectField(threadClass, threadField);
+        jfieldID appField = env->GetFieldID(threadClass, "mInitialApplication", "Landroid/app/Application;");
+        if (!thread || !appField) return false;
+        jobject application = env->GetObjectField(thread, appField);
+        jclass contextClass = env->FindClass("android/content/Context");
+        if (!application || !contextClass) return false;
+        jmethodID resolverMethod = env->GetMethodID(contextClass, "getContentResolver", "()Landroid/content/ContentResolver;");
+        if (!resolverMethod) return false;
+        jobject resolver = env->CallObjectMethod(application, resolverMethod);
+        jclass secureClass = env->FindClass("android/provider/Settings$Secure");
+        if (!resolver || !secureClass || env->ExceptionCheck()) return false;
+        jmethodID getString = env->GetStaticMethodID(secureClass, "getString", "(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;");
+        if (!getString) return false;
+        jstring androidIdKey = env->NewStringUTF("android_id");
+        if (!androidIdKey) return false;
+        auto androidId = static_cast<jstring>(env->CallStaticObjectMethod(secureClass, getString, resolver, androidIdKey));
+        jclass buildClass = env->FindClass("android/os/Build");
+        if (!buildClass || env->ExceptionCheck()) return false;
+        jfieldID modelField = env->GetStaticFieldID(buildClass, "MODEL", "Ljava/lang/String;");
+        jfieldID brandField = env->GetStaticFieldID(buildClass, "BRAND", "Ljava/lang/String;");
+        if (!modelField || !brandField) return false;
+        auto model = static_cast<jstring>(env->GetStaticObjectField(buildClass, modelField));
+        auto brand = static_cast<jstring>(env->GetStaticObjectField(buildClass, brandField));
+        std::string androidIdValue, modelValue, brandValue;
+        if (!copyString(androidId, androidIdValue) || androidIdValue.empty() ||
+            !copyString(model, modelValue) || !copyString(brand, brandValue)) return false;
+        const std::string seed = std::string(userKey) + androidIdValue + modelValue + brandValue;
+        jclass uuidClass = env->FindClass("java/util/UUID");
+        if (!uuidClass) return false;
+        jmethodID fromBytes = env->GetStaticMethodID(uuidClass, "nameUUIDFromBytes", "([B)Ljava/util/UUID;");
+        jmethodID toString = env->GetMethodID(uuidClass, "toString", "()Ljava/lang/String;");
+        if (!fromBytes || !toString || seed.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) return false;
+        jbyteArray bytes = env->NewByteArray(static_cast<jsize>(seed.size()));
+        if (!bytes) return false;
+        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(seed.size()), reinterpret_cast<const jbyte *>(seed.data()));
+        if (env->ExceptionCheck()) return false;
+        jobject uuid = env->CallStaticObjectMethod(uuidClass, fromBytes, bytes);
+        if (!uuid || env->ExceptionCheck()) return false;
+        auto value = static_cast<jstring>(env->CallObjectMethod(uuid, toString));
+        return copyString(value, serial) && !serial.empty();
+    }();
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    env->PopLocalFrame(nullptr);
+    if (attached) jvm->DetachCurrentThread();
+    return success;
+}
+
 std::string Login(const char *user_key) {
-    if (!user_key || !*user_key) return "Enter a license key";
-    JNIEnv *env;
-    jvm->AttachCurrentThread(&env, 0);
-    
-    auto looperClass = env->FindClass("android/os/Looper");
-    auto prepareMethod = env->GetStaticMethodID(looperClass, "prepare", "()V");
-    env->CallStaticVoidMethod(looperClass, prepareMethod);
-    
-    jclass activityThreadClass = env->FindClass("android/app/ActivityThread");
-    jfieldID sCurrentActivityThreadField = env->GetStaticFieldID(activityThreadClass, "sCurrentActivityThread", "Landroid/app/ActivityThread;");
-    jobject sCurrentActivityThread = env->GetStaticObjectField(activityThreadClass, sCurrentActivityThreadField);
-    
-    jfieldID mInitialApplicationField = env->GetFieldID(activityThreadClass, "mInitialApplication", "Landroid/app/Application;");
-    jobject mInitialApplication = env->GetObjectField(sCurrentActivityThread, mInitialApplicationField);
-    
-    std::string hwid = user_key;
-    hwid += GetAndroidID(env, mInitialApplication);
-    hwid += GetDeviceModel(env);
-    hwid += GetDeviceBrand(env);
-    std::string UUID = GetDeviceUniqueIdentifier(env, hwid.c_str());
-    jvm->DetachCurrentThread();
-    std::string errMsg;
-	usedKey = user_key;  
-    
-	if (isVipKey(user_key)) {  
-        userType = "PREMIUM PAID";  
-    } else {  
-        userType = "PREMIUM PAID";  
-    }  
-	
     bValid = false;
     g_Token.clear();
     g_Auth.clear();
+    EXP.clear();
+    expiryTimestamp = 0;
+    usedKey.clear();
     if (!user_key || !*user_key) return "Enter a license key";
+    // Match PHP's default trim() for pasted license keys before computing the
+    // serial, constructing the request and verifying the signed claims.
+    const std::string input(user_key);
+    const char *trimCharacters = " \t\n\r\v";
+    const auto first = input.find_first_not_of(trimCharacters);
+    if (first == std::string::npos) return "Enter a license key";
+    const auto last = input.find_last_not_of(trimCharacters);
+    const std::string key = input.substr(first, last - first + 1);
+    std::string serial;
+    if (!BuildLicenseSerial(key.c_str(), serial)) return "Unable to identify this device";
 
-    struct MemoryStruct chunk{};
-    chunk.memory = (char *) malloc(1);
+    MemoryStruct chunk{};
+    chunk.memory = static_cast<char *>(malloc(1));
     if (!chunk.memory) return "Out of memory";
     chunk.memory[0] = '\0';
-    chunk.size = 0;
-
     CURL *curl = curl_easy_init();
-    if (!curl) {
-        free(chunk.memory);
-        return "Unable to initialize connection";
-    }
-
-    const std::string api_url = oxorany("https://freeshai.x10.mx/connect");
-    struct curl_slist *headers = nullptr;
-    headers = curl_slist_append(headers, "Content-Type: application/x-www-form-urlencoded");
-    char *encodedKey = curl_easy_escape(curl, user_key, 0);
-    char *encodedSerial = curl_easy_escape(curl, UUID.c_str(), 0);
+    if (!curl) { free(chunk.memory); return "Unable to initialize connection"; }
+    curl_slist *headers = curl_slist_append(nullptr, "Content-Type: application/x-www-form-urlencoded");
+    char *encodedKey = curl_easy_escape(curl, key.c_str(), 0);
+    char *encodedSerial = curl_easy_escape(curl, serial.c_str(), 0);
     if (!encodedKey || !encodedSerial || !headers) {
         if (encodedKey) curl_free(encodedKey);
         if (encodedSerial) curl_free(encodedSerial);
@@ -330,55 +383,70 @@ std::string Login(const char *user_key) {
     const std::string data = std::string("game=CODMGR&user_key=") + encodedKey + "&serial=" + encodedSerial;
     curl_free(encodedKey);
     curl_free(encodedSerial);
-
-    curl_easy_setopt(curl, CURLOPT_URL, api_url.c_str());
+    const std::string apiUrl = "https://ethnir.x10.mx/connect.php";
+    curl_easy_setopt(curl, CURLOPT_URL, apiUrl.c_str());
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str());
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(data.size()));
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &chunk);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 25L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
-
-    CURLcode res = curl_easy_perform(curl);
+    const CURLcode result = curl_easy_perform(curl);
     long statusCode = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
-    if (res != CURLE_OK) {
-        errMsg = curl_easy_strerror(res);
+    std::string error;
+    if (result != CURLE_OK) {
+        error = std::string("License connection failed: ") + curl_easy_strerror(result);
     } else if (statusCode != 200) {
-        errMsg = "License server returned HTTP " + std::to_string(statusCode);
+        error = "License server returned HTTP " + std::to_string(statusCode);
     } else {
         try {
-            json result = json::parse(chunk.memory);
-            if (result.value("status", false)) {
-                const auto &payload = result.at("data");
-                const std::string token = payload.at("token").get<std::string>();
-                const time_t rng = payload.at("rng").get<time_t>();
-                EXP = payload.value("EXP", std::string());
-                const time_t now = time(nullptr);
-                if (rng < now - 30 || rng > now + 30) {
-                    errMsg = "License response expired or device time incorrect";
-                } else {
-                    const std::string auth = std::string("CODMGR-") + user_key + "-" + UUID + "-Vm8Lk7Uj2JmsjCPVPVjrLa7zgfx3uz9E";
-                    g_Auth = CalcMD5(auth);
-                    g_Token = token;
-                    bValid = (g_Token == g_Auth);
-                    if (bValid && !EXP.empty()) expiryTimestamp = parseExpiryDate(EXP);
-                    if (!bValid) errMsg = "License response verification failed";
-                }
+            const json response = json::parse(chunk.memory, chunk.memory + chunk.size);
+            if (!response.value("status", false)) {
+                error = response.value("reason", std::string("License rejected"));
             } else {
-                errMsg = result.value("reason", std::string("License rejected"));
+                const auto &data = response.at("data");
+                const auto &expiresJson = data.at("expires");
+                if (!expiresJson.is_number_integer() ||
+                    (!expiresJson.is_number_unsigned() && expiresJson.get<std::int64_t>() < 0)) {
+                    error = "Invalid license server response";
+                } else {
+                    const auto expires = expiresJson.get<std::uint64_t>();
+                    const std::time_t current = std::time(nullptr);
+                    const auto verification = current > 0
+                        ? PanelLicense::Verify(data.at("payload").get<std::string>(),
+                            data.at("sig").get<std::string>(), key, serial, expires,
+                            static_cast<std::uint64_t>(current))
+                        : PanelLicense::Verification::InvalidInput;
+                    if (verification == PanelLicense::Verification::Valid &&
+                        expires <= static_cast<std::uint64_t>(std::numeric_limits<time_t>::max())) {
+                        expiryTimestamp = static_cast<time_t>(expires);
+                        std::tm expiration{};
+                        if (gmtime_r(&expiryTimestamp, &expiration)) {
+                            char label[32]{};
+                            if (std::strftime(label, sizeof(label), "%Y-%m-%d %H:%M UTC", &expiration)) EXP = label;
+                        }
+                        usedKey = key;
+                        userType = "PREMIUM PAID";
+                        bValid = true;
+                    } else if (verification == PanelLicense::Verification::Expired) {
+                        error = "License expired";
+                    } else {
+                        error = "License response verification failed";
+                    }
+                }
             }
         } catch (const json::exception &) {
-            errMsg = "Invalid license server response";
+            error = "Invalid license server response";
         }
     }
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     free(chunk.memory);
-    return bValid ? "OK" : errMsg;
+    return PanelLicense::OutcomeText(bValid, error);
 }

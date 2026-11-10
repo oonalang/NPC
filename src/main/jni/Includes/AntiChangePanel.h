@@ -8,7 +8,7 @@
 namespace AntiChangePanel {
 
     inline std::string GetExpectedUrl() {
-        return "https://freeshai.x10.mx/connect";
+        return "https://ethnir.x10.mx/connect.php";
     }
 
     inline bool IsVirtualInjectionDetected() {

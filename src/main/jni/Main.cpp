@@ -22,6 +22,8 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <atomic>
+#include <thread>
 
 #include "oxorany/source/oxorany.h"
 #include "oxorany/source/oxorany.cpp"
@@ -164,6 +166,11 @@ static std::string err;
 static std::string storedKey = "";
 static char s[256];
 static bool g_LoginTextLoaded = false;
+// The worker publishes its result before the render thread consumes it.
+static std::atomic<bool> g_LoginFinished{false};
+static bool g_LoginPending = false;
+static std::string g_LoginResult;
+static std::string g_SubmittedKey;
 
 std::vector<sRegion> trapRegions;
 uintptr_t address = 0;
@@ -288,7 +295,15 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
-    DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
+    if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
+        isLogin = false;
+        err = "License expired";
+        auto settings = PhantomTrigger::GetSettings();
+        settings.enabled = false;
+        PhantomTrigger::SetSettings(settings);
+    }
+    if (isLogin)
+        DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
     PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
     floating_info::Render(draw, screenWidth, screenHeight);
       
@@ -412,6 +427,22 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
         if (!isLogin && !ui_loading::IsActive())
         {
+            if (g_LoginPending && g_LoginFinished.load(std::memory_order_acquire)) {
+                g_LoginPending = false;
+                g_LoginFinished.store(false, std::memory_order_relaxed);
+                err = g_LoginResult;
+                if (err == "OK" && bValid) {
+                    showKeyboard = false;
+                    strncpy(logintext, g_SubmittedKey.c_str(), sizeof(logintext) - 1);
+                    logintext[sizeof(logintext) - 1] = '\0';
+                    SaveLoginTextToFile(logintext);
+                    g_LoginTextLoaded = true;
+                    err.clear();
+                    ui_loading::Start(7.0f);
+                } else if (err == "OK") {
+                    err = "License rejected";
+                }
+            }
             ImGui::SetNextWindowPos(viewportCenter, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(630, 400), ImGuiCond_Always);
             ImGui::SetNextWindowBgAlpha(0.0f);
@@ -571,7 +602,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
                 if (F50) ImGui::PushFont(F50);
-                if (ImGui::Button("AUTHENTICATE", ImVec2(authW, authH)))
+                if (ImGui::Button(g_LoginPending ? "CHECKING..." : "AUTHENTICATE", ImVec2(authW, authH)) && !g_LoginPending)
                 {
                     if (s[0] == '\0')
                     {
@@ -579,17 +610,13 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     }
                     else
                     {
-                        err = Login(s);
-                        if (err == "OK")
-                        {
-                            showKeyboard = false;
-                            strncpy(logintext, s, sizeof(logintext) - 1);
-                            logintext[sizeof(logintext) - 1] = '\0';
-                            SaveLoginTextToFile(s);
-                            g_LoginTextLoaded = true;
-                            err.clear();
-                            ui_loading::Start(7.0f);
-                        }
+                        g_SubmittedKey = s;
+                        g_LoginPending = true;
+                        err.clear();
+                        std::thread([](std::string key) {
+                            g_LoginResult = Login(key.c_str());
+                            g_LoginFinished.store(true, std::memory_order_release);
+                        }, g_SubmittedKey).detach();
                     }
                 }
                 if (F50) ImGui::PopFont();
