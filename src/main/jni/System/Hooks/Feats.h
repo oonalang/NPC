@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
+#include "../../BlueprintTierFilter.h"
 #include <string>
 
 extern bool MpB;
@@ -473,15 +475,22 @@ inline float DisperseBase(void * instance) {
     return orig_DisperseBase(instance);
 } 
 
-// Unlock Blueprints
 inline bool (*orig_IsUnlocked)(void *instance);
 inline bool IsUnlocked(void *instance) {
-    if (instance != NULL) {
-        if (Config.ExtraMenu.Blueprints) {
-            return true;
+    if (instance && Config.ExtraMenu.Blueprints) {
+        if (BlueprintTierFilter::GetMask() == 0) return true;
+        const auto* bytes = static_cast<const unsigned char*>(instance);
+        if (Tools::IsPtrValid(instance) &&
+            Tools::IsPtrValid(const_cast<unsigned char*>(bytes + 0x24))) {
+            uint32_t baseId = 0;
+            uint32_t blueprintId = 0;
+            std::memcpy(&baseId, bytes + 0x20, sizeof(baseId));
+            std::memcpy(&blueprintId, bytes + 0x24, sizeof(blueprintId));
+            if (baseId != 0 && blueprintId != 0 && baseId != blueprintId &&
+                BlueprintTierFilter::Allows(blueprintId)) return true;
         }
     }
-    return orig_IsUnlocked(instance);
+    return orig_IsUnlocked ? orig_IsUnlocked(instance) : false;
 }
 
 inline bool (*orig_IsWeaponAttachmentUnlock)(void *instance);
