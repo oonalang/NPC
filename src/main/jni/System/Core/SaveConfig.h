@@ -7,6 +7,7 @@
 #include "../foxcheats/include/json.hpp"
 #include "../../Hacks/Feature/Init_Hacks.h"
 #include "../../BlueprintTierFilter.h"
+#include "../../Trigger/TriggerDotStyle.h"
 
 // Externals defined in Main.cpp
 extern float menu[4];
@@ -55,6 +56,14 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["KineticArmor"] = Config.ExtraMenu.Kinetic;
     config["ExtraMenu"]["Blueprints"] = Config.ExtraMenu.Blueprints;
     config["ExtraMenu"]["BlueprintTiers"] = BlueprintTierFilter::GetMask();
+    auto& dotStyle = TriggerDotStyle::appearance;
+    TriggerDotStyle::Normalize(dotStyle);
+    config["TriggerDot"]["Radius"] = dotStyle.radius;
+    config["TriggerDot"]["Outline"] = dotStyle.outline;
+    config["TriggerDot"]["Opacity"] = dotStyle.opacity;
+    config["TriggerDot"]["Red"] = dotStyle.color[0];
+    config["TriggerDot"]["Green"] = dotStyle.color[1];
+    config["TriggerDot"]["Blue"] = dotStyle.color[2];
 
     config["isJumpAdjustmentEnabled"] = isJumpAdjustmentEnabled;
     config["jumpHeightMultiplier"] = jumpHeightMultiplier;
@@ -129,6 +138,24 @@ bool LoadConfiguration(const std::string& filename) {
                 Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();
             if (config["ExtraMenu"].contains("BlueprintTiers"))
                 BlueprintTierFilter::SetMask(config["ExtraMenu"]["BlueprintTiers"].get<uint32_t>());
+        }
+
+        if (config.contains("TriggerDot") && config["TriggerDot"].is_object()) {
+            auto& dotStyle = TriggerDotStyle::appearance;
+            const auto& stored = config["TriggerDot"];
+            if (stored.contains("Radius") && stored["Radius"].is_number())
+                dotStyle.radius = stored["Radius"].get<float>();
+            if (stored.contains("Outline") && stored["Outline"].is_number())
+                dotStyle.outline = stored["Outline"].get<float>();
+            if (stored.contains("Opacity") && stored["Opacity"].is_number())
+                dotStyle.opacity = stored["Opacity"].get<float>();
+            if (stored.contains("Red") && stored["Red"].is_number())
+                dotStyle.color[0] = stored["Red"].get<float>();
+            if (stored.contains("Green") && stored["Green"].is_number())
+                dotStyle.color[1] = stored["Green"].get<float>();
+            if (stored.contains("Blue") && stored["Blue"].is_number())
+                dotStyle.color[2] = stored["Blue"].get<float>();
+            TriggerDotStyle::Normalize(dotStyle);
         }
 
         if (config.contains("isJumpAdjustmentEnabled"))
