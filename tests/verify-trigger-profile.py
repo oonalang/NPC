@@ -66,10 +66,13 @@ def verify(library, source):
 
     checks = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\}\}',
                         (source / "NativeProfileChecks.inc").read_text())
-    probes = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\},\s*true\}',
+    # The live comparison flag does not change offline disk verification.
+    probes = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\},\s*(?:true|false)\}',
                         (source / "TriggerCompatibility.cpp").read_text())
-    if not checks or not probes:
-        raise ValueError("could not read profile fingerprints and compatibility probes")
+    if len(checks) != 44 or len(probes) != 7:
+        raise ValueError("expected all 44 profile fingerprints and all 7 compatibility probes")
+    if len({int(rva, 16) for _, rva, _ in checks}) != 44:
+        raise ValueError("duplicate profile fingerprint addresses")
     failures = []
     for entries, width in ((checks, 16), (probes, 8)):
         for name, rva_text, literals in entries:

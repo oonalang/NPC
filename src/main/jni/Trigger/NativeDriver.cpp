@@ -1,5 +1,7 @@
 #include "NativeDriver.h"
 #include "NativeCancellation.h"
+#include "NativeProfile.h"
+#include "NativeReadiness.h"
 #include "TriggerCompatibility.h"
 #include <atomic>
 #include <cmath>
@@ -254,12 +256,11 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     const auto klass = Field<std::uintptr_t>(weapon,0);
     const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
     const bool knownPrepare = prepare == library + 0x54A373C;
-    // Slot 274 has the same native table base as PrepareInputParam (slot 202).
-    // Derived CanFire handlers can impose additional restrictions; calling the
-    // base implementation would skip those checks. Support verified handlers only.
-    const auto canFire = klass ? Field<std::uintptr_t>(klass,0x11F0) : 0;
-    const bool knownReadiness = canFire == library + 0x54AFFE4;
-    frame.shotReady = knownReadiness && At<BoolGetter>(0x54AFFE4)(weapon,nullptr);
+    // Preserve subtype readiness checks through the same virtual dispatch used
+    // by the game. The verified module's executable ranges constrain the target.
+    const auto readiness = QueryNativeReadiness(weapon, klass, IsVerifiedExecutableAddress);
+    const bool knownReadiness = readiness.handlerVerified;
+    frame.shotReady = readiness.shotReady;
 
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
@@ -302,8 +303,8 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     else if (burst) detail = "Burst mode unsupported";
     else if (frame.fireMode == FireMode::Unsupported) detail = "Unsupported weapon fire mode";
     else if (frame.hardBlocked) detail = "Weapon state blocked";
-    else if (!rayReady) detail = "Camera ray unavailable";
     else if (!needTarget) detail = "Waiting for weapon shot readiness";
+    else if (!rayReady) detail = "Camera ray unavailable";
     else if (target == TargetResult::NoEligibleBody) detail = "No eligible target at crosshair";
     else if (target == TargetResult::WorldBlocked) detail = "World obstruction";
     else if (target == TargetResult::SmokeBlocked) detail = "Smoke obstruction";
@@ -453,6 +454,10 @@ void NativeDriverFailure(const char* message) noexcept {
     detected.store(FireMode::Unsupported,std::memory_order_release);
     viewportValid.store(false,std::memory_order_release);
     observedComponent.store(0,std::memory_order_release);
+}
+void NativeDriverPending(const char* message) noexcept {
+    reason.store(message ? message : "Waiting for the loaded game library",std::memory_order_release);
+    status.store(RuntimeStatus::WaitingForBinaryVerification,std::memory_order_release);
 }
 void NotifyNativeShot(std::uintptr_t component) noexcept {
     if (component && component == observedComponent.load(std::memory_order_acquire))

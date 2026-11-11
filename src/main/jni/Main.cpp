@@ -37,6 +37,8 @@
 #include "CaptureOverlay/HideRecord.h"
 #include "System/UI/TriggerTab.h"
 
+static void RequestTriggerInitialization();
+
 
 #include <jni.h>
 #include <android/log.h>
@@ -1062,7 +1064,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 3)
                         {
-                            RenderTriggerCustomizationTab(childWidth, childHeight, columnGap);
+                            RenderTriggerCustomizationTab(childWidth, childHeight, columnGap,
+                                                          hideRecordEnabled, hideRecordUnavailable,
+                                                          &RequestTriggerInitialization);
                         }
 
                         if (runtimeState.activeTab == 4)
@@ -1371,6 +1375,20 @@ void Init_Thread2()
 
 }
 
+static void RequestTriggerInitialization()
+{
+    static std::atomic<bool> running{false};
+    if (!m_unity || running.exchange(true, std::memory_order_acq_rel)) return;
+    std::thread([base = static_cast<std::uintptr_t>(m_unity)] {
+        for (unsigned attempt = 0; attempt < 40; ++attempt) {
+            if (PhantomTrigger::InitializeNativeTrigger(base)) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        LOGI("Trigger initialization: %s", PhantomTrigger::GetRuntimeStatusText());
+        running.store(false, std::memory_order_release);
+    }).detach();
+}
+
 void Init_SwapHook()
 {
 }
@@ -1397,7 +1415,9 @@ void Init_Thread()
 
     InitializeAllHooks();
     BlueprintEquipment::Install();
-    PhantomTrigger::InitializeNativeTrigger(m_unity);
+    // The loader may expose the module's address before its metadata is ready.
+    // Keep transient verification retries off the render and input threads.
+    RequestTriggerInitialization();
 MemoryPatch::createWithHex("libanogs.so", 0x202680, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x204218, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x35140C, "00 00 80 D2 C0 03 5F D6").Modify();
