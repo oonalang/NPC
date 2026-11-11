@@ -35,6 +35,7 @@
 #include "Trigger/TriggerRuntime.h"
 #include "Trigger/TriggerOverlay.h"
 #include "CaptureOverlay/HideRecord.h"
+#include "System/UI/TriggerTab.h"
 
 
 #include <jni.h>
@@ -830,8 +831,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         ImMax(0.0f, (hostMax.y - hostMin.y) - contentPadding * 2.0f)
                     );
 
-                    runtimeState.page = ImClamp(runtimeState.page, 1, 6);
-                    runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 6);
+                    runtimeState.page = ImClamp(runtimeState.page, 1, 7);
+                    runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
 
                     // Single compact header matching the supplied reference image.
                     runtimeDrawList->AddRectFilled(headerMin, headerMax, IM_COL32(7, 10, 20, 236), 11.0f);
@@ -902,20 +903,21 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     static const char *sidebarIcons[] = {
                         ICON_FA_EYE,
                         ICON_FA_CROSSHAIRS,
+                        ICON_FA_BULLSEYE,
                         ICON_FA_MICROCHIP,
                         ICON_FA_MAGIC,
                         ICON_FA_SLIDERS_H,
                         ICON_FA_COG
                     };
                     static const char *sidebarLabels[] = {
-                        "ESP", "Aimbot", "Memory", "Skins", "Misc", "Settings"
+                        "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Misc", "Settings"
                     };
                     const int sidebarButtonCount = IM_ARRAYSIZE(sidebarIcons);
                     const float sidebarButtonGap = 6.0f;
                     const float sidebarTopInset = 12.0f;
                     const float sidebarBottomInset = 12.0f;
                     const float availableRailHeight = ImMax(0.0f, (railMax.y - railMin.y) - sidebarTopInset - sidebarBottomInset - sidebarButtonGap * (sidebarButtonCount - 1));
-                    const float sidebarButtonHeight = ImClamp(availableRailHeight / (float)sidebarButtonCount, 52.0f, 64.0f);
+                    const float sidebarButtonHeight = ImClamp(availableRailHeight / (float)sidebarButtonCount, 30.0f, 64.0f);
                     const float sidebarStartY = railMin.y + sidebarTopInset;
                     const ImVec2 sidebarButtonSize(sidebarWidth, sidebarButtonHeight);
                     for (int i = 0; i < sidebarButtonCount; ++i) {
@@ -1028,23 +1030,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 2)
                         {
+                            const float aimHeight = ImMin(childHeight, 310.0f);
                             custom::BeginGroup();
                             {
-                                const ChildFrame left = BeginContentChild("AIMBOT", ImVec2(childWidth, childHeight));
-                                ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "TRIGGER CONTROLS");
-                                auto triggerSettings = PhantomTrigger::GetSettings();
-                                custom::Checkbox("Triggerbot", &triggerSettings.enabled);
-                                static const char *triggerModes[] = {"Both", "ADS Only"};
-                                int triggerMode = triggerSettings.mode == PhantomTrigger::Mode::ADSOnly ? 1 : 0;
-                                custom::Combo("Triggerbot Mode", &triggerMode, triggerModes, IM_ARRAYSIZE(triggerModes), -1);
-                                triggerSettings.mode = triggerMode == 1 ? PhantomTrigger::Mode::ADSOnly : PhantomTrigger::Mode::Both;
-                                custom::Checkbox("Dot Crosshair", &triggerSettings.showDot);
-                                custom::Checkbox("Hide Record", &hideRecordEnabled);
-                                PhantomTrigger::SetSettings(triggerSettings);
-                                if (hideRecordUnavailable) ImGui::TextUnformatted("Hide Record: unsupported on this device");
-                                ImGui::TextWrapped("Triggerbot: %s", PhantomTrigger::GetRuntimeStatusText());
-                                ImGui::Text("Weapon: %s", PhantomTrigger::GetDetectedFireModeText());
-                                ImGui::Separator();
+                                const ChildFrame left = BeginContentChild("AIMBOT", ImVec2(childWidth, aimHeight));
                                 custom::Checkbox("Aimbot 360", &Config.Aim.Aimbot360);
                                 custom::Checkbox("Bullet Track", &Config.Aim.AimSilent);
                                 custom::SliderFloat("Aim Assist Size", &Config.Aim.AimAssistSize, 0.0f, 100.0f, "%.0f");
@@ -1057,7 +1046,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                             custom::BeginGroup();
                             {
-                                const ChildFrame right = BeginContentChild("COMBAT OPTIONS", ImVec2(childWidth, childHeight));
+                                const ChildFrame right = BeginContentChild("COMBAT OPTIONS", ImVec2(childWidth, aimHeight));
                                 static const char *targets[] = {"Head", "Chest", "Body"};
                                 custom::Combo("Location", (int *)&Config.Aim.Target, targets, IM_ARRAYSIZE(targets), -1);
                                 static const char *triggers[] = {"None", "Shooting", "Scoping"};
@@ -1073,6 +1062,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 3)
                         {
+                            RenderTriggerCustomizationTab(childWidth, childHeight, columnGap);
+                        }
+
+                        if (runtimeState.activeTab == 4)
+                        {
                             custom::BeginGroup();
                             {
                                 const ChildFrame left = BeginContentChild("MEMORY HACKS", ImVec2(childWidth, childHeight));                                
@@ -1083,7 +1077,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 								custom::Checkbox("No Smoke", &Config.ExtraMenu.NoSmoke);
 								custom::Checkbox("ClearTerrain", &Config.ExtraMenu.ClearTerrain);
 								custom::Checkbox("Unlock Blueprints", &Config.ExtraMenu.Blueprints);
-                                if (Config.ExtraMenu.Blueprints) {
+                                {
+                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT FILTER");
                                     ImGui::TextUnformatted("Blueprint tiers");
                                     const std::string selectedTiers = BlueprintTierFilter::Preview();
                                     ImGui::SetNextItemWidth(-1.0f);
@@ -1101,6 +1096,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
                                         ImGui::EndCombo();
                                     }
+                                    if (!Config.ExtraMenu.Blueprints)
+                                        ImGui::TextDisabled("Enable Unlock Blueprints to apply selected tiers");
+                                    else if (BlueprintTierFilter::GetMask() == 0)
+                                        ImGui::TextDisabled("No tiers selected: all blueprints");
                                 }
 								custom::Checkbox("Unlimited Fly", &Config.ExtraMenu.UnlimitedFly);
                                 custom::Checkbox("Hitbox", &Config.ExtraMenu.Hit);
@@ -1142,14 +1141,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             custom::EndGroup();
                         }
 
-                        if (runtimeState.activeTab == 4)
+                        if (runtimeState.activeTab == 5)
                         {
                             const ChildFrame skinChild = BeginContentChild("SKINS", ImVec2(contentRegion.x, childHeight));
                             RenderSkinCategoryContent(skinSubTab, true);
                             EndContentChild(skinChild);
                         }
 
-                        if (runtimeState.activeTab == 5)
+                        if (runtimeState.activeTab == 6)
                         {
                             const ChildFrame misc = BeginContentChild("MISC", ImVec2(contentRegion.x, childHeight));
                             const misc_tab::LayoutMetrics layout = misc_tab::CalculateLayout(contentRegion.x, runtime_preview_menu::g_activeChangelogTab);
@@ -1209,7 +1208,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             EndContentChild(misc);
                         }
 
-                        if (runtimeState.activeTab == 6)
+                        if (runtimeState.activeTab == 7)
                         {
                             ImGuiStyle &style = ImGui::GetStyle();
                             const float settingsColumnGap = ImClamp(contentRegion.x * 0.022f, 12.0f, 18.0f);
