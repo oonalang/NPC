@@ -30,6 +30,7 @@
 #include "oxorany/source/oxorany_include.h"
 
 #include "MainFeatureIncludes.h"
+#include "BlueprintEquipment.h"
 #include "Trigger/NativeProfile.h"
 #include "Trigger/TriggerRuntime.h"
 #include "Trigger/TriggerOverlay.h"
@@ -1303,6 +1304,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         io->MouseDown[0] = false;
     }
     
+    BlueprintEquipment::ApplyPending();
     UpdateCamoOverride();
     ApplyWorldVisualsRuntime();
     InstallBRClassEspConfigHook();
@@ -1376,6 +1378,7 @@ void Init_Thread()
     InstallBRClassEspConfigHook();
 
     InitializeAllHooks();
+    BlueprintEquipment::Install();
     PhantomTrigger::InitializeNativeTrigger(m_unity);
 MemoryPatch::createWithHex("libanogs.so", 0x202680, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x204218, "00 00 80 D2 C0 03 5F D6").Modify();

@@ -34,6 +34,216 @@ static float cursorBlinkTimer = 0.0f;
 static bool cursorVisible = true;
 static std::string activeInputID = "";
 
+inline void ApplyWeaponSkin(const itemInfo& getitem) {
+
+                int baseID = getitem.WeaponConf[0];
+                int extraID = getitem.WeaponExtra[0];
+                int skinID = getitem.WeaponConf[2];
+                int itemID = getitem.Item2Inventory[0];
+                int lootID = getitem.Item2Inventory[3];
+                ApplyMythicAttachments(
+                    {baseID, extraID, skinID, itemID, lootID},
+                    getitem.mythicAttach);
+                InstallMythicAttachmentRuntimeFresh(m_unity);
+                for (auto item : itemInventoryInstance)
+                {
+                    if (!item)
+                        continue;
+                    item2Fields = (Item2InventoryFields *)((uintptr_t)item + 0x20);
+                    if (item2Fields->ItemID == getitem.Item2Inventory[0] || item2Fields->ItemID == getitem.Item2Inventory[3])
+                    {
+                        item2Fields->WeaponAssetGroupID = getitem.Item2Inventory[1];
+                        item2Fields->WeaponIconID = getitem.Item2Inventory[2];
+                    }
+                }
+                for (auto conf : weaponConfInstance)
+                {
+                    if (!conf)
+                        continue;
+                    weaponconfFields = (WeaponConfFields *)((uintptr_t)conf + 0x20);
+                    if (baseID == weaponconfFields->ID ||
+                            extraID == weaponconfFields->ID ||
+                            skinID == weaponconfFields->ID ||
+                            itemID == weaponconfFields->ID ||
+                            lootID == weaponconfFields->ID)
+                    {
+                        weaponconfFields->DefWeaponSkinID = getitem.WeaponConf[2];
+                        weaponconfFields->DefaultKillBrocast = getitem.WeaponConf[3];
+                        weaponconfFields->ExternalUnVisible = true;
+
+                        for (auto skinConf : weaponConfInstance)
+                        {
+                            if (!skinConf)
+                                continue;
+                            WeaponConfFields *skinFields = (WeaponConfFields *)((uintptr_t)skinConf + 0x20);
+                            if (skinFields->ID == getitem.WeaponConf[2])
+                            {
+                                weaponconfFields->LOCID_Name = skinFields->LOCID_Name;
+                                break;
+                            }
+                        }
+                        if (baseID == weaponconfFields->ID)
+                        {
+                            weaponconfFields->ColorID = getitem.WeaponConf[1];
+                        }
+                    }
+                }
+                if (getitem.WeaponExtra[4] > 0)
+                {
+                    activeKillEffects[baseID] = getitem.WeaponExtra[4];
+                    activeKillEffects[extraID] = getitem.WeaponExtra[4];
+                    activeKillEffects[skinID] = getitem.WeaponExtra[4];
+                    activeKillEffects[itemID] = getitem.WeaponExtra[4];
+                    activeKillEffects[lootID] = getitem.WeaponExtra[4];
+                }
+                for (auto extra : weaponExtraInstance)
+                {
+                    if (!extra)
+                        continue;
+                    weaponextraFields = (WeaponConfExtraFields *)((uintptr_t)extra + 0x10);
+                    if (weaponextraFields->ID == baseID ||
+                            weaponextraFields->ID == extraID ||
+                            weaponextraFields->ID == skinID ||
+                            weaponextraFields->ID == itemID ||
+                            weaponextraFields->ID == lootID)
+                    {
+                        if (getitem.itemName.find("[MYTHIC]") != std::string::npos)
+                        {
+                            weaponextraFields->DefaultMythicArmor = getitem.WeaponExtra[1];
+                            if (getitem.itemName.find("[MYTHIC] AK117 - Memento Mori") != std::string::npos)
+                            {
+                                weaponextraFields->DefaultMythicSig = getitem.WeaponExtra[2];
+                            }
+                        }
+                        weaponextraFields->DefaultDeadReplayEffectId = getitem.WeaponExtra[3];
+                        weaponextraFields->DefaultKillEffectId = getitem.WeaponExtra[4];
+                    }
+                }
+                for (auto asset : weaponAssetGroupInstance)
+                {
+                    if (!asset)
+                        continue;
+                    weaponAssetFields = (WeaponAssetGroupFields *)((uintptr_t)asset + 0x40);
+                    if (weaponAssetFields->Id == getitem.WeaponAsset[0])
+                    {
+                        if (getitem.WeaponAsset[1] / 10 == getitem.WeaponAsset[2] / 10 && getitem.WeaponAsset[1] > 0)
+                        {
+                            weaponAssetFields->FireEffectGroupID = getitem.WeaponAsset[1];
+                        }
+                    }
+                }
+                for (auto itemResource : itemResourceConfigInstance)
+                {
+                    if (!itemResource)
+                        continue;
+                    itemFields = (ItemResourceFields *)((uintptr_t)itemResource + 0x10);
+                    if (itemFields->ID == skinID)
+                    {
+                        itemFields->FxAssetID = getitem.WeaponConf[0];
+                        itemFields->InventoryModelID = getitem.ItemResInt[1];
+                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
+                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
+                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
+                        itemFields->UISpriteName = getitem.ItemRes[2];
+                        itemFields->UISquareSpriteName = getitem.ItemRes[3];
+                    }
+                    if (itemFields->ID == skinID)
+                    {
+                        itemFields->FxAssetID = getitem.ItemResInt[0];
+                        itemFields->InventoryModelID = getitem.ItemResInt[1];
+                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
+                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
+                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
+                        itemFields->UISquareSpriteName = getitem.ItemRes[3];
+                    }
+                    if (itemFields->ID == itemID)
+                    {
+                        itemFields->FxAssetID = getitem.ItemResInt[0];
+                        itemFields->InventoryModelID = getitem.ItemResInt[1];
+                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
+                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
+                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
+                        itemFields->UISpriteName = getitem.ItemRes[2];
+                    }
+                    if (itemFields->ID == lootID)
+                    {
+                        itemFields->FxAssetID = getitem.ItemResInt[0];
+                        itemFields->InventoryModelID = getitem.ItemResInt[1];
+                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
+                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
+                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
+                        itemFields->UISpriteName = getitem.ItemRes[2];
+                        itemFields->UISquareSpriteName = getitem.ItemRes[3];
+                    }
+                    if (itemFields->ID == extraID)
+                    {
+                        itemFields->FxAssetID = getitem.ItemResInt[0];
+                        itemFields->InventoryModelID = getitem.ItemResInt[1];
+                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
+                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
+                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
+                        itemFields->UISpriteName = getitem.ItemRes[2];
+                    }
+                    if (itemFields->ID == baseID)
+                    {
+                        itemFields->FxAssetID = getitem.ItemResInt[0];
+                        itemFields->InventoryModelID = getitem.ItemResInt[1];
+                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
+                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
+                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
+                        itemFields->UISpriteName = getitem.ItemRes[2];
+                    }
+                }
+
+                int fireEffectID = 0;
+                for (auto asset : weaponAssetGroupInstance)
+                {
+                    if (!asset)
+                        continue;
+                    weaponAssetFields = (WeaponAssetGroupFields *)((uintptr_t)asset + 0x40);
+                    if (weaponAssetFields && weaponAssetFields->Id == getitem.WeaponAsset[0])
+                    {
+                        fireEffectID = weaponAssetFields->FireEffectGroupID;
+                        break;
+                    }
+                }
+
+                if (fireEffectID > 0)
+                {
+                    for (auto fireConf : weaponFireEffectInstance)
+                    {
+                        if (!fireConf)
+                            continue;
+                        WeaponFireEffectFields *wfFields = (WeaponFireEffectFields *)((uintptr_t)fireConf + 0x10);
+                        if (!Tools::IsPtrValid(wfFields))
+                            continue;
+
+                        if (wfFields->Id == fireEffectID)
+                        {
+                            wfFields->LevelEffectDelayTimeUI = 0.1f;
+                            wfFields->LevelEffectDelayTimeUI_King = 0.1f;
+                            auto *killCountArray = *(Array<int> **)((uintptr_t)fireConf + 0x118);
+                            if (killCountArray && Tools::IsPtrValid(killCountArray))
+                            {
+                                for (int i = 0; i < killCountArray->getLength(); ++i)
+                                {
+                                    killCountArray->m_Items[i] = 0;
+                                }
+                            }
+                            auto *killCountArrayKing = *(Array<int> **)((uintptr_t)fireConf + 0x120);
+                            if (killCountArrayKing && Tools::IsPtrValid(killCountArrayKing))
+                            {
+                                for (int i = 0; i < killCountArrayKing->getLength(); ++i)
+                                {
+                                    killCountArrayKing->m_Items[i] = 0;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+}
+
 std::string ToLower(std::string str) {
     std::transform(str.begin(), str.end(), str.begin(), ::tolower);
     return str;
@@ -711,217 +921,7 @@ case 3:
 
         if (!itemData.empty())
         {
-            auto applyWeaponSkin = [&](const auto& getitem) {
-                int baseID = getitem.WeaponConf[0];
-                int extraID = getitem.WeaponExtra[0];
-                int skinID = getitem.WeaponConf[2];
-                int itemID = getitem.Item2Inventory[0];
-                int lootID = getitem.Item2Inventory[3];
-
-                // Apply mythic attachment state before any conf writes
-                // so runtime hooks see the correct selection immediately.
-                ApplyMythicAttachments(
-                    {baseID, extraID, skinID, itemID, lootID},
-                    getitem.mythicAttach);
-                InstallMythicAttachmentRuntimeFresh(m_unity);
-                for (auto item : itemInventoryInstance)
-                {
-                    if (!item)
-                        continue;
-                    item2Fields = (Item2InventoryFields *)((uintptr_t)item + 0x20);
-                    if (item2Fields->ItemID == getitem.Item2Inventory[0] || item2Fields->ItemID == getitem.Item2Inventory[3])
-                    {
-                        item2Fields->WeaponAssetGroupID = getitem.Item2Inventory[1];
-                        item2Fields->WeaponIconID = getitem.Item2Inventory[2];
-                    }
-                }
-                for (auto conf : weaponConfInstance)
-                {
-                    if (!conf)
-                        continue;
-                    weaponconfFields = (WeaponConfFields *)((uintptr_t)conf + 0x20);
-                    if (baseID == weaponconfFields->ID ||
-                            extraID == weaponconfFields->ID ||
-                            skinID == weaponconfFields->ID ||
-                            itemID == weaponconfFields->ID ||
-                            lootID == weaponconfFields->ID)
-                    {
-                        weaponconfFields->DefWeaponSkinID = getitem.WeaponConf[2];
-                        weaponconfFields->DefaultKillBrocast = getitem.WeaponConf[3];
-                        weaponconfFields->ExternalUnVisible = true;
-
-                        for (auto skinConf : weaponConfInstance)
-                        {
-                            if (!skinConf)
-                                continue;
-                            WeaponConfFields *skinFields = (WeaponConfFields *)((uintptr_t)skinConf + 0x20);
-                            if (skinFields->ID == getitem.WeaponConf[2])
-                            {
-                                weaponconfFields->LOCID_Name = skinFields->LOCID_Name;
-                                break;
-                            }
-                        }
-                        if (baseID == weaponconfFields->ID)
-                        {
-                            weaponconfFields->ColorID = getitem.WeaponConf[1];
-                        }
-                    }
-                }
-                if (getitem.WeaponExtra[4] > 0)
-                {
-                    activeKillEffects[baseID] = getitem.WeaponExtra[4];
-                    activeKillEffects[extraID] = getitem.WeaponExtra[4];
-                    activeKillEffects[skinID] = getitem.WeaponExtra[4];
-                    activeKillEffects[itemID] = getitem.WeaponExtra[4];
-                    activeKillEffects[lootID] = getitem.WeaponExtra[4];
-                }
-                for (auto extra : weaponExtraInstance)
-                {
-                    if (!extra)
-                        continue;
-                    weaponextraFields = (WeaponConfExtraFields *)((uintptr_t)extra + 0x10);
-                    if (weaponextraFields->ID == baseID ||
-                            weaponextraFields->ID == extraID ||
-                            weaponextraFields->ID == skinID ||
-                            weaponextraFields->ID == itemID ||
-                            weaponextraFields->ID == lootID)
-                    {
-                        if (getitem.itemName.find("[MYTHIC]") != std::string::npos)
-                        {
-                            weaponextraFields->DefaultMythicArmor = getitem.WeaponExtra[1];
-                            if (getitem.itemName.find("[MYTHIC] AK117 - Memento Mori") != std::string::npos)
-                            {
-                                weaponextraFields->DefaultMythicSig = getitem.WeaponExtra[2];
-                            }
-                        }
-                        weaponextraFields->DefaultDeadReplayEffectId = getitem.WeaponExtra[3];
-                        weaponextraFields->DefaultKillEffectId = getitem.WeaponExtra[4];
-                    }
-                }
-                for (auto asset : weaponAssetGroupInstance)
-                {
-                    if (!asset)
-                        continue;
-                    weaponAssetFields = (WeaponAssetGroupFields *)((uintptr_t)asset + 0x40);
-                    if (weaponAssetFields->Id == getitem.WeaponAsset[0])
-                    {
-                        if (getitem.WeaponAsset[1] / 10 == getitem.WeaponAsset[2] / 10 && getitem.WeaponAsset[1] > 0)
-                        {
-                            weaponAssetFields->FireEffectGroupID = getitem.WeaponAsset[1];
-                        }
-                    }
-                }
-                for (auto itemResource : itemResourceConfigInstance)
-                {
-                    if (!itemResource)
-                        continue;
-                    itemFields = (ItemResourceFields *)((uintptr_t)itemResource + 0x10);
-                    if (itemFields->ID == skinID)
-                    {
-                        itemFields->FxAssetID = getitem.WeaponConf[0];
-                        itemFields->InventoryModelID = getitem.ItemResInt[1];
-                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
-                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
-                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
-                        itemFields->UISpriteName = getitem.ItemRes[2];
-                        itemFields->UISquareSpriteName = getitem.ItemRes[3];
-                    }
-                    if (itemFields->ID == skinID)
-                    {
-                        itemFields->FxAssetID = getitem.ItemResInt[0];
-                        itemFields->InventoryModelID = getitem.ItemResInt[1];
-                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
-                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
-                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
-                        itemFields->UISquareSpriteName = getitem.ItemRes[3];
-                    }
-                    if (itemFields->ID == itemID)
-                    {
-                        itemFields->FxAssetID = getitem.ItemResInt[0];
-                        itemFields->InventoryModelID = getitem.ItemResInt[1];
-                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
-                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
-                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
-                        itemFields->UISpriteName = getitem.ItemRes[2];
-                    }
-                    if (itemFields->ID == lootID)
-                    {
-                        itemFields->FxAssetID = getitem.ItemResInt[0];
-                        itemFields->InventoryModelID = getitem.ItemResInt[1];
-                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
-                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
-                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
-                        itemFields->UISpriteName = getitem.ItemRes[2];
-                        itemFields->UISquareSpriteName = getitem.ItemRes[3];
-                    }
-                    if (itemFields->ID == extraID)
-                    {
-                        itemFields->FxAssetID = getitem.ItemResInt[0];
-                        itemFields->InventoryModelID = getitem.ItemResInt[1];
-                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
-                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
-                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
-                        itemFields->UISpriteName = getitem.ItemRes[2];
-                    }
-                    if (itemFields->ID == baseID)
-                    {
-                        itemFields->FxAssetID = getitem.ItemResInt[0];
-                        itemFields->InventoryModelID = getitem.ItemResInt[1];
-                        itemFields->ModelAssetIDRaw = getitem.ItemResInt[2];
-                        itemFields->UIMiniSpriteName = getitem.ItemRes[0];
-                        itemFields->UISmallSpriteName = getitem.ItemRes[1];
-                        itemFields->UISpriteName = getitem.ItemRes[2];
-                    }
-                }
-
-                int fireEffectID = 0;
-                for (auto asset : weaponAssetGroupInstance)
-                {
-                    if (!asset)
-                        continue;
-                    weaponAssetFields = (WeaponAssetGroupFields *)((uintptr_t)asset + 0x40);
-                    if (weaponAssetFields && weaponAssetFields->Id == getitem.WeaponAsset[0])
-                    {
-                        fireEffectID = weaponAssetFields->FireEffectGroupID;
-                        break;
-                    }
-                }
-
-                if (fireEffectID > 0)
-                {
-                    for (auto fireConf : weaponFireEffectInstance)
-                    {
-                        if (!fireConf)
-                            continue;
-                        WeaponFireEffectFields *wfFields = (WeaponFireEffectFields *)((uintptr_t)fireConf + 0x10);
-                        if (!Tools::IsPtrValid(wfFields))
-                            continue;
-
-                        if (wfFields->Id == fireEffectID)
-                        {
-                            wfFields->LevelEffectDelayTimeUI = 0.1f;
-                            wfFields->LevelEffectDelayTimeUI_King = 0.1f;
-                            auto *killCountArray = *(Array<int> **)((uintptr_t)fireConf + 0x118);
-                            if (killCountArray && Tools::IsPtrValid(killCountArray))
-                            {
-                                for (int i = 0; i < killCountArray->getLength(); ++i)
-                                {
-                                    killCountArray->m_Items[i] = 0;
-                                }
-                            }
-                            auto *killCountArrayKing = *(Array<int> **)((uintptr_t)fireConf + 0x120);
-                            if (killCountArrayKing && Tools::IsPtrValid(killCountArrayKing))
-                            {
-                                for (int i = 0; i < killCountArrayKing->getLength(); ++i)
-                                {
-                                    killCountArrayKing->m_Items[i] = 0;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-            };
+            auto applyWeaponSkin = [&](const auto& getitem) { ApplyWeaponSkin(getitem); };
 
             for (const auto& getitem : itemData)
             {
