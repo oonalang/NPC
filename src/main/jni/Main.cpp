@@ -488,9 +488,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 if (F50)
                     draw->AddText(F50, 15.0f,
                                   iconCenter + ImVec2(-5.0f, -8.0f),
-                                  IM_COL32(235, 240, 242, 255), "N");
+                                  IM_COL32(235, 240, 242, 255), "E");
 
-                const char* titleText = "NPC EXECUTIVE AUTH";
+                const char* titleText = "ETHNIR NOIR";
                 draw->AddText(
                     F50 ? F50 : ImGui::GetFont(),
                     17.0f,
@@ -850,8 +850,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                     ImFont *runtimeTitleFont = custom::shell::GetTitleFont();
                     const float runtimeTitleSize = 28.0f;
-                    const char *titleA = "NPC CONTAINER";
-                    const char *titleB = " PREM MODZ";
+                    const char *titleA = "ETHNIR";
+                    const char *titleB = " NOIR";
                     const ImVec2 titleASize = runtimeTitleFont->CalcTextSizeA(runtimeTitleSize, FLT_MAX, 0.0f, titleA);
                     runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize,
                         ImVec2(headerMin.x + 56.0f, headerMin.y + 11.0f), IM_COL32(245, 245, 250, 255), titleA);
@@ -859,7 +859,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         ImVec2(headerMin.x + 56.0f + titleASize.x, headerMin.y + 11.0f), main_runtime_theme::GetAccentU32(), titleB);
 
                     const ImVec2 subtitlePos(headerMin.x + 57.0f, headerMin.y + 38.0f);
-                    runtimeDrawList->AddText(runtimeTitleFont, 10.0f, subtitlePos, IM_COL32(135, 143, 165, 220), "PLAY SMART  |  STAY AHEAD");
+                    runtimeDrawList->AddText(runtimeTitleFont, 10.0f, subtitlePos, IM_COL32(135, 143, 165, 220), "CONTROL PANEL  |  ARM64");
 
                     // Keep the existing hue control functional, but place it inside the header.
                     const ImVec2 trackMin(headerMin.x + headerMainWidth * 0.58f, headerMin.y + 28.0f);

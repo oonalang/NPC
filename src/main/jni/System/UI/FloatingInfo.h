@@ -79,7 +79,7 @@ inline void Render(ImDrawList* draw, float screenWidth, float screenHeight) {
 
     const ImColor accent(188, 110, 255, 228);
     const ImColor white(255, 255, 255, 255);
-    drawTextWithSpacing("DEV -✥NPC|•CONTAINER✥", ImVec2(textStartX, startY), accent);
+    drawTextWithSpacing("ETHNIR NOIR", ImVec2(textStartX, startY), accent);
     drawTextWithSpacing(line2, ImVec2(textStartX, startY + lineSpacing), white);
     drawTextWithSpacing(line3, ImVec2(textStartX, startY + lineSpacing * 2), white);
     drawTextWithSpacing(line4, ImVec2(textStartX, startY + lineSpacing * 3), white);
