@@ -8,6 +8,7 @@
 #include "FileUtils.h"
 #include "Hacks/Hacks.h"
 #include "../../BlueprintTierFilter.h"
+#include "../../Trigger/TriggerDotStyle.h"
 
 extern JavaVM* VM;
 
@@ -69,8 +70,15 @@ void LoadConfig() {
         else if (key == "ExtraMenu.WallHack") Config.ExtraMenu.WallHack = (valueStr == "1");
         else if (key == "ExtraMenu.Blueprints") Config.ExtraMenu.Blueprints = (valueStr == "1");
         else if (key == "ExtraMenu.BlueprintTiers") BlueprintTierFilter::SetMask(static_cast<uint32_t>(std::stoul(valueStr)));
+        else if (key == "TriggerDot.Radius") TriggerDotStyle::appearance.radius = std::stof(valueStr);
+        else if (key == "TriggerDot.Outline") TriggerDotStyle::appearance.outline = std::stof(valueStr);
+        else if (key == "TriggerDot.Opacity") TriggerDotStyle::appearance.opacity = std::stof(valueStr);
+        else if (key == "TriggerDot.Red") TriggerDotStyle::appearance.color[0] = std::stof(valueStr);
+        else if (key == "TriggerDot.Green") TriggerDotStyle::appearance.color[1] = std::stof(valueStr);
+        else if (key == "TriggerDot.Blue") TriggerDotStyle::appearance.color[2] = std::stof(valueStr);
     }
     file.close();
+    TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
 }
 
 void SaveConfig() {
@@ -117,6 +125,13 @@ void SaveConfig() {
     file << "ExtraMenu.WallHack " << Config.ExtraMenu.WallHack << "\n";
     file << "ExtraMenu.Blueprints " << Config.ExtraMenu.Blueprints << "\n";
     file << "ExtraMenu.BlueprintTiers " << BlueprintTierFilter::GetMask() << "\n";
+    TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
+    file << "TriggerDot.Radius " << TriggerDotStyle::appearance.radius << "\n";
+    file << "TriggerDot.Outline " << TriggerDotStyle::appearance.outline << "\n";
+    file << "TriggerDot.Opacity " << TriggerDotStyle::appearance.opacity << "\n";
+    file << "TriggerDot.Red " << TriggerDotStyle::appearance.color[0] << "\n";
+    file << "TriggerDot.Green " << TriggerDotStyle::appearance.color[1] << "\n";
+    file << "TriggerDot.Blue " << TriggerDotStyle::appearance.color[2] << "\n";
     
     file.close();
 }
