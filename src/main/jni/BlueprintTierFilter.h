@@ -48,6 +48,12 @@ inline bool HasSelection(uint32_t bit) {
     return (GetMask() & bit) != 0;
 }
 
+inline bool Contains(uint32_t blueprintId) {
+    if (blueprintId == 0 || !catalogReady.load(std::memory_order_acquire)) return false;
+    const auto snapshot = std::atomic_load_explicit(&catalog, std::memory_order_acquire);
+    return snapshot && snapshot->find(blueprintId) != snapshot->end();
+}
+
 inline bool Allows(uint32_t blueprintId) {
     const uint32_t mask = GetMask();
     if (mask == 0) return true;
