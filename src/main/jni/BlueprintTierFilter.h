@@ -71,15 +71,15 @@ inline void Publish(TierCatalog updated) {
     catalogReady.store(true, std::memory_order_release);
 }
 
-inline const char* Preview() {
-    switch (GetMask()) {
-        case 0: return "All blueprints";
-        case Mythic: return "Mythic";
-        case Legendary: return "Legendary";
-        case Epic: return "Epic";
-        case Common: return "Common";
-        default: return "Multiple tiers";
-    }
+inline std::string Preview() {
+    const uint32_t mask = GetMask();
+    if (mask == 0) return "All blueprints";
+    std::string result;
+    if (mask & Mythic) result += "Mythic";
+    if (mask & Legendary) result += result.empty() ? "Legendary" : ", Legendary";
+    if (mask & Epic) result += result.empty() ? "Epic" : ", Epic";
+    if (mask & Common) result += result.empty() ? "Common" : ", Common";
+    return result;
 }
 
 }
