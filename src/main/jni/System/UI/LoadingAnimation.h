@@ -297,7 +297,7 @@ inline bool RenderWindow(ImTextureID /*backgroundTexture*/ = nullptr) {
 
     // ── Title area ───────────────────────────────────────────────────────────
     {
-        const char* titleStr = "NPC X LOADING";
+        const char* titleStr = "ETHNIR NOIR";
         const float  tsz     = (fontTitle == F50) ? 26.0f : fontTitle->FontSize * 1.10f;
         const ImVec2 tSz     = fontTitle->CalcTextSizeA(tsz, FLT_MAX, 0.0f, titleStr);
         const float  tx      = pos.x + (W - tSz.x) * 0.5f;
