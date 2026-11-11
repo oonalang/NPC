@@ -5,6 +5,7 @@
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
+#include "BlueprintTierFilter.h"
 
 namespace BlueprintEquipment {
 
@@ -42,12 +43,21 @@ inline bool Read(const void* at, T& value) {
     return true;
 }
 
+inline void RefreshTierCatalog() {
+    if (!loadskinhack || BlueprintTierFilter::catalogReady.load(std::memory_order_acquire)) return;
+    BlueprintTierFilter::TierCatalog updated;
+    updated.reserve(itemData.size());
+    for (const auto& item : itemData) {
+        if (item.WeaponConf[0] <= 0 || item.WeaponConf[2] <= 0) continue;
+        const auto blueprintId = static_cast<uint32_t>(item.WeaponConf[2]);
+        updated[blueprintId] |= BlueprintTierFilter::DetectTier(item.itemName);
+    }
+    BlueprintTierFilter::Publish(std::move(updated));
+}
+
 inline bool CatalogContains(uint32_t blueprintId) {
-    if (!loadskinhack || blueprintId == 0) return false;
-    return std::any_of(itemData.begin(), itemData.end(), [blueprintId](const itemInfo& item) {
-        return item.WeaponConf[0] > 0 &&
-               static_cast<uint32_t>(item.WeaponConf[2]) == blueprintId;
-    });
+    return loadskinhack && BlueprintTierFilter::Contains(blueprintId) &&
+           BlueprintTierFilter::Allows(blueprintId);
 }
 
 inline bool SelectBlueprint(void* controller, uint32_t& blueprintId, int& diyIndex) {
@@ -119,7 +129,7 @@ inline bool OnItemClick(void* controller, void* list, void* item,
 
 inline bool IsEquipped(void* controller, uint32_t baseId, uint32_t blueprintId,
                        int diyIndex, void* method) {
-    if (Config.ExtraMenu.Blueprints) {
+    if (Config.ExtraMenu.Blueprints && BlueprintTierFilter::Allows(blueprintId)) {
         std::lock_guard<std::mutex> lock(equippedMutex);
         const auto found = equipped.find(baseId);
         if (found != equipped.end())
@@ -139,6 +149,7 @@ inline bool IsInfoEquipped(void* info, bool& result) {
     auto* fields = static_cast<unsigned char*>(info);
     if (!Read(fields + 0x20, baseId) || !Read(fields + 0x24, blueprintId) ||
         !Read(fields + 0x28, diyIndex)) return false;
+    if (!BlueprintTierFilter::Allows(blueprintId)) return false;
     std::lock_guard<std::mutex> lock(equippedMutex);
     const auto found = equipped.find(baseId);
     if (found == equipped.end()) return false;
@@ -170,6 +181,7 @@ inline bool IsQuickItemEquipped(void* view, void* info, void* method) {
 
 inline void ApplyPending() {
     if (!Config.ExtraMenu.Blueprints || !loadskinhack) return;
+    RefreshTierCatalog();
     const uint32_t blueprintId = pendingId.exchange(0, std::memory_order_acq_rel);
     if (blueprintId == 0) return;
     const int diyIndex = pendingDiy.exchange(-1, std::memory_order_acq_rel);
@@ -177,7 +189,7 @@ inline void ApplyPending() {
         return item.WeaponConf[0] > 0 &&
                static_cast<uint32_t>(item.WeaponConf[2]) == blueprintId;
     });
-    if (found == itemData.end()) return;
+    if (found == itemData.end() || !BlueprintTierFilter::Allows(blueprintId)) return;
     for (const auto& item : itemData) {
         if (item.WeaponConf[0] == found->WeaponConf[0])
             sBool[item.itemName] = item.WeaponConf[2] == found->WeaponConf[2];
