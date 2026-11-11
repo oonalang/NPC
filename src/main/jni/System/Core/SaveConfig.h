@@ -6,6 +6,7 @@
 
 #include "../foxcheats/include/json.hpp"
 #include "../../Hacks/Feature/Init_Hacks.h"
+#include "../../BlueprintTierFilter.h"
 
 // Externals defined in Main.cpp
 extern float menu[4];
@@ -52,6 +53,8 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Scope"] = Config.ExtraMenu.Scope;
     config["ExtraMenu"]["Switch"] = Config.ExtraMenu.Switch;
     config["ExtraMenu"]["KineticArmor"] = Config.ExtraMenu.Kinetic;
+    config["ExtraMenu"]["Blueprints"] = Config.ExtraMenu.Blueprints;
+    config["ExtraMenu"]["BlueprintTiers"] = BlueprintTierFilter::GetMask();
 
     config["isJumpAdjustmentEnabled"] = isJumpAdjustmentEnabled;
     config["jumpHeightMultiplier"] = jumpHeightMultiplier;
@@ -122,6 +125,10 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
             Config.ExtraMenu.Switch = config["ExtraMenu"]["Switch"].get<bool>();
             Config.ExtraMenu.Kinetic = config["ExtraMenu"]["Kinetic"].get<bool>();
+            if (config["ExtraMenu"].contains("Blueprints"))
+                Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();
+            if (config["ExtraMenu"].contains("BlueprintTiers"))
+                BlueprintTierFilter::SetMask(config["ExtraMenu"]["BlueprintTiers"].get<uint32_t>());
         }
 
         if (config.contains("isJumpAdjustmentEnabled"))
