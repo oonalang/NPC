@@ -3,6 +3,9 @@
 #include "../../Trigger/TriggerOverlay.h"
 
 inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, float columnGap) {
+    using runtime_preview_menu::ChildFrame;
+    using runtime_preview_menu::BeginContentChild;
+    using runtime_preview_menu::EndContentChild;
     custom::BeginGroup();
     {
         const ChildFrame left = BeginContentChild("TRIGGERBOT", ImVec2(childWidth, childHeight));
