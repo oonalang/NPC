@@ -22,14 +22,25 @@ Native instructions confirm that generated static query methods retain a dummy
 object argument. Removing it shifts integer and object arguments. Camera rays
 also use the ARM64 indirect aggregate return convention. Preserve these bindings.
 
-Some method bodies in the disk image are encoded. Disk fingerprint matches do
-not prove that those bytes remain unchanged in a running process. The existing
-runtime build and code verification stays enabled; an unsupported loaded build
-leaves automatic input disabled. Live device compatibility remains unverified.
+Eight method bodies in the disk image are encoded. Their disk fingerprints are
+checked by the offline verifier rather than compared with the loaded bodies.
+Runtime validation requires the pinned build ID, readable executable ranges for
+all 44 methods, and exact prefixes for the 36 stable methods, including all four
+input hook entry points. The encoded methods must be readable and no longer
+match their known encoded disk prefixes before hooks can be installed. Unknown
+builds and changed stable entry points leave automatic input disabled. Live
+device compatibility remains unverified.
+
+Reading validated module segments no longer requires `/proc/self/mem` access.
+Transient loader-readiness failures retry in a startup worker for up to ten
+seconds; **Retry trigger setup** in the Trigger tab starts another bounded
+attempt if the loader is still pending. Concurrent retry workers are suppressed.
+Build-ID and stable-prefix mismatches are terminal. The initialization result is
+also written to the native log.
 
 ## Behavior and changes
 
-The existing **Triggerbot** checkbox is in the aim tab. **Both** permits hipfire
+The **Triggerbot** checkbox is in the Trigger tab. **Both** permits hipfire
 and ADS; **ADS Only** requires completed ADS. **Dot Crosshair** is independent of
 automatic firing. The trigger uses the camera-center body intersection and
 requires a living enemy, a valid detailed hit, clear world geometry and no smoke
@@ -42,11 +53,12 @@ take precedence over synthetic input. Invalid gameplay context updates the
 displayed status instead of leaving a stale firing message.
 
 The adapter supports ordinary automatic and single-shot weapons whose input
-preparation and shot-readiness handlers match the verified base implementations.
-It rejects unknown overrides instead of calling base `CanFire` while skipping a
-subtype's additional restrictions. Burst and release-to-fire modes remain
-unsupported. The ammo query is reused within each input decision to avoid a
-second native call and inconsistent samples.
+preparation matches the verified base implementation. Shot readiness uses the
+actual `CanFire` virtual function and its metadata, matching the native game's
+dispatch, and requires that function to lie in the verified module's executable
+segments. This preserves subtype restrictions without rejecting every override.
+Burst and release-to-fire modes remain unsupported. The ammo query is reused
+within each input decision to avoid a second native call and inconsistent samples.
 
 ## Validation
 

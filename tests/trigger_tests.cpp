@@ -1,8 +1,10 @@
 #include "../src/main/jni/Trigger/NativeCancellation.h"
+#include "../src/main/jni/Trigger/NativeReadiness.h"
 #include "../src/main/jni/Trigger/TriggerRange.h"
 #include "../src/main/jni/Trigger/TriggerRuntime.h"
 
 #include <cstdlib>
+#include <array>
 #include <iostream>
 #include <limits>
 
@@ -58,6 +60,56 @@ struct Queries final : TargetQueries {
 
 const Settings enabled{true, Mode::Both, false};
 const ViewRay centerRay{{0, 0, 0}, {0, 0, 1}, 100};
+
+struct ReadinessWeapon {
+    const void* expectedMetadata;
+    int calls = 0;
+};
+
+bool BaseReadiness(std::uintptr_t object, const void* metadata) {
+    auto& weapon = *reinterpret_cast<ReadinessWeapon*>(object);
+    ++weapon.calls;
+    return metadata == weapon.expectedMetadata;
+}
+
+bool RestrictedReadiness(std::uintptr_t object, const void* metadata) {
+    auto& weapon = *reinterpret_cast<ReadinessWeapon*>(object);
+    ++weapon.calls;
+    Require(metadata == weapon.expectedMetadata, "virtual readiness receives its MethodInfo");
+    return false;
+}
+
+void VirtualWeaponReadiness() {
+    std::array<unsigned char, 0x1200> klass{};
+    const int methodInfo = 274;
+    const void* metadata = &methodInfo;
+    ReadinessWeapon weapon{metadata};
+    auto entry = reinterpret_cast<std::uintptr_t>(&BaseReadiness);
+    std::memcpy(klass.data() + 0x11F0, &entry, sizeof(entry));
+    std::memcpy(klass.data() + 0x11F8, &metadata, sizeof(metadata));
+    const auto object = reinterpret_cast<std::uintptr_t>(&weapon);
+    const auto table = reinterpret_cast<std::uintptr_t>(klass.data());
+    const auto executable = [](std::uintptr_t address) noexcept {
+        return address == reinterpret_cast<std::uintptr_t>(&BaseReadiness) ||
+               address == reinterpret_cast<std::uintptr_t>(&RestrictedReadiness);
+    };
+    auto result = QueryNativeReadiness(object, table, executable);
+    Require(result.handlerVerified && result.shotReady && weapon.calls == 1,
+            "base readiness uses its native virtual entry and metadata");
+
+    entry = reinterpret_cast<std::uintptr_t>(&RestrictedReadiness);
+    std::memcpy(klass.data() + 0x11F0, &entry, sizeof(entry));
+    result = QueryNativeReadiness(object, table, executable);
+    Require(result.handlerVerified && !result.shotReady && weapon.calls == 2,
+            "subtype readiness can block a shot that base readiness permits");
+
+    result = QueryNativeReadiness(object, table, [](std::uintptr_t) noexcept { return false; });
+    Require(!result.handlerVerified && !result.shotReady && weapon.calls == 2,
+            "an unverified virtual entry is never invoked");
+    result = QueryNativeReadiness(object, 0, executable);
+    Require(!result.handlerVerified && !result.shotReady && weapon.calls == 2,
+            "missing class metadata leaves readiness unavailable");
+}
 
 void SingleShotAcknowledgement() {
     Controller controller;
@@ -251,6 +303,7 @@ void CancellationAndSettings() {
 }
 
 int main() {
+    VirtualWeaponReadiness();
     SingleShotAcknowledgement();
     OwnershipAndLifecycle();
     AdsAndModeChanges();

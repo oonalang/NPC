@@ -2,7 +2,9 @@
 
 #include "../../Trigger/TriggerOverlay.h"
 
-inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, float columnGap) {
+inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, float columnGap,
+                                          bool& hideRecordEnabled, bool hideRecordUnavailable,
+                                          void (*retrySetup)()) {
     using runtime_preview_menu::ChildFrame;
     using runtime_preview_menu::BeginContentChild;
     using runtime_preview_menu::EndContentChild;
@@ -10,7 +12,10 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
     {
         const ChildFrame left = BeginContentChild("TRIGGERBOT", ImVec2(childWidth, childHeight));
         auto triggerSettings = PhantomTrigger::GetSettings();
-        custom::Checkbox("Triggerbot", &triggerSettings.enabled);
+        if (custom::Checkbox("Triggerbot", &triggerSettings.enabled) &&
+            triggerSettings.enabled && retrySetup && PhantomTrigger::GetRuntimeStatus() ==
+                PhantomTrigger::RuntimeStatus::WaitingForBinaryVerification)
+            retrySetup();
         static const char* triggerModes[] = {"Both", "ADS Only"};
         int triggerMode = triggerSettings.mode == PhantomTrigger::Mode::ADSOnly ? 1 : 0;
         custom::Combo("Triggerbot Mode", &triggerMode, triggerModes, IM_ARRAYSIZE(triggerModes), -1);
@@ -22,6 +27,10 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         ImGui::Separator();
         ImGui::TextWrapped("Status: %s", PhantomTrigger::GetRuntimeStatusText());
         ImGui::TextWrapped("Weapon: %s", PhantomTrigger::GetDetectedFireModeText());
+        if (retrySetup && PhantomTrigger::GetRuntimeStatus() ==
+                PhantomTrigger::RuntimeStatus::WaitingForBinaryVerification &&
+            ImGui::Button("Retry trigger setup"))
+            retrySetup();
         EndContentChild(left);
     }
     custom::EndGroup();
