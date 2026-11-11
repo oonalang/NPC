@@ -1083,6 +1083,25 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 								custom::Checkbox("No Smoke", &Config.ExtraMenu.NoSmoke);
 								custom::Checkbox("ClearTerrain", &Config.ExtraMenu.ClearTerrain);
 								custom::Checkbox("Unlock Blueprints", &Config.ExtraMenu.Blueprints);
+                                if (Config.ExtraMenu.Blueprints) {
+                                    ImGui::TextUnformatted("Blueprint tiers");
+                                    const std::string selectedTiers = BlueprintTierFilter::Preview();
+                                    ImGui::SetNextItemWidth(-1.0f);
+                                    if (ImGui::BeginCombo("##BlueprintTierMultiSelect", selectedTiers.c_str())) {
+                                        const auto options = ImGuiSelectableFlags_DontClosePopups;
+                                        if (ImGui::Selectable("All blueprints (clear)", BlueprintTierFilter::GetMask() == 0, options))
+                                            BlueprintTierFilter::SetMask(0);
+                                        if (ImGui::Selectable("Mythic", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Mythic), options))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Mythic);
+                                        if (ImGui::Selectable("Legendary", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Legendary), options))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Legendary);
+                                        if (ImGui::Selectable("Epic", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Epic), options))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Epic);
+                                        if (ImGui::Selectable("Common", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common), options))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
+                                        ImGui::EndCombo();
+                                    }
+                                }
 								custom::Checkbox("Unlimited Fly", &Config.ExtraMenu.UnlimitedFly);
                                 custom::Checkbox("Hitbox", &Config.ExtraMenu.Hit);
                                 custom::Checkbox("No Recoil", &Config.ExtraMenu.Recoil);
