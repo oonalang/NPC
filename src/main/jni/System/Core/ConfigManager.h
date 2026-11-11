@@ -7,6 +7,7 @@
 #include <jni.h>
 #include "FileUtils.h"
 #include "Hacks/Hacks.h"
+#include "../../BlueprintTierFilter.h"
 
 extern JavaVM* VM;
 
@@ -66,6 +67,8 @@ void LoadConfig() {
         else if (key == "ExtraMenu.Parachute") Config.ExtraMenu.Parachute = (valueStr == "1");
         else if (key == "ExtraMenu.Diving") Config.ExtraMenu.Diving = (valueStr == "1");
         else if (key == "ExtraMenu.WallHack") Config.ExtraMenu.WallHack = (valueStr == "1");
+        else if (key == "ExtraMenu.Blueprints") Config.ExtraMenu.Blueprints = (valueStr == "1");
+        else if (key == "ExtraMenu.BlueprintTiers") BlueprintTierFilter::SetMask(static_cast<uint32_t>(std::stoul(valueStr)));
     }
     file.close();
 }
@@ -112,6 +115,8 @@ void SaveConfig() {
     file << "ExtraMenu.Parachute " << Config.ExtraMenu.Parachute << "\n";
     file << "ExtraMenu.Diving " << Config.ExtraMenu.Diving << "\n";
     file << "ExtraMenu.WallHack " << Config.ExtraMenu.WallHack << "\n";
+    file << "ExtraMenu.Blueprints " << Config.ExtraMenu.Blueprints << "\n";
+    file << "ExtraMenu.BlueprintTiers " << BlueprintTierFilter::GetMask() << "\n";
     
     file.close();
 }
