@@ -469,7 +469,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 draw->AddRect(
                     pos,
                     pos + login_size,
-                    IM_COL32(220, 40, 55, 220),
+                    IM_COL32(177, 110, 245, 220),
                     12.0f,
                     0,
                     1.0f
@@ -485,7 +485,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                 // Header icon and title.
                 const ImVec2 iconCenter = pos + ImVec2(31.0f, 31.0f);
-                draw->AddCircleFilled(iconCenter, 13.0f, IM_COL32(220, 40, 55, 50), 24);
+                draw->AddCircleFilled(iconCenter, 13.0f, IM_COL32(177, 110, 245, 60), 24);
                 draw->AddCircle(iconCenter, 13.0f, IM_COL32(240, 55, 70, 210), 24, 1.0f);
 
                 if (F50)
@@ -519,7 +519,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 255));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 10, 12, 255));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(60, 15, 18, 255));
-                ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(220, 40, 55, 235));
+                ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(177, 110, 245, 235));
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(224, 234, 244, 255));
                 ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(122, 132, 148, 220));
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
@@ -560,7 +560,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 255));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 10, 12, 255));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(60, 15, 18, 255));
-                    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(220, 40, 55, 235));
+                    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(177, 110, 245, 235));
                     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(207, 218, 231, 255));
                     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
                     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -600,7 +600,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 255));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 10, 12, 255));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(60, 15, 18, 255));
-                ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(220, 40, 55, 235));
+                ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(177, 110, 245, 235));
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(225, 236, 246, 255));
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -728,82 +728,26 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     const ImVec2 runtimeWindowPos = ImGui::GetWindowPos();
                     ImDrawList *runtimeDrawList = ImGui::GetWindowDrawList();
 
-                    // Animated RGB/rainbow glow border around the complete menu.
                     {
-                        const float borderPad = 3.0f;
-                        const float borderRounding = 14.0f;
-                        const float borderThickness = 2.2f;
-                        const float glowRadius = 8.0f;
-                        const float phase = (float)ImGui::GetTime() * 0.12f;
-                        const ImVec2 borderMin(runtimeWindowPos.x + borderPad, runtimeWindowPos.y + borderPad);
-                        const ImVec2 borderMax(runtimeWindowPos.x + runtimeWindowSize.x - borderPad, runtimeWindowPos.y + runtimeWindowSize.y - borderPad);
-
-                        // Soft outer glow layers.
-                        for (int layer = 4; layer >= 1; --layer) {
-                            const float expand = glowRadius * ((float)layer / 4.0f);
-                            const float alpha = 0.045f * (5.0f - (float)layer);
-                            const int segments = 96;
-                            for (int i = 0; i < segments; ++i) {
-                                const float t0 = (float)i / (float)segments;
-                                const float t1 = (float)(i + 1) / (float)segments;
-                                const float h0 = fmodf(t0 + phase, 1.0f);
-                                const float h1 = fmodf(t1 + phase, 1.0f);
-                                float r0, g0, b0, r1, g1, b1;
-                                ImGui::ColorConvertHSVtoRGB(h0, 0.95f, 1.0f, r0, g0, b0);
-                                ImGui::ColorConvertHSVtoRGB(h1, 0.95f, 1.0f, r1, g1, b1);
-                                const ImVec4 c0(r0, g0, b0, alpha);
-                                const ImVec4 c1(r1, g1, b1, alpha);
-                                const ImU32 col0 = ImGui::ColorConvertFloat4ToU32(c0);
-                                const ImU32 col1 = ImGui::ColorConvertFloat4ToU32(c1);
-
-                                auto pointOnRect = [&](float t, float e) -> ImVec2 {
-                                    const float w = borderMax.x - borderMin.x + e * 2.0f;
-                                    const float h = borderMax.y - borderMin.y + e * 2.0f;
-                                    const float perim = 2.0f * (w + h);
-                                    float d = t * perim;
-                                    const float x0 = borderMin.x - e;
-                                    const float y0 = borderMin.y - e;
-                                    if (d < w) return ImVec2(x0 + d, y0);
-                                    d -= w;
-                                    if (d < h) return ImVec2(x0 + w, y0 + d);
-                                    d -= h;
-                                    if (d < w) return ImVec2(x0 + w - d, y0 + h);
-                                    d -= w;
-                                    return ImVec2(x0, y0 + h - d);
-                                };
-
-                                runtimeDrawList->AddLine(pointOnRect(t0, expand), pointOnRect(t1, expand), col0, 5.5f);
-                                runtimeDrawList->AddLine(pointOnRect(t0, expand * 0.55f), pointOnRect(t1, expand * 0.55f), col1, 3.5f);
-                            }
-                        }
-
-                        // Crisp animated rainbow edge.
-                        const int segments = 128;
-                        for (int i = 0; i < segments; ++i) {
-                            const float t0 = (float)i / (float)segments;
-                            const float t1 = (float)(i + 1) / (float)segments;
-                            float r0, g0, b0, r1, g1, b1;
-                            ImGui::ColorConvertHSVtoRGB(fmodf(t0 + phase, 1.0f), 0.95f, 1.0f, r0, g0, b0);
-                            ImGui::ColorConvertHSVtoRGB(fmodf(t1 + phase, 1.0f), 0.95f, 1.0f, r1, g1, b1);
-                            const ImU32 col0 = ImGui::ColorConvertFloat4ToU32(ImVec4(r0, g0, b0, 1.0f));
-                            const ImU32 col1 = ImGui::ColorConvertFloat4ToU32(ImVec4(r1, g1, b1, 1.0f));
-
-                            auto edgePoint = [&](float t) -> ImVec2 {
-                                const float w = borderMax.x - borderMin.x;
-                                const float h = borderMax.y - borderMin.y;
-                                const float perim = 2.0f * (w + h);
-                                float d = t * perim;
-                                if (d < w) return ImVec2(borderMin.x + d, borderMin.y);
-                                d -= w;
-                                if (d < h) return ImVec2(borderMax.x, borderMin.y + d);
-                                d -= h;
-                                if (d < w) return ImVec2(borderMax.x - d, borderMax.y);
-                                d -= w;
-                                return ImVec2(borderMin.x, borderMax.y - d);
-                            };
-
-                            runtimeDrawList->AddLine(edgePoint(t0), edgePoint(t1), col0, borderThickness);
-                        }
+                        const ImVec2 shellMin(runtimeWindowPos.x + 1.0f, runtimeWindowPos.y + 1.0f);
+                        const ImVec2 shellMax(runtimeWindowPos.x + runtimeWindowSize.x - 1.0f, runtimeWindowPos.y + runtimeWindowSize.y - 1.0f);
+                        runtimeDrawList->AddRectFilled(shellMin, shellMax, IM_COL32(10, 10, 14, 246), 26.0f);
+                        runtimeDrawList->AddRectFilledMultiColor(
+                            shellMin,
+                            ImVec2(shellMax.x, shellMin.y + (shellMax.y - shellMin.y) * 0.42f),
+                            IM_COL32(255, 255, 255, 12),
+                            IM_COL32(255, 255, 255, 8),
+                            IM_COL32(255, 255, 255, 0),
+                            IM_COL32(255, 255, 255, 0)
+                        );
+                        runtimeDrawList->AddRect(shellMin, shellMax, IM_COL32(255, 255, 255, 26), 26.0f, 0, 1.0f);
+                        runtimeDrawList->AddRect(shellMin + ImVec2(2.6f, 2.2f), shellMax - ImVec2(2.2f, 2.6f), IM_COL32(255, 255, 255, 8), 24.0f, 0, 1.0f);
+                        runtimeDrawList->AddLine(
+                            ImVec2(shellMin.x + 34.0f, shellMin.y + 1.6f),
+                            ImVec2(shellMax.x - 34.0f, shellMin.y + 1.2f),
+                            main_runtime_theme::GetAccentU32(0.30f),
+                            1.4f
+                        );
                     }
 
                     const float outerPad = 14.0f;
@@ -836,62 +780,56 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     runtimeState.page = ImClamp(runtimeState.page, 1, 7);
                     runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
 
-                    // Single compact header matching the supplied reference image.
-                    runtimeDrawList->AddRectFilled(headerMin, headerMax, IM_COL32(7, 10, 20, 236), 11.0f);
-                    runtimeDrawList->AddRect(headerMin, headerMax, main_runtime_theme::GetAccentTintU32(0.70f, 0.70f), 11.0f, 0, 1.0f);
+                    runtimeDrawList->AddRectFilled(headerMin, headerMax, IM_COL32(19, 19, 25, 238), 20.0f);
+                    runtimeDrawList->AddRectFilledMultiColor(
+                        headerMin,
+                        ImVec2(headerMax.x, headerMin.y + (headerMax.y - headerMin.y) * 0.55f),
+                        IM_COL32(255, 255, 255, 12),
+                        IM_COL32(255, 255, 255, 7),
+                        IM_COL32(255, 255, 255, 0),
+                        IM_COL32(255, 255, 255, 0)
+                    );
+                    runtimeDrawList->AddRect(headerMin, headerMax, IM_COL32(255, 255, 255, 22), 20.0f, 0, 1.0f);
 
-                    const ImVec2 flameCenter(headerMin.x + 28.0f, headerMin.y + headerHeight * 0.5f);
-                    runtimeDrawList->AddCircleFilled(flameCenter, 18.0f, main_runtime_theme::GetAccentTintU32(0.25f, 0.55f), 28);
+                    const ImVec2 markCenter(headerMin.x + 32.0f, headerMin.y + headerHeight * 0.5f);
+                    runtimeDrawList->AddCircleFilled(markCenter, 16.0f, IM_COL32(255, 255, 255, 8), 32);
+                    runtimeDrawList->AddCircle(markCenter, 16.0f, main_runtime_theme::GetAccentU32(0.85f), 32, 1.5f);
+                    runtimeDrawList->AddCircle(markCenter + ImVec2(1.0f, -0.8f), 16.4f, IM_COL32(255, 255, 255, 12), 32, 1.0f);
                     {
                         ImFont *iconFont = custom::shell::GetIconFont();
                         const char *logoIcon = ICON_FA_FIRE;
-                        const ImVec2 logoSize = custom::shell::MeasureText(iconFont, 17.0f, logoIcon);
-                        runtimeDrawList->AddText(iconFont, 17.0f,
-                            ImVec2(flameCenter.x - logoSize.x * 0.5f, flameCenter.y - logoSize.y * 0.5f),
-                            main_runtime_theme::GetAccentU32(), logoIcon);
+                        const ImVec2 logoSize = custom::shell::MeasureText(iconFont, 15.0f, logoIcon);
+                        runtimeDrawList->AddText(
+                            iconFont,
+                            15.0f,
+                            ImVec2(markCenter.x - logoSize.x * 0.5f, markCenter.y - logoSize.y * 0.5f),
+                            main_runtime_theme::GetAccentU32(),
+                            logoIcon
+                        );
                     }
 
                     ImFont *runtimeTitleFont = custom::shell::GetTitleFont();
-                    const float runtimeTitleSize = 28.0f;
-                    const char *titleA = "ETHNIR";
-                    const char *titleB = " NOIR";
+                    const float runtimeTitleSize = 25.0f;
+                    const char *titleA = "SHAI";
+                    const char *titleB = " ETHNIR ED";
                     const ImVec2 titleASize = runtimeTitleFont->CalcTextSizeA(runtimeTitleSize, FLT_MAX, 0.0f, titleA);
-                    runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize,
-                        ImVec2(headerMin.x + 56.0f, headerMin.y + 11.0f), IM_COL32(245, 245, 250, 255), titleA);
-                    runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize,
-                        ImVec2(headerMin.x + 56.0f + titleASize.x, headerMin.y + 11.0f), main_runtime_theme::GetAccentU32(), titleB);
-
-                    const ImVec2 subtitlePos(headerMin.x + 57.0f, headerMin.y + 38.0f);
-                    runtimeDrawList->AddText(runtimeTitleFont, 10.0f, subtitlePos, IM_COL32(135, 143, 165, 220), "CONTROL PANEL  |  ARM64");
-
-                    // Keep the existing hue control functional, but place it inside the header.
-                    const ImVec2 trackMin(headerMin.x + headerMainWidth * 0.58f, headerMin.y + 28.0f);
-                    const ImVec2 trackMax(headerMax.x - 18.0f, trackMin.y + 8.0f);
-                    ImGui::SetCursorScreenPos(ImVec2(trackMin.x - 4.0f, trackMin.y - 7.0f));
-                    ImGui::InvisibleButton("##main_runtime_menu_color_slider_new", ImVec2((trackMax.x - trackMin.x) + 8.0f, 22.0f));
-                    if (ImGui::IsItemActive()) {
-                        main_runtime_theme::g_menuHue = custom::shell::Normalize(ImGui::GetIO().MousePos.x, trackMin.x, trackMax.x);
-                        main_runtime_theme::ApplyAccentFromHue();
-                        c::UpdateTheme(runtimeState.dark, menu, ImGui::GetIO().DeltaTime);
-                        main_runtime_theme::ApplyThemeState();
-                    }
-                    const float segments = 8.0f;
-                    const float segmentWidth = (trackMax.x - trackMin.x) / segments;
-                    for (int i = 0; i < (int)segments; ++i) {
-                        float r0, g0, b0, r1, g1, b1;
-                        ImGui::ColorConvertHSVtoRGB((float)i / segments, 0.90f, 1.0f, r0, g0, b0);
-                        ImGui::ColorConvertHSVtoRGB((float)(i + 1) / segments, 0.90f, 1.0f, r1, g1, b1);
-                        const ImVec2 a(trackMin.x + segmentWidth * i, trackMin.y);
-                        const ImVec2 b((i == (int)segments - 1) ? trackMax.x : a.x + segmentWidth + 1.0f, trackMax.y);
-                        runtimeDrawList->AddRectFilledMultiColor(a, b,
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(r0,g0,b0,1)),
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(r1,g1,b1,1)),
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(r1,g1,b1,1)),
-                            ImGui::ColorConvertFloat4ToU32(ImVec4(r0,g0,b0,1)));
-                    }
-                    const float hueX = trackMin.x + ImClamp(main_runtime_theme::g_menuHue, 0.0f, 1.0f) * (trackMax.x - trackMin.x);
-                    runtimeDrawList->AddCircleFilled(ImVec2(hueX, trackMin.y + 4.0f), 5.0f, IM_COL32(245,245,250,255), 20);
-                    runtimeDrawList->AddCircle(ImVec2(hueX, trackMin.y + 4.0f), 6.5f, main_runtime_theme::GetAccentU32(), 20, 1.5f);
+                    const ImVec2 titleBSize = runtimeTitleFont->CalcTextSizeA(runtimeTitleSize, FLT_MAX, 0.0f, titleB);
+                    const ImVec2 titlePos(headerMin.x + 58.0f, headerMin.y + 12.0f);
+                    runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize, titlePos, IM_COL32(248, 248, 252, 255), titleA);
+                    runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize, ImVec2(titlePos.x + titleASize.x, titlePos.y), main_runtime_theme::GetAccentU32(), titleB);
+                    runtimeDrawList->AddLine(
+                        ImVec2(titlePos.x, titlePos.y + runtimeTitleSize + 2.0f),
+                        ImVec2(titlePos.x + titleASize.x + titleBSize.x + 5.0f, titlePos.y + runtimeTitleSize + 0.5f),
+                        main_runtime_theme::GetAccentU32(0.55f),
+                        1.2f
+                    );
+                    runtimeDrawList->AddText(
+                        runtimeTitleFont,
+                        10.0f,
+                        ImVec2(headerMin.x + 59.0f, headerMin.y + 41.0f),
+                        IM_COL32(144, 144, 160, 225),
+                        "CONTROL PANEL  |  ARM64"
+                    );
 
                     if (custom::shell::DrawCloseCard(closeCardMin, closeCardSize)) {
                         runtime_preview_menu::CollapseMenu(runtimeState);
@@ -900,7 +838,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     const ImVec2 railMin(sidebarLeft, headerTop);
                     const ImVec2 railMax(sidebarLeft + sidebarWidth, hostMax.y);
 
-                    custom::shell::DrawPanelShell(runtimeDrawList, railMin, railMax, 15.0f);
+                    custom::shell::DrawPanelShell(runtimeDrawList, railMin, railMax, 22.0f);
 
                     static const char *sidebarIcons[] = {
                         ICON_FA_EYE,
@@ -938,9 +876,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         runtimeState.activeTab = runtimeState.page;
                     }
 
-                    runtimeDrawList->AddRectFilled(hostMin, hostMax, ImGui::GetColorU32(main_runtime_theme::GetSidebarShellBackgroundColor()), 11.0f);
+                    runtimeDrawList->AddRectFilled(hostMin, hostMax, IM_COL32(13, 13, 17, 216), 22.0f);
+                    runtimeDrawList->AddRect(hostMin, hostMax, IM_COL32(255, 255, 255, 14), 22.0f, 0, 1.0f);
 
-                    ImGui::SetCursorScreenPos(contentInnerMin);
+                    ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
                     ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground);
                     {
                         const bool pushedContentFont = (font::inter_semibold != nullptr);

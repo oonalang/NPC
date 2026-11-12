@@ -469,29 +469,24 @@ inline bool DrawRuntimeSidebarButton(const char *id, const char *icon, const cha
     const bool clicked = ImGui::IsItemClicked();
 
     ImDrawList *drawList = ImGui::GetWindowDrawList();
+    const float pillRounding = 14.0f;
     const ImU32 bg = active
-        ? main_runtime_theme::GetAccentTintU32(0.28f, 0.92f)
-        : hovered ? IM_COL32(255, 255, 255, 10) : IM_COL32(0, 0, 0, 0);
+        ? IM_COL32(255, 255, 255, 18)
+        : hovered ? IM_COL32(255, 255, 255, 8) : IM_COL32(0, 0, 0, 0);
     if (bg != IM_COL32(0, 0, 0, 0)) {
-        drawList->AddRectFilled(min, min + size, bg, 9.0f);
+        drawList->AddRectFilled(min, min + size, bg, pillRounding);
     }
-
     if (active) {
-        drawList->AddRect(min, min + size, main_runtime_theme::GetAccentU32(0.95f), 9.0f, 0, 1.0f);
-        drawList->AddRectFilled(
-            ImVec2(min.x, min.y + 5.0f),
-            ImVec2(min.x + 3.0f, min.y + size.y - 5.0f),
-            main_runtime_theme::GetAccentU32(0.95f),
-            2.0f
-        );
+        drawList->AddRect(min, min + size, IM_COL32(255, 255, 255, 28), pillRounding, 0, 1.0f);
+        drawList->AddCircleFilled(ImVec2(min.x + 7.0f, min.y + size.y * 0.5f), 2.6f, main_runtime_theme::GetAccentU32(1.0f), 16);
     }
 
     ImFont *iconFont = custom::shell::GetIconFont();
     ImFont *textFont = font::inter_semibold ? font::inter_semibold : ImGui::GetFont();
     const float iconSize = 18.0f;
     const float textSize = 14.0f;
-    const ImU32 iconColor = active ? main_runtime_theme::GetAccentU32(1.0f) : IM_COL32(210, 214, 226, 210);
-    const ImU32 textColor = active ? IM_COL32(245, 245, 250, 255) : IM_COL32(190, 196, 212, 220);
+    const ImU32 iconColor = active ? IM_COL32(248, 248, 252, 255) : IM_COL32(150, 150, 166, hovered ? 240 : 200);
+    const ImU32 textColor = active ? IM_COL32(248, 248, 252, 255) : IM_COL32(164, 164, 178, hovered ? 235 : 205);
 
     if (icon != nullptr && iconFont != nullptr) {
         const ImVec2 is = iconFont->CalcTextSizeA(iconSize, FLT_MAX, 0.0f, icon);
@@ -511,19 +506,19 @@ inline bool DrawRuntimeSidebarButton(const char *id, const char *icon, const cha
 inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size) {
     ImDrawList *drawList = ImGui::GetWindowDrawList();
     const ImVec2 max = min + size;
-    drawList->AddRectFilled(min, max, IM_COL32(10, 14, 24, 235), 10.0f);
-    drawList->AddRect(min, max, main_runtime_theme::GetAccentTintU32(0.65f, 0.75f), 10.0f, 0, 1.0f);
+    drawList->AddRectFilled(min, max, IM_COL32(16, 16, 21, 235), 18.0f);
+    drawList->AddRect(min, max, IM_COL32(255, 255, 255, 18), 18.0f, 0, 1.0f);
 
     ImFont *textFont = font::inter_semibold ? font::inter_semibold : ImGui::GetFont();
     const float titleSize = 15.0f;
     const char *title = "ESP PREVIEW";
     const ImVec2 titleSz = textFont->CalcTextSizeA(titleSize, FLT_MAX, 0.0f, title);
     drawList->AddText(textFont, titleSize,
-        ImVec2(min.x + 14.0f, min.y + 12.0f), main_runtime_theme::GetAccentU32(1.0f), title);
+        ImVec2(min.x + 14.0f, min.y + 12.0f), IM_COL32(248, 248, 252, 255), title);
 
     const ImVec2 previewMin(min.x + 12.0f, min.y + 42.0f);
     const ImVec2 previewMax(max.x - 12.0f, max.y - 14.0f);
-    drawList->AddRectFilled(previewMin, previewMax, IM_COL32(24, 31, 42, 235), 7.0f);
+    drawList->AddRectFilled(previewMin, previewMax, IM_COL32(24, 24, 30, 235), 12.0f);
 
     // Lightweight visual-only preview. It does not read or modify gameplay state.
     const float groundY = previewMax.y - 34.0f;

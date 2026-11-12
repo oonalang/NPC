@@ -7,7 +7,7 @@ inline void DrawTopContainer(ImDrawList *drawList, const ImVec2 &min, const ImVe
    
     drawList->AddRectFilled(min, max, IM_COL32(22, 29, 34, 220), 7.0f);
     
-    drawList->AddLine(ImVec2(min.x + 12.0f, max.y - 1.0f), ImVec2(max.x - 12.0f, max.y - 1.0f), IM_COL32(210, 134, 10, 120), 1.0f);
+    drawList->AddLine(ImVec2(min.x + 12.0f, max.y - 1.0f), ImVec2(max.x - 12.0f, max.y - 1.0f), IM_COL32(177, 110, 245, 120), 1.0f);
 
     const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, label);
     const ImVec2 textPos(min.x + (size.x - textSize.x) * 0.5f, min.y + (size.y - textSize.y) * 0.5f);
@@ -30,7 +30,7 @@ inline bool DrawSidebarButton(const char *id, const char *label, const Texture &
         drawList->AddRectFilled(
             ImVec2(min.x + 4.0f, min.y + size.y - 3.0f),
             ImVec2(min.x + size.x - 4.0f, min.y + size.y - 1.0f),
-            IM_COL32(210, 134, 10, 220),
+            IM_COL32(177, 110, 245, 220),
             2.0f
         );
     } else if (hovered) {
@@ -143,7 +143,7 @@ inline bool DrawActionButton(const char *id, const char *label, float h = 50.0f)
     ImU32 bg = IM_COL32(22, 29, 34, 228);
     if (hovered) bg = IM_COL32(38, 48, 56, 238);
     if (held) bg = IM_COL32(52, 64, 72, 246);
-    const ImU32 border = IM_COL32(210, 134, 10, hovered ? 180 : 120);
+    const ImU32 border = IM_COL32(177, 110, 245, hovered ? 180 : 120);
     dl->AddRectFilled(p, p + size, bg, 10.0f);
     dl->AddRect(p, p + size, border, 10.0f, 0, 1.0f);
 

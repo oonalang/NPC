@@ -53,17 +53,19 @@ namespace custom
             drawList->AddRectFilled(
                 min,
                 max,
-                ImGui::GetColorU32(highlighted ? main_runtime_theme::GetActiveTabBackgroundColor() : main_runtime_theme::GetSidebarShellBackgroundColor()),
+                highlighted ? IM_COL32(25, 25, 32, 236) : IM_COL32(14, 14, 18, 224),
                 rounding
             );
             drawList->AddRectFilledMultiColor(
                 min,
-                ImVec2(max.x, min.y + (max.y - min.y) * 0.48f),
-                main_runtime_theme::GetAccentTintU32(0.22f, highlighted ? 0.12f : 0.08f),
-                main_runtime_theme::GetAccentTintU32(0.16f, highlighted ? 0.07f : 0.04f),
-                IM_COL32(0, 0, 0, 0),
-                IM_COL32(0, 0, 0, 0)
+                ImVec2(max.x, min.y + (max.y - min.y) * 0.55f),
+                IM_COL32(255, 255, 255, 10),
+                IM_COL32(255, 255, 255, 6),
+                IM_COL32(255, 255, 255, 0),
+                IM_COL32(255, 255, 255, 0)
             );
+            drawList->AddRect(min, max, IM_COL32(255, 255, 255, highlighted ? 30 : 18), rounding, 0, 1.0f);
+            drawList->AddRect(min + ImVec2(1.6f, 1.2f), max - ImVec2(1.2f, 1.6f), IM_COL32(255, 255, 255, 8), rounding, 0, 1.0f);
         }
 
         bool DrawSidebarButton(const char* id, const char* icon, bool active, const ImVec2& min, const ImVec2& size)
@@ -82,8 +84,8 @@ namespace custom
                 drawList->AddRectFilled(
                     slotMin,
                     slotMax,
-                    active ? ImGui::GetColorU32(main_runtime_theme::GetActiveTabBackgroundColor()) : IM_COL32(18, 20, 29, 150),
-                    9.0f
+                    active ? IM_COL32(255, 255, 255, 18) : IM_COL32(255, 255, 255, 8),
+                    14.0f
                 );
             }
 
@@ -94,7 +96,7 @@ namespace custom
                 iconFont,
                 iconSize,
                 ImVec2(slotMin.x + (slotSide - iconTextSize.x) * 0.5f, slotMin.y + (slotSide - iconTextSize.y) * 0.5f),
-                active ? main_runtime_theme::GetAccentTintU32(0.98f, 1.0f) : IM_COL32(154, 160, 182, hovered ? 245 : 220),
+                active ? IM_COL32(248, 248, 252, 255) : IM_COL32(156, 156, 172, hovered ? 245 : 215),
                 icon
             );
 
@@ -663,7 +665,7 @@ namespace custom
         if (size.x <= 0.0f) size.x = ImMax(content_avail.x + size.x, 4.0f * c::scale);
         if (size.y <= 0.0f) size.y = ImMax(content_avail.y + size.y, 4.0f * c::scale);
 
-        const float rounding = 7.0f * c::scale;
+        const float rounding = 11.0f * c::scale;
         const float cap_height = cap ? 34.0f * c::scale : 0.0f;
         const ImVec2 panel_min = parent_window->DC.CursorPos;
         const ImVec2 panel_max = panel_min + size;
@@ -672,61 +674,8 @@ namespace custom
 
         ImDrawList* draw = GetWindowDrawList();
         draw->AddRectFilled(panel_min, panel_max, GetColorU32(c::child::background), rounding);
-        // jni/ImGui/custom_widgets.cpp — sa loob ng ChildEx(), after AddRectFilled
-
-{
-    const float t        = (float)ImGui::GetTime();
-    const float speed    = 1.8f;          // bilis ng rotation
-    const float thickness = 1.5f * c::scale;
-    const float r        = 7.0f * c::scale; // same rounding as panel
-
-    // Dalawang kulay — accent at transparent, umiikot
-    const float angle    = fmodf(t * speed, 2.0f * IM_PI);
-    const float sweep    = 0.65f;         // 0–1, gaano kalaki ng lit portion
-
-    // Base dim border palagi nandoon
-    draw->AddRect(
-        panel_min, panel_max,
-        IM_COL32(50, 60, 68, 80),
-        r, 0, thickness
-    );
-
-    // Animated accent sweep — 12-segment polyline sa rect perimeter
-    const ImVec2 corners[4] = {
-        panel_min,
-        ImVec2(panel_max.x, panel_min.y),
-        panel_max,
-        ImVec2(panel_min.x, panel_max.y)
-    };
-
-    const float W = panel_max.x - panel_min.x;
-    const float H = panel_max.y - panel_min.y;
-    const float perimeter = 2.0f * (W + H);
-
-    // Sample N points around perimeter, draw only the lit arc
-    const int N = 64;
-    auto perimeterPoint = [&](float frac) -> ImVec2 {
-        frac = fmodf(frac + 1.0f, 1.0f);
-        const float d = frac * perimeter;
-        if (d < W)          return ImVec2(panel_min.x + d, panel_min.y);
-        else if (d < W + H) return ImVec2(panel_max.x,     panel_min.y + (d - W));
-        else if (d < 2*W+H) return ImVec2(panel_max.x - (d - W - H), panel_max.y);
-        else                return ImVec2(panel_min.x,     panel_max.y - (d - 2*W - H));
-    };
-
-    const float head = fmodf(angle / (2.0f * IM_PI), 1.0f);
-
-    for (int i = 0; i < N; i++) {
-        const float f0 = fmodf(head - sweep + (float)i       / N + 1.0f, 1.0f);
-        const float f1 = fmodf(head - sweep + (float)(i + 1) / N + 1.0f, 1.0f);
-        const float alpha_t = (float)i / N;                // 0 = tail, 1 = head
-        const ImU32 col = IM_COL32(
-            210, 134, 10,
-            (ImU8)(alpha_t * alpha_t * 200)               // quadratic fade
-        );
-        draw->AddLine(perimeterPoint(f0), perimeterPoint(f1), col, thickness);
-    }
-}
+        draw->AddRect(panel_min, panel_max, IM_COL32(255, 255, 255, 16), rounding, 0, 1.0f);
+        draw->AddRect(panel_min + ImVec2(1.6f, 1.2f), panel_max - ImVec2(1.2f, 1.6f), IM_COL32(255, 255, 255, 7), rounding, 0, 1.0f);
 
         if (cap) {
             const ImVec2 cap_max(panel_max.x, panel_min.y + cap_height);
@@ -751,13 +700,21 @@ namespace custom
                         text_x += icon_text_size.x + 7.0f * c::scale;
                     }
                 }
-                draw->AddText(
-                    panel_min + ImVec2(text_x, ImMax(6.0f * c::scale, (cap_height - title_size.y) * 0.5f - 2.0f * c::scale)),
-                    GetColorU32(c::accent),
-                    name,
-                    name_end
+                const ImVec2 title_pos = panel_min + ImVec2(text_x, ImMax(6.0f * c::scale, (cap_height - title_size.y) * 0.5f - 2.0f * c::scale));
+                draw->AddText(title_pos, GetColorU32(c::text::text_active), name, name_end);
+                draw->AddLine(
+                    ImVec2(title_pos.x, title_pos.y + title_size.y + 2.0f * c::scale),
+                    ImVec2(title_pos.x + title_size.x + 3.0f * c::scale, title_pos.y + title_size.y + 1.0f * c::scale),
+                    main_runtime_theme::GetAccentTintU32(0.85f, 0.65f),
+                    1.0f * c::scale
                 );
             }
+            draw->AddLine(
+                ImVec2(panel_min.x + 12.0f * c::scale, cap_max.y - 0.5f),
+                ImVec2(panel_max.x - 12.0f * c::scale, cap_max.y - 0.5f),
+                IM_COL32(255, 255, 255, 10),
+                1.0f
+            );
         }
 
         const char* temp_window_name;
@@ -1236,67 +1193,77 @@ namespace custom
     };
 
     bool Checkbox(const char* label, bool* v)
-{
-    ImGuiWindow* window = GetCurrentWindow();
-    if (window->SkipItems) return false;
+    {
+        ImGuiWindow* window = GetCurrentWindow();
+        if (window->SkipItems) return false;
 
-    ImGuiContext& g = *GImGui;
-    const ImGuiID id = window->GetID(label);
-    const float height = 28.0f * c::scale;
-    const float pillW = 72.0f * c::scale;
-    const float pillH = 26.0f * c::scale;
-    const float w = GetContentRegionMax().x - GetStyle().WindowPadding.x;
+        ImGuiContext& g = *GImGui;
+        const ImGuiID id = window->GetID(label);
+        const float height = 30.0f * c::scale;
+        const float pillW = 60.0f * c::scale;
+        const float pillH = 24.0f * c::scale;
+        const float w = GetContentRegionMax().x - GetStyle().WindowPadding.x;
 
-    const ImVec2 pos = window->DC.CursorPos;
-    const ImRect total(pos, pos + ImVec2(w, height));
-    ItemSize(total);
-    if (!ItemAdd(total, id)) return false;
+        const ImVec2 pos = window->DC.CursorPos;
+        const ImRect total(pos, pos + ImVec2(w, height));
+        ItemSize(total);
+        if (!ItemAdd(total, id)) return false;
 
-    bool hovered, held;
-    bool pressed = ButtonBehavior(total, id, &hovered, &held);
-    if (pressed) {
-    *v = !*v;
-    MarkItemEdited(id);
-}
+        bool hovered, held;
+        bool pressed = ButtonBehavior(total, id, &hovered, &held);
+        if (pressed) {
+            *v = !*v;
+            MarkItemEdited(id);
+        }
 
-    ImDrawList* draw = window->DrawList;
-    const float pillX = total.Max.x - pillW;
-    const float pillY = pos.y + (height - pillH) * 0.5f;
-    const ImVec2 pMin(pillX, pillY);
-    const ImVec2 pMax(pillX + pillW, pillY + pillH);
+        struct switch_state { float knob; float press; float hover; };
+        static std::map<ImGuiID, switch_state> anim;
+        auto it = anim.find(id);
+        if (it == anim.end()) {
+            switch_state init;
+            init.knob = *v ? 1.0f : 0.0f;
+            init.press = 0.0f;
+            init.hover = 0.0f;
+            anim.insert({ id, init });
+            it = anim.find(id);
+        }
+        switch_state& state = it->second;
+        const float dt = g.IO.DeltaTime;
+        state.knob = ImLerp(state.knob, *v ? 1.0f : 0.0f, ImMin(1.0f, dt * 16.0f));
+        state.press = ImLerp(state.press, held ? 1.0f : 0.0f, ImMin(1.0f, dt * 20.0f));
+        state.hover = ImLerp(state.hover, hovered ? 1.0f : 0.0f, ImMin(1.0f, dt * 14.0f));
 
-    // Pill background
-    const ImU32 pillBg = *v
-        ? IM_COL32(220, 40, 55, 255)   // ON = red
-        : IM_COL32(50, 52, 58, 255);   // OFF = dark gray
-    draw->AddRectFilled(pMin, pMax, pillBg, pillH * 0.5f);
+        ImDrawList* draw = window->DrawList;
+        const float grow = state.press * 2.0f * c::scale;
+        const float pillX = total.Max.x - pillW;
+        const float pillY = pos.y + (height - pillH) * 0.5f - grow * 0.5f;
+        const ImVec2 pMin(pillX, pillY);
+        const ImVec2 pMax(pillX + pillW, pillY + pillH + grow);
+        const float rounding = (pMax.y - pMin.y) * 0.5f;
 
-    // Circle
-    const float circleR = pillH * 0.38f;
-    const float circleX = *v
-        ? (pMax.x - circleR - 5.0f)
-        : (pMin.x + circleR + 5.0f);
-    const float circleY = pillY + pillH * 0.5f;
-    draw->AddCircleFilled(ImVec2(circleX, circleY), circleR, IM_COL32(255, 255, 255, 255));
+        const ImVec4 track = ImLerp(ImVec4(0.17f, 0.17f, 0.21f, 1.0f), c::accent, state.knob);
+        draw->AddRectFilled(pMin, pMax, GetColorU32(track), rounding);
+        draw->AddRectFilled(pMin, pMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.05f + state.hover * 0.04f + state.press * 0.10f)), rounding);
+        draw->AddRect(pMin, pMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.10f + state.hover * 0.06f + state.press * 0.12f)), rounding, 0, 1.0f);
 
-    // OFF / ON text
-    const char* stateText = *v ? "OFF" : "ON";
-    ImVec2 textSize = ImGui::CalcTextSize(stateText);
-    const float textX = *v
-        ? (pMin.x + 10.0f)
-        : (pMax.x - textSize.x - 10.0f);
-    const float textY = pillY + (pillH - textSize.y) * 0.5f;
-    draw->AddText(ImVec2(textX, textY), IM_COL32(220, 220, 225, 255), stateText);
+        const float inset = 3.0f * c::scale + grow * 0.5f;
+        const float knobH = (pMax.y - pMin.y) - inset * 2.0f;
+        const float travel = (pMax.x - pMin.x) - inset * 2.0f - knobH;
+        const float knobX = ImLerp(pMin.x + inset, pMin.x + inset + travel, state.knob);
+        const ImVec2 kMin(knobX, pMin.y + inset);
+        const ImVec2 kMax(knobX + knobH, pMin.y + inset + knobH);
+        const float glass = state.press;
+        draw->AddRectFilled(kMin, kMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f - glass * 0.28f)), knobH * 0.5f);
+        draw->AddRect(kMin, kMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.30f + glass * 0.40f)), knobH * 0.5f, 0, 1.0f);
 
-    // Label (left side)
-    draw->AddText(
-        ImVec2(pos.x, pos.y + (height - ImGui::CalcTextSize(label).y) * 0.5f),
-        GetColorU32(c::text::text_active),
-        label
-    );
+        draw->AddText(
+            ImVec2(pos.x, pos.y + (height - CalcTextSize(label).y) * 0.5f),
+            GetColorU32(ImLerp(c::text::text_hov, c::text::text_active, state.hover)),
+            label
+        );
 
-    return pressed;
-}
+        return pressed;
+    }
 
     bool CheckboxClicked(const char* label, bool* v)
     {
@@ -2672,24 +2639,22 @@ namespace custom
             value_buf
         );
 
-        const float track_thickness = ImLerp(3.0f * control_scale, 4.0f * control_scale, it_anim->second.active_t * 0.9f + it_anim->second.hover_t * 0.35f);
-        const float knob_half_width = ImLerp(2.5f * control_scale, 3.4f * control_scale, it_anim->second.active_t);
-        const float knob_half_height = ImLerp(7.0f * control_scale, 8.4f * control_scale, it_anim->second.active_t * 0.9f + it_anim->second.hover_t * 0.2f);
+        const float track_thickness = 4.0f * control_scale;
+        const float knob_half_width = ImLerp(8.0f * control_scale, 11.0f * control_scale, it_anim->second.active_t);
+        const float knob_half_height = ImLerp(6.0f * control_scale, 8.0f * control_scale, it_anim->second.active_t);
         const ImVec2 track_start(slider_bb.Min.x + track_margin, frame_bb.Min.y + box_height * 0.5f);
         const ImVec2 track_end(slider_bb.Max.x - track_margin, track_start.y);
         GetWindowDrawList()->AddRectFilled(
             ImVec2(track_start.x, track_start.y - track_thickness * 0.5f),
             ImVec2(track_end.x, track_start.y + track_thickness * 0.5f),
-            GetColorU32(WithAlpha(c::widget::outlinecolor, 0.45f + it_anim->second.hover_t * 0.12f)),
-            3.0f * control_scale
+            GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.09f + it_anim->second.hover_t * 0.04f)),
+            track_thickness * 0.5f
         );
-        GetWindowDrawList()->AddRectFilledMultiColor(
+        GetWindowDrawList()->AddRectFilled(
             ImVec2(track_start.x, track_start.y - track_thickness * 0.5f),
             ImVec2(track_start.x + it_anim->second.slow, track_start.y + track_thickness * 0.5f),
-            GetColorU32(AccentLift(0.18f)),
             GetColorU32(c::accent),
-            GetColorU32(c::accent),
-            GetColorU32(AccentLift(0.18f))
+            track_thickness * 0.5f
         );
         const ImVec2 knob_center(track_start.x + it_anim->second.slow, track_start.y);
         const ImVec2 knob_min(knob_center.x - knob_half_width, knob_center.y - knob_half_height);
@@ -2698,13 +2663,15 @@ namespace custom
             GetWindowDrawList()->AddRectFilled(
                 knob_min - ImVec2((1.5f + it_anim->second.active_t) * control_scale, (1.5f + it_anim->second.active_t) * control_scale),
                 knob_max + ImVec2((1.5f + it_anim->second.active_t) * control_scale, (1.5f + it_anim->second.active_t) * control_scale),
-                GetColorU32(AccentShade(0.12f), 0.10f + it_anim->second.active_t * 0.08f + it_anim->second.hover_t * 0.03f),
-                5.0f * control_scale
+                GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.05f + it_anim->second.active_t * 0.05f)),
+                knob_half_height + 2.0f * control_scale
             );
         }
-        const ImVec4 knob_fill = MixColor(c::text::text_active, AccentLift(0.10f), it_anim->second.active_t * 0.45f + it_anim->second.hover_t * 0.12f);
-        GetWindowDrawList()->AddRectFilled(knob_min, knob_max, GetColorU32(knob_fill), 3.5f * control_scale);
-        GetWindowDrawList()->AddRect(knob_min, knob_max, GetColorU32(WithAlpha(c::widget::outlinecolor, 0.72f + it_anim->second.active_t * 0.16f)), 3.5f * control_scale, 0, 1.0f * control_scale);
+        const float glass_knob = it_anim->second.active_t;
+        const ImVec4 knob_fill = ImVec4(1.0f, 1.0f, 1.0f, 1.0f - glass_knob * 0.30f);
+        const float knob_rounding = knob_half_height;
+        GetWindowDrawList()->AddRectFilled(knob_min, knob_max, GetColorU32(knob_fill), knob_rounding);
+        GetWindowDrawList()->AddRect(knob_min, knob_max, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.30f + glass_knob * 0.40f)), knob_rounding, 0, 1.0f * control_scale);
 
         return value_changed;
     }
