@@ -60,7 +60,8 @@ inline void RefreshTierCatalog() {
     for (const auto& item : itemData) {
         if (item.WeaponConf[0] <= 0 || item.WeaponConf[2] <= 0) continue;
         const auto blueprintId = static_cast<uint32_t>(item.WeaponConf[2]);
-        updated[blueprintId] |= BlueprintTierFilter::DetectTier(item.itemName);
+        BlueprintTierFilter::RecordTier(updated, blueprintId,
+            BlueprintTierFilter::TierFromColorId(item.WeaponConf[1]));
     }
     BlueprintTierFilter::Publish(std::move(updated));
     builtCatalogSize.store(itemCount, std::memory_order_release);

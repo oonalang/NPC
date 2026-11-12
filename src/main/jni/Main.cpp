@@ -422,7 +422,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             }
         }
 
-        runtime_preview_menu::EnsureTexturesLoaded();
         main_runtime_theme::ApplyThemeState();
 
         ImVec2 viewportCenter = ImGui::GetMainViewport()->GetCenter();
@@ -674,7 +673,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         }
         else if (!isLogin && ui_loading::IsActive())
         {
-            if (ui_loading::RenderWindow((ImTextureID)(intptr_t)runtime_preview_menu::g_menuBackground.id))
+            if (ui_loading::RenderWindow())
             {
                 isLogin = true;
             }
@@ -1018,7 +1017,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     // Stock ImGui widgets draw with this build's all-transparent
                                     // style, so the tier selector uses the themed custom combo
                                     // and stays visible regardless of the Unlock Blueprints state.
-                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT FILTER");
+                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT UNLOCK FILTER");
                                     const std::string selectedTiers = BlueprintTierFilter::Preview();
                                     bool allBlueprints = BlueprintTierFilter::GetMask() == 0;
                                     bool mythicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Mythic);
@@ -1026,7 +1025,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     bool epicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Epic);
                                     bool commonTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common);
                                     const auto tierOptions = ImGuiSelectableFlags_DontClosePopups;
-                                    if (custom::BeginCombo("Blueprint tiers", selectedTiers.c_str(), 5)) {
+                                    if (custom::BeginCombo("Unlock tiers", selectedTiers.c_str(), 5)) {
                                         if (custom::Selectable("All blueprints (clear)", &allBlueprints, tierOptions))
                                             BlueprintTierFilter::SetMask(0);
                                         if (custom::Selectable("Mythic", &mythicTier, tierOptions))
@@ -1039,6 +1038,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
                                         custom::EndCombo();
                                     }
+                                    if (Config.ExtraMenu.Blueprints && BlueprintTierFilter::GetMask() != 0 &&
+                                        !BlueprintTierFilter::catalogReady.load(std::memory_order_acquire))
+                                        ImGui::TextWrapped("Loading blueprint tiers...");
+                                    ImGui::TextWrapped("Filters added unlocks. Owned blueprints stay visible.");
                                     if (!Config.ExtraMenu.Blueprints)
                                         ImGui::TextColored(ImVec4(0.66f, 0.70f, 0.78f, 1.0f),
                                                            "Enable Unlock Blueprints to apply these tiers");
