@@ -51,7 +51,7 @@ void Frame() {
             const char* labels[] = {"All blueprints", "Mythic", "Legendary", "Epic", "Common"};
             const uint32_t bits[] = {0, Mythic, Legendary, Epic, Common};
             const ImU32 colors[] = {IM_COL32(185,182,198,255),IM_COL32(239,77,91,255),
-                IM_COL32(255,208,70,255),IM_COL32(181,119,245,255),IM_COL32(173,181,193,255)};
+                IM_COL32(255,208,70,255),IM_COL32(181,119,245,255),IM_COL32(74,222,128,255)};
             for (int i = 0; i < 5; ++i) {
                 bool isSelected = i == 0 ? GetMask() == 0 : HasSelection(bits[i]);
                 const auto decoration = i == 0 ? custom::MenuItemDecoration::Ring(colors[i])

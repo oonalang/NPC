@@ -6,9 +6,12 @@ sidebar's active page uses an inset clay highlight without a dot. A single-line
 Inter wordmark and a compact edition capsule sit on the glass header; blueprint
 tiers retain their selector without the explanatory descriptions underneath.
 
+Closed dropdowns use taller fields with the same dark fill and subtle border as
+their popovers, with vertically centered labels and chevrons.
+
 Open dropdowns use a dark rounded popover, a short muted heading, roomy rows,
 and right-aligned white checkmarks. Only hovered rows receive a subtle fill.
-Blueprint rows use red Mythic, gold Legendary, purple Epic, and neutral Common
+Blueprint rows use red Mythic, gold Legendary, purple Epic, and green Common
 circles; All blueprints uses an outlined neutral circle. These are explicit row
 decorations and do not change tier matching or multi-selection. Popovers keep
 their touch targets stationary, flip above the field when needed, and scroll

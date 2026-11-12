@@ -1370,7 +1370,7 @@ namespace custom
         const ImVec2 label_size = CalcTextSize(label, label_end, true);
         const float width = ImMax(1.f, GetContentRegionAvail().x);
         const float control_scale = c::scale * c::widget_scale;
-        const float field_height = 24.0f * control_scale;
+        const float field_height = ImMax(38.f * control_scale, label_size.y + 16.f * control_scale);
         const float gap = 5.0f * control_scale;
 
         const ImRect total_bb(window->DC.CursorPos, window->DC.CursorPos + ImVec2(width, label_size.y + gap + field_height));
@@ -1434,38 +1434,22 @@ namespace custom
 
         it_anim->second.opened_combo = popup_open;
 
-        const float field_rounding = 11.0f * control_scale;
+        const float field_rounding = 12.f * control_scale;
         GetWindowDrawList()->AddText(total_bb.Min, GetColorU32(WithAlpha(c::text::text_hov, 0.9f)), label, label_end);
-        clay::Surface(GetWindowDrawList(), field_bb.Min, field_bb.Max, field_rounding, false);
-        if (it_anim->second.field_emphasis > 0.01f)
-        {
-            GetWindowDrawList()->AddRectFilled(
-                field_bb.Min - ImVec2(1.0f * control_scale, 1.0f * control_scale),
-                field_bb.Max + ImVec2(1.0f * control_scale, 1.0f * control_scale),
-                GetColorU32(AccentShade(0.18f), 0.06f * it_anim->second.field_emphasis),
-                field_rounding + 1.0f * control_scale
-            );
-        }
-        GetWindowDrawList()->AddRectFilledMultiColor(
-            field_bb.Min + ImVec2(1.0f * control_scale, 1.0f * control_scale),
-            ImVec2(field_bb.Max.x - 1.0f * control_scale, field_bb.Min.y + field_height * 0.46f),
-            GetColorU32(WithAlpha(c::text::text_active, 0.05f)),
-            GetColorU32(WithAlpha(c::text::text_active, 0.02f)),
-            GetColorU32(WithAlpha(c::text::text_active, 0.00f)),
-            GetColorU32(WithAlpha(c::text::text_active, 0.00f))
-        );
-        GetWindowDrawList()->AddRect(
-            field_bb.Min,
-            field_bb.Max,
-            GetColorU32(popup_open ? AccentLift(0.08f) : c::widget::outlinecolor, hovered || popup_open ? 1.0f : 0.78f),
-            field_rounding,
-            0,
-            1.0f * control_scale
-        );
+        GetWindowDrawList()->AddRectFilled(field_bb.Min + ImVec2(0, 3.f * control_scale),
+            field_bb.Max + ImVec2(0, 3.f * control_scale), GetColorU32(ImVec4(0, 0, 0, .20f)), field_rounding);
+        GetWindowDrawList()->AddRectFilled(field_bb.Min, field_bb.Max,
+            GetColorU32(ImVec4(.085f + .015f * it_anim->second.field_emphasis,
+                              .081f + .015f * it_anim->second.field_emphasis,
+                              .10f + .02f * it_anim->second.field_emphasis, .98f)), field_rounding);
+        GetWindowDrawList()->AddRect(field_bb.Min, field_bb.Max,
+            popup_open ? GetColorU32(AccentLift(.08f), .8f)
+                       : GetColorU32(ImVec4(.58f, .55f, .65f, hovered ? .40f : .24f)),
+            field_rounding, 0, 1.f * control_scale);
 
         PushClipRect(field_bb.Min, field_bb.Max - ImVec2(30.f * control_scale, 0), true);
         GetWindowDrawList()->AddText(
-            field_bb.Min + ImVec2(10.0f * control_scale, (field_height - CalcTextSize(preview_value ? preview_value : "None").y) * 0.5f),
+            field_bb.Min + ImVec2(14.0f * control_scale, (field_height - CalcTextSize(preview_value ? preview_value : "None").y) * 0.5f),
             GetColorU32(it_anim->second.text),
             preview_value ? preview_value : "None"
         );

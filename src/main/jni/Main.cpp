@@ -972,7 +972,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                                 custom::MenuItemDecoration::Circle(IM_COL32(181, 119, 245, 255))))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Epic);
                                         if (custom::Selectable("Common", &commonTier, tierOptions, ImVec2(0, 0),
-                                                custom::MenuItemDecoration::Circle(IM_COL32(173, 181, 193, 255))))
+                                                custom::MenuItemDecoration::Circle(IM_COL32(74, 222, 128, 255))))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
                                         custom::EndCombo();
                                     }
