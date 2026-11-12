@@ -17,8 +17,6 @@ struct InputStage {
     std::array<unsigned char, 0x30> param{};
     std::array<unsigned char, 0x20> result{};
     void Prepare() {
-        // Native button processing first resets/copies physical edges, then the
-        // sniper override marks this parameter as release-to-fire.
         param.fill(0);
         result.fill(0);
         param[0x14] = 1;
@@ -111,14 +109,11 @@ int main() {
             "target loss generated a sniper release shot");
     Require(!native.result[0x16], "target loss exposed a release result edge");
 
-    // Passthrough must retain real user edges, including a manual release.
     native.param[0x1A] = native.param[0x25] = native.result[0x16] = 1;
     native.Merge(Intent{});
     Require(native.NativeReleaseShot() && native.result[0x16],
             "passthrough clobbered physical release");
 
-    // A late native gate may refuse the release. There will be no shot ack;
-    // the feedback must insert a neutral frame and allow a later valid retry.
     controller.Reset();
     frame = Ready();
     controller.Step(enabled,frame);

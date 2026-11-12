@@ -174,8 +174,6 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     const auto controller = local.scope;
     if (At<Getter>(0xC918E3C)(nullptr,nullptr) != controller ||
         Field<std::uintptr_t>(controller, 0x50) != reinterpret_cast<std::uintptr_t>(unit)) return;
-    // Capture actual user input before the weapon's virtual preparation can
-    // transform these fields. The firing decision runs after preparation.
     local.buttonsSampled = true;
     local.sampledParam = param;
     local.manualActive = PhysicalFire(reinterpret_cast<std::uintptr_t>(param));
@@ -381,9 +379,6 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         local.previous[2] == Field<std::uintptr_t>(local.scope,0x68) &&
         local.epoch == lifecycle.load(std::memory_order_acquire);
 
-    // Native gates (for example a one-frame IsMustStopFire) can reject a
-    // committed release after our decision. Do not wait for an impossible ack.
-    // Observe the final result after both fire and ADS processing have run.
     if (sameOwner && local.committedRelease &&
         committedShots.load(std::memory_order_acquire) == local.lastFrame.shotSerial) {
         const auto result = Field<std::uintptr_t>(local.scope,0x40);

@@ -30,7 +30,6 @@ namespace font {
 
 namespace runtime_preview_menu {
 
-// Shared by optional image-button helpers; the unused menu background is gone.
 struct Texture {
     GLuint id = 0;
 };

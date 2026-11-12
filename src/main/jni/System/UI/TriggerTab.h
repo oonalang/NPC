@@ -22,7 +22,6 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         triggerSettings.mode = triggerMode == 1 ? PhantomTrigger::Mode::ADSOnly : PhantomTrigger::Mode::Both;
         custom::Checkbox("Hide Record", &hideRecordEnabled);
         PhantomTrigger::SetSettings(triggerSettings);
-        // The stock theme hides ordinary text; diagnostics must stay readable.
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.78f, .75f, .86f, 1.f));
         if (hideRecordUnavailable)
             ImGui::TextWrapped("Hide Record is unsupported on this device");

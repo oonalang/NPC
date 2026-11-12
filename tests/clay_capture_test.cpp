@@ -8,7 +8,6 @@
 ImFont* F50 = nullptr;
 namespace font { ImFont* inter_semibold = nullptr; }
 
-// Optional integration check: requires a surfaceless Mesa EGL/GLES3 runtime.
 int main() {
     const auto getDisplay = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
     assert(getDisplay);
@@ -46,7 +45,6 @@ int main() {
     glBindTexture(GL_TEXTURE_2D,textures[2]);
     glGenBuffers(1,&pbo);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER,pbo);
-    // Empty unpack buffer catches an allocation that mistakenly reads offset 0.
     glEnable(GL_SCISSOR_TEST);
     glScissor(0,0,1,1);
     clay::Capture(64,64,true);

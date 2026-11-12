@@ -33,17 +33,13 @@ inline GLuint scene = 0, framebuffer = 0;
 inline int sceneWidth = 0, sceneHeight = 0;
 inline EGLContext sceneContext = EGL_NO_CONTEXT;
 inline bool sceneValid = false;
-// A downsampled live scene is shared by all controls. No full-size blur passes.
 inline void Capture(int width, int height, bool visible) {
     sceneValid = false;
-    // Capture before any overlay drawing, while the expanded menu needs its
-    // backdrop. Never sample an earlier overlay texture back into itself.
     if (!visible || width <= 0 || height <= 0) return;
     const EGLContext context = eglGetCurrentContext();
     if (context == EGL_NO_CONTEXT) return;
     GLint samples = 0;
     glGetIntegerv(GL_SAMPLES, &samples);
-    // Scaled blits from multisampled surfaces are not legal in GLES3.
     if (samples > 0) return;
     if (context != sceneContext) {
         scene = framebuffer = 0;
@@ -63,7 +59,6 @@ inline void Capture(int width, int height, bool visible) {
     if (!framebuffer) glGenFramebuffers(1, &framebuffer);
     glBindTexture(GL_TEXTURE_2D, scene);
     if (sceneWidth != w || sceneHeight != h) {
-        // nullptr must mean allocation, even if the game left a PBO bound.
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
         glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,w,h,0,GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER,unpackBuffer);
@@ -115,7 +110,6 @@ inline void Backdrop(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius,
     const bool sampled = SceneImage(draw,lo,hi,radius,1.018f);
     draw->AddRectFilled(lo,hi,ImGui::GetColorU32(ImVec4(.105f,.098f,.15f,
         sampled ? ImClamp(tintOpacity,0.f,1.f) : 1.f)),radius);
-    // The narrow polished rim catches light without obscuring the clay cards.
     draw->AddRect(lo,hi,IM_COL32(224,214,255,46),radius,0,1.f);
     draw->AddRect(lo + ImVec2(1,1),hi - ImVec2(1,1),IM_COL32(255,255,255,10),
                   ImMax(1.f,radius - 1.f),0,1.f);

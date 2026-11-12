@@ -113,8 +113,6 @@ public:
             return {};
         }
 
-        // A release has already been committed. Do not submit another press
-        // while its shot is unconfirmed, even if targeting or ADS changes.
         if (phase_ == Phase::AwaitShot) {
             if (frame.shotSerial != submittedShotSerial_)
                 phase_ = Phase::Rearm;

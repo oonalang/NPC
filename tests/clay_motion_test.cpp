@@ -11,7 +11,6 @@ int main() {
     assert(std::abs(fast.value - 1.f) < .0001f);
     assert(std::abs(fast.value - slow.value) < .0001f);
 
-    // Releasing or reversing a held control must settle without overshoot.
     fast.Step(0.f, 1.f / 60);
     float previous = fast.value;
     for (int i = 0; i < 120; ++i) {
@@ -19,7 +18,6 @@ int main() {
         assert(fast.value <= previous + .00001f && fast.value >= 0.f);
         previous = fast.value;
     }
-    // A stalled or invalid frame must not destabilize the following frames.
     fast.Step(1.f, 100.f);
     assert(std::isfinite(fast.value) && fast.value <= 1.f);
     const float before = fast.value;

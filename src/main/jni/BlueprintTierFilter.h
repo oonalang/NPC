@@ -45,8 +45,6 @@ inline uint32_t TierFromColorId(int colorId) {
 inline void RecordTier(TierCatalog& entries, uint32_t blueprintId, uint32_t tier) {
     if (blueprintId == 0) return;
     const auto added = entries.emplace(blueprintId, tier);
-    // One blueprint ID must resolve to one rarity. Conflicting or unknown
-    // metadata must not turn a restricted selection into a multi-tier unlock.
     if (!added.second && added.first->second != tier) added.first->second = 0;
 }
 
@@ -76,8 +74,6 @@ inline bool Allows(uint32_t blueprintId) {
     const uint32_t mask = GetMask();
     if (mask == 0) return true;
     if (blueprintId == 0) return false;
-    // A restricted selection grants only verified matching tiers. Waiting for
-    // metadata or encountering an unknown ID must not unlock another rarity.
     if (!catalogReady.load(std::memory_order_acquire)) return false;
     const auto snapshot = std::atomic_load_explicit(&catalog, std::memory_order_acquire);
     if (!snapshot) return false;

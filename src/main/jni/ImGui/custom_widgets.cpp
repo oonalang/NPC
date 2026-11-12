@@ -68,7 +68,6 @@ namespace custom
 
             const ImVec2 badgeSize(67.f,24.f);
             const ImVec2 badgeMin(secondX + second.x + 17.f,min.y + (max.y - min.y - badgeSize.y) * .5f);
-            // Keep the wordmark intact when the available header is narrow.
             if (badgeMin.x + badgeSize.x < max.x - 16.f) {
                 draw->AddRectFilled(badgeMin,badgeMin + badgeSize,IM_COL32(189,153,245,21),12.f);
                 draw->AddRect(badgeMin,badgeMin + badgeSize,IM_COL32(218,192,255,38),12.f);
@@ -1525,7 +1524,7 @@ namespace custom
 
     void EndCombo()
     {
-        PopStyleVar(2); // row spacing and popup fade; both are scoped to this popup
+        PopStyleVar(2);
         EndPopup();
     }
 
@@ -1810,7 +1809,6 @@ namespace custom
 
         if (popup_selectable)
         {
-            // The checkmark carries selection; rows stay quiet until hovered.
             if (hovered && !disabled_item && !disabled_global)
                 GetWindowDrawList()->AddRectFilled(bb.Min, bb.Max,
                     GetColorU32(ImVec4(1.f, 1.f, 1.f, held ? .075f : .045f)), 8.f * control_scale);
@@ -2686,7 +2684,6 @@ namespace custom
         const float track_width = ImMax(1.0f, slider_bb.GetWidth() - track_margin * 2.0f);
         const float grab_center_x = (grab_bb.Min.x + grab_bb.Max.x) * 0.5f;
         const float fill_target = ImClamp(grab_center_x - (slider_bb.Min.x + track_margin), 0.0f, track_width);
-        // The handle follows the exact native value while dragging; only its material springs.
         it_anim->second.slow = fill_target;
 
         const float header_y = total_bb.Min.y + (header_height - label_size.y) * 0.5f;

@@ -24,8 +24,6 @@ int main() {
     assert(TierFromColorId(-1) == 0);
     assert(TierFromColorId(6) == 0);
 
-    // Selecting Epic before metadata loads must not temporarily grant every
-    // blueprint. Native ownership remains the hook's fallback.
     SetMask(Epic);
     assert(!Contains(101));
     assert(!Allows(101));
@@ -49,8 +47,6 @@ int main() {
     RecordTier(entries, 0, Epic);
     Publish(std::move(entries));
 
-    // Regression: only Epic may be injected, including when a blueprint has an
-    // unknown or conflicting catalog entry.
     assert(Allows(103));
     assert(Allows(106));
     assert(!Allows(101));

@@ -118,11 +118,11 @@ int main() {
     Open();
     assert(rows[1].max.x <= popup.max.x);
     Click(rows[2].Center());
-    assert(opened && selected == 0); // Disabled row must not select or dismiss.
+    assert(opened && selected == 0);
     Click(rows[1].Center());
     assert(!opened && selected == 1);
     Open();
-    assert(rows[1].max.x <= popup.max.x); // Selected long label reserves the check lane.
+    assert(rows[1].max.x <= popup.max.x);
     CloseOutside();
 
     kind = Kind::LongList; nearBottom = true; selected = 0;
@@ -131,7 +131,6 @@ int main() {
     assert(popup.max.y <= field.min.y && scrollMax > 0.f);
     io.AddMousePosEvent(popup.Center().x,popup.Center().y);
     Frame();
-    // This ImGui fork eases scrolling; allow repeated input and settling frames.
     for (int i = 0; i < 32 && rows[23].max.y > popupClip.max.y; ++i) {
         io.AddMouseWheelEvent(0,-1.f); Frame(); Settle();
     }
