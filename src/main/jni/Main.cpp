@@ -24,6 +24,7 @@
 #include <fstream>
 #include <sstream>
 #include <atomic>
+#include <cmath>
 #include <thread>
 
 #include "oxorany/source/oxorany.h"
@@ -445,90 +446,169 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 }
             }
             ImGui::SetNextWindowPos(viewportCenter, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowSize(ImVec2(630, 400), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(600, 460), ImGuiCond_Always);
             ImGui::SetNextWindowBgAlpha(0.0f);
             
             if (ImGui::Begin(OBFUSCATE("Login Menu"), nullptr, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse))
             {
-                const ImVec2 pos = ImGui::GetWindowPos();
                 ImDrawList* draw = ImGui::GetWindowDrawList();
-                const ImVec2 login_size = ImVec2(540.0f, 330.0f);
+                const ImVec2 pos = ImGui::GetWindowPos() + ImVec2(20.0f, 18.0f);
+                const ImVec2 login_size = ImVec2(560.0f, 424.0f);
+                const ImVec2 cardMax = pos + login_size;
 
-                // Compact authentication panel inspired by the supplied reference:
-                // dark translucent card, thin border, key icon/title, key field,
-                // two utility buttons, primary authenticate button, and error line.
-                draw->AddRectFilled(
+                const ImVec4 accentV = main_runtime_theme::GetAccentVec4();
+                const ImU32 accent = ImGui::GetColorU32(accentV);
+                ImFont* titleFont = F50 ? F50 : ImGui::GetFont();
+                ImFont* bodyFont = font::inter_semibold ? font::inter_semibold : ImGui::GetFont();
+                ImFont* iconFont = custom::shell::GetIconFont();
+
+                for (int layer = 4; layer >= 1; --layer)
+                {
+                    const float expand = layer * 7.0f;
+                    draw->AddRectFilled(
+                        pos - ImVec2(expand, expand),
+                        cardMax + ImVec2(expand, expand),
+                        ImGui::GetColorU32(ImVec4(accentV.x, accentV.y, accentV.z, 0.028f)),
+                        30.0f + expand
+                    );
+                }
+
+                draw->AddRectFilled(pos, cardMax, IM_COL32(13, 11, 19, 248), 30.0f);
+                draw->AddRectFilledMultiColor(
                     pos,
-                    pos + login_size,
-                    IM_COL32(0, 0, 0, 255),
-                    12.0f
+                    ImVec2(cardMax.x, pos.y + login_size.y * 0.52f),
+                    IM_COL32(255, 255, 255, 16),
+                    IM_COL32(206, 186, 255, 10),
+                    IM_COL32(255, 255, 255, 0),
+                    IM_COL32(255, 255, 255, 0)
                 );
-                draw->AddRect(
-                    pos,
-                    pos + login_size,
-                    IM_COL32(177, 110, 245, 220),
-                    12.0f,
-                    0,
-                    1.0f
-                );
-
-                // Subtle top highlight.
-                draw->AddRectFilled(
-                    pos + ImVec2(1.0f, 1.0f),
-                    pos + ImVec2(login_size.x - 1.0f, 5.0f),
-                    IM_COL32(240, 50, 65, 180),
-                    10.0f
+                draw->AddRect(pos, cardMax, IM_COL32(230, 222, 255, 42), 30.0f, 0, 1.4f);
+                draw->AddRect(pos + ImVec2(2.0f, 2.0f), cardMax - ImVec2(2.0f, 2.0f), IM_COL32(255, 255, 255, 9), 28.0f, 0, 1.0f);
+                draw->AddLine(
+                    ImVec2(pos.x + 46.0f, pos.y + 1.8f),
+                    ImVec2(cardMax.x - 46.0f, pos.y + 1.2f),
+                    IM_COL32(255, 255, 255, 96),
+                    1.6f
                 );
 
-                // Header icon and title.
-                const ImVec2 iconCenter = pos + ImVec2(31.0f, 31.0f);
-                draw->AddCircleFilled(iconCenter, 13.0f, IM_COL32(177, 110, 245, 60), 24);
-                draw->AddCircle(iconCenter, 13.0f, IM_COL32(240, 55, 70, 210), 24, 1.0f);
-
-                if (F50)
-                    draw->AddText(F50, 15.0f,
-                                  iconCenter + ImVec2(-5.0f, -8.0f),
-                                  IM_COL32(235, 240, 242, 255), "E");
+                const ImVec2 logoCenter(pos.x + login_size.x * 0.5f, pos.y + 44.0f);
+                for (int g = 3; g >= 1; --g)
+                {
+                    draw->AddCircleFilled(
+                        logoCenter,
+                        21.0f + g * 4.0f,
+                        ImGui::GetColorU32(ImVec4(accentV.x, accentV.y, accentV.z, 0.040f)),
+                        32
+                    );
+                }
+                draw->AddCircleFilled(logoCenter, 21.0f, IM_COL32(26, 18, 36, 250), 32);
+                {
+                    ImVec2 hexOuter[6];
+                    ImVec2 hexInner[6];
+                    for (int i = 0; i < 6; ++i)
+                    {
+                        const float a = -1.5707964f + (float)i * 1.0471976f;
+                        hexOuter[i] = ImVec2(logoCenter.x + std::cos(a) * 18.0f, logoCenter.y + std::sin(a) * 18.0f);
+                        hexInner[i] = ImVec2(logoCenter.x + std::cos(a) * 15.0f, logoCenter.y + std::sin(a) * 15.0f);
+                    }
+                    draw->AddPolyline(hexOuter, 6, accent, ImDrawFlags_Closed, 1.5f);
+                    draw->AddPolyline(hexInner, 6, IM_COL32(255, 255, 255, 26), ImDrawFlags_Closed, 1.0f);
+                }
+                {
+                    const char* mark = "E";
+                    const ImVec2 markSz = titleFont->CalcTextSizeA(15.0f, FLT_MAX, 0.0f, mark);
+                    draw->AddText(
+                        titleFont,
+                        15.0f,
+                        ImVec2(logoCenter.x - markSz.x * 0.5f, logoCenter.y - markSz.y * 0.5f),
+                        IM_COL32(246, 242, 255, 255),
+                        mark
+                    );
+                }
 
                 const char* titleText = "ETHNIR NOIR";
-                draw->AddText(
-                    F50 ? F50 : ImGui::GetFont(),
-                    17.0f,
-                    pos + ImVec2(53.0f, 20.0f),
-                    IM_COL32(226, 236, 246, 255),
-                    titleText
-                );
+                const float titleSize = 22.0f;
+                const ImVec2 titleSz = titleFont->CalcTextSizeA(titleSize, FLT_MAX, 0.0f, titleText);
+                const ImVec2 titlePos(pos.x + (login_size.x - titleSz.x) * 0.5f, pos.y + 72.0f);
+                draw->AddText(titleFont, titleSize, titlePos + ImVec2(0.0f, 1.2f), IM_COL32(0, 0, 0, 170), titleText);
+                draw->AddText(titleFont, titleSize, titlePos, IM_COL32(247, 245, 252, 255), titleText);
 
+                for (int i = 0; i < 3; ++i)
+                {
+                    draw->AddLine(
+                        ImVec2(titlePos.x + titleSz.x * 0.5f - 12.0f + i * 6.0f, titlePos.y + titleSz.y + 7.0f),
+                        ImVec2(titlePos.x + titleSz.x * 0.5f - 6.0f + i * 6.0f, titlePos.y + titleSz.y + 2.0f),
+                        accent,
+                        1.8f
+                    );
+                }
+
+                {
+                    const char* hint = "Use your authorized access key to continue.";
+                    const float hintSize = 11.5f;
+                    const ImVec2 hintSz = bodyFont->CalcTextSizeA(hintSize, FLT_MAX, 0.0f, hint);
+                    draw->AddText(
+                        bodyFont,
+                        hintSize,
+                        ImVec2(pos.x + (login_size.x - hintSz.x) * 0.5f, pos.y + 112.0f),
+                        IM_COL32(152, 148, 170, 238),
+                        hint
+                    );
+                }
+
+                const float fieldX = 38.0f;
+                const float fieldY = 138.0f;
+                const float fieldW = login_size.x - 76.0f;
+                const float fieldH = 54.0f;
+                const ImVec2 fieldMin(pos.x + fieldX, pos.y + fieldY);
+                const ImVec2 fieldMax(fieldMin.x + fieldW, fieldMin.y + fieldH);
+                draw->AddRectFilled(fieldMin, fieldMax, IM_COL32(20, 16, 28, 250), fieldH * 0.5f);
+                draw->AddRectFilled(fieldMin, fieldMax, IM_COL32(255, 255, 255, 7), fieldH * 0.5f);
+                draw->AddRect(fieldMin, fieldMax, IM_COL32(255, 255, 255, 30), fieldH * 0.5f, 0, 1.1f);
                 draw->AddLine(
-                    pos + ImVec2(53.0f, 46.0f),
-                    pos + ImVec2(login_size.x - 18.0f, 46.0f),
-                    IM_COL32(92, 70, 24, 180),
+                    ImVec2(fieldMin.x + 52.0f, fieldMin.y + 15.0f),
+                    ImVec2(fieldMin.x + 52.0f, fieldMax.y - 15.0f),
+                    IM_COL32(255, 255, 255, 26),
                     1.0f
                 );
 
-                // Key input.
-                const float inputX = 24.0f;
-                const float inputY = 72.0f;
-                const float inputW = login_size.x - 48.0f;
-                const float inputH = 48.0f;
-
-                ImGui::SetCursorPos(ImVec2(inputX, inputY));
-                ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 255));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 10, 12, 255));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(60, 15, 18, 255));
-                ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(177, 110, 245, 235));
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(224, 234, 244, 255));
-                ImGui::PushStyleColor(ImGuiCol_TextDisabled, IM_COL32(122, 132, 148, 220));
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-
+                ImGui::SetCursorPos(ImVec2(fieldX + 64.0f, fieldY + 24.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 18.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(232, 228, 244, 255));
                 if (F50) ImGui::PushFont(F50);
-                ImGui::AstralInput("##key_login", s, sizeof(s), ImVec2(inputW, inputH));
+                ImGui::AstralInput("##key_login", s, sizeof(s), ImVec2(fieldW - 66.0f, fieldH - 12.0f), false);
                 if (F50) ImGui::PopFont();
+                ImGui::PopStyleColor();
+                ImGui::PopStyleVar();
 
                 const bool loginInputClicked = ImGui::IsItemClicked();
                 const bool loginInputActive = ImGui::IsItemActive();
                 const bool loginInputHovered = ImGui::IsItemHovered();
+
+                if (loginInputActive || loginInputHovered)
+                {
+                    draw->AddRect(
+                        fieldMin - ImVec2(1.2f, 1.2f),
+                        fieldMax + ImVec2(1.2f, 1.2f),
+                        ImGui::GetColorU32(ImVec4(accentV.x, accentV.y, accentV.z, loginInputActive ? 0.72f : 0.34f)),
+                        fieldH * 0.5f + 1.2f,
+                        0,
+                        1.4f
+                    );
+                }
+                if (iconFont != nullptr)
+                {
+                    const char* keyIcon = ICON_FA_KEY;
+                    const float iconSize = 16.0f;
+                    const ImVec2 iconSz = iconFont->CalcTextSizeA(iconSize, FLT_MAX, 0.0f, keyIcon);
+                    draw->AddText(
+                        iconFont,
+                        iconSize,
+                        ImVec2(fieldMin.x + 26.0f - iconSz.x * 0.5f, fieldMin.y + (fieldH - iconSz.y) * 0.5f),
+                        accent,
+                        keyIcon
+                    );
+                }
 
                 if (loginInputClicked || loginInputActive)
                     showKeyboard = true;
@@ -542,37 +622,89 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         showKeyboard = false;
                 }
 
-                ImGui::PopStyleVar(2);
-                ImGui::PopStyleColor(6);
+                const float utilityY = 208.0f;
+                const float utilityGap = 14.0f;
+                const float utilityW = (fieldW - utilityGap) * 0.5f;
+                const float utilityH = 46.0f;
 
-                // Utility buttons: PASTE + LOAD CACHED.
-                const float utilityY = 132.0f;
-                const float utilityGap = 12.0f;
-                const float utilityW = (login_size.x - 48.0f - utilityGap) * 0.5f;
-                const float utilityH = 42.0f;
-
-                auto drawUtilityButton = [&](const char* label, float x) -> bool
+                auto drawPill = [&](const char* id, const char* label, const char* icon, float x, float y, float w, float h, bool primary) -> bool
                 {
-                    ImGui::SetCursorPos(ImVec2(x, utilityY));
-                    ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 255));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 10, 12, 255));
-                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(60, 15, 18, 255));
-                    ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(177, 110, 245, 235));
-                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(207, 218, 231, 255));
-                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+                    ImGui::SetCursorPos(ImVec2(x + 20.0f, y + 18.0f));
+                    ImGui::InvisibleButton(id, ImVec2(w, h));
+                    const bool hovered = ImGui::IsItemHovered();
+                    const bool held = ImGui::IsItemActive();
+                    const bool clicked = ImGui::IsItemClicked();
 
-                    if (F50) ImGui::PushFont(F50);
-                    bool clicked = ImGui::Button(label, ImVec2(utilityW, utilityH));
-                    if (F50) ImGui::PopFont();
+                    const ImVec2 bMin(pos.x + x, pos.y + y);
+                    const ImVec2 bMax(bMin.x + w, bMin.y + h);
+                    const float radius = h * 0.5f;
 
-                    ImGui::PopStyleVar(2);
-                    ImGui::PopStyleColor(5);
+                    if (primary)
+                    {
+                        for (int g = 3; g >= 1; --g)
+                        {
+                            draw->AddRectFilled(
+                                bMin - ImVec2(g * 2.5f, g * 2.5f),
+                                bMax + ImVec2(g * 2.5f, g * 2.5f),
+                                ImGui::GetColorU32(ImVec4(accentV.x, accentV.y, accentV.z, held ? 0.11f : 0.06f)),
+                                radius + g * 2.5f
+                            );
+                        }
+                        draw->AddRectFilled(bMin, bMax, ImGui::GetColorU32(ImVec4(accentV.x, accentV.y, accentV.z, hovered ? 0.48f : 0.34f)), radius);
+                        draw->AddRectFilled(bMin, bMax, IM_COL32(255, 255, 255, hovered ? 22 : 12), radius);
+                        draw->AddRect(bMin, bMax, IM_COL32(255, 255, 255, 46), radius, 0, 1.2f);
+                        draw->AddLine(
+                            ImVec2(bMin.x + radius, bMin.y + 1.8f),
+                            ImVec2(bMax.x - radius, bMin.y + 1.2f),
+                            IM_COL32(255, 255, 255, 150),
+                            1.6f
+                        );
+                    }
+                    else
+                    {
+                        draw->AddRectFilled(bMin, bMax, IM_COL32(255, 255, 255, hovered ? 16 : 9), radius);
+                        draw->AddRect(bMin, bMax, IM_COL32(255, 255, 255, held ? 52 : 34), radius, 0, 1.1f);
+                        draw->AddLine(
+                            ImVec2(bMin.x + radius, bMin.y + 1.6f),
+                            ImVec2(bMax.x - radius, bMin.y + 1.2f),
+                            IM_COL32(255, 255, 255, 60),
+                            1.2f
+                        );
+                    }
+
+                    const float labelSize = 14.0f;
+                    const float iconSize = 16.0f;
+                    const ImVec2 labelSz = titleFont->CalcTextSizeA(labelSize, FLT_MAX, 0.0f, label);
+                    ImVec2 iconSz(0.0f, 0.0f);
+                    float contentW = labelSz.x;
+                    if (iconFont != nullptr && icon != nullptr)
+                    {
+                        iconSz = iconFont->CalcTextSizeA(iconSize, FLT_MAX, 0.0f, icon);
+                        contentW += iconSz.x + 14.0f;
+                    }
+                    const float contentX = bMin.x + (w - contentW) * 0.5f;
+                    const float centerY = bMin.y + h * 0.5f;
+                    if (iconFont != nullptr && icon != nullptr)
+                    {
+                        draw->AddText(
+                            iconFont,
+                            iconSize,
+                            ImVec2(contentX, centerY - iconSz.y * 0.5f),
+                            primary ? IM_COL32(255, 255, 255, 245) : IM_COL32(208, 204, 222, 235),
+                            icon
+                        );
+                    }
+                    draw->AddText(
+                        titleFont,
+                        labelSize,
+                        ImVec2(contentX + (iconSz.x > 0.0f ? iconSz.x + 14.0f : 0.0f), centerY - labelSz.y * 0.5f),
+                        primary ? IM_COL32(252, 250, 255, 255) : IM_COL32(226, 222, 238, 240),
+                        label
+                    );
                     return clicked;
                 };
 
-
-                if (drawUtilityButton("LOAD", 24.0f + utilityW + utilityGap))
+                if (drawPill("##login_load", "LOAD", ICON_FA_FOLDER_OPEN, fieldX + utilityW + utilityGap, utilityY, utilityW, utilityH, false))
                 {
                     if (LoadTextFromFile() && logintext[0] != '\0')
                     {
@@ -587,23 +719,17 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     }
                 }
 
-                // Primary authentication button.
-                const float authX = 24.0f;
-                const float authY = 190.0f;
-                const float authW = login_size.x - 48.0f;
-                const float authH = 46.0f;
+                if (drawPill("##login_paste", "PASTE", ICON_FA_PASTE, fieldX, utilityY, utilityW, utilityH, false))
+                {
+                    auto key = getClipboard();
+                    strncpy(s, key.c_str(), sizeof(s) - 1);
+                    s[sizeof(s) - 1] = '\0';
+                    err.clear();
+                }
 
-                ImGui::SetCursorPos(ImVec2(authX, authY));
-                ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 255));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(40, 10, 12, 255));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, IM_COL32(60, 15, 18, 255));
-                ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(177, 110, 245, 235));
-                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(225, 236, 246, 255));
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-
-                if (F50) ImGui::PushFont(F50);
-                if (ImGui::Button(g_LoginPending ? "CHECKING..." : "AUTHENTICATE", ImVec2(authW, authH)) && !g_LoginPending)
+                const float authY = 272.0f;
+                const float authH = 56.0f;
+                if (drawPill("##login_auth", g_LoginPending ? "CHECKING..." : "AUTHENTICATE", ICON_FA_BULLSEYE, fieldX, authY, fieldW, authH, true) && !g_LoginPending)
                 {
                     if (s[0] == '\0')
                     {
@@ -620,49 +746,45 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         }, g_SubmittedKey).detach();
                     }
                 }
-                if (F50) ImGui::PopFont();
-                                if (drawUtilityButton("PASTE", 24.0f))
-                {
-                    auto key = getClipboard();
-                    strncpy(s, key.c_str(), sizeof(s) - 1);
-                    s[sizeof(s) - 1] = '\0';
-                    err.clear();
-                }
-
-
-                ImGui::PopStyleVar(2);
-                ImGui::PopStyleColor(5);
-
-                // Error/status line.
-                if (!err.empty() && err != "OK")
-                {
-                    draw->AddText(
-                        pos + ImVec2(24.0f, 255.0f),
-                        IM_COL32(255, 105, 115, 255),
-                        ("Error: " + err).c_str()
-                    );
-                }
-                else
-                {
-                    draw->AddText(
-                        pos + ImVec2(24.0f, 255.0f),
-                        IM_COL32(118, 132, 150, 210),
-                        "Use your authorized access key to continue."
-                    );
-                }
 
                 draw->AddLine(
-                    pos + ImVec2(24.0f, 283.0f),
-                    pos + ImVec2(login_size.x - 24.0f, 283.0f),
-                    IM_COL32(82, 38, 44, 180),
+                    ImVec2(pos.x + 38.0f, pos.y + 352.0f),
+                    ImVec2(cardMax.x - 38.0f, pos.y + 352.0f),
+                    IM_COL32(255, 255, 255, 16),
                     1.0f
                 );
 
-                draw->AddText(
-                    pos + ImVec2(24.0f, 296.0f),
-                    IM_COL32(102, 116, 134, 190),
-                    "Secure access  •  Local cache"
-                );
+                {
+                    const bool hasError = !err.empty() && err != "OK";
+                    const char* statusIcon = hasError ? ICON_FA_EXCLAMATION : ICON_FA_SHIELD_ALT;
+                    const char* statusText = hasError ? err.c_str() : "Secure access  •  Local cache ready";
+                    const float statusSize = 11.5f;
+                    const float statusIconSize = 13.0f;
+                    const ImVec2 textSz = bodyFont->CalcTextSizeA(statusSize, FLT_MAX, 0.0f, statusText);
+                    ImVec2 iconSz(0.0f, 0.0f);
+                    if (iconFont != nullptr)
+                        iconSz = iconFont->CalcTextSizeA(statusIconSize, FLT_MAX, 0.0f, statusIcon);
+                    const float totalW = textSz.x + iconSz.x + (iconFont != nullptr ? 9.0f : 0.0f);
+                    const float startX = pos.x + (login_size.x - totalW) * 0.5f;
+                    const float textY = cardMax.y - 34.0f;
+                    if (iconFont != nullptr)
+                    {
+                        draw->AddText(
+                            iconFont,
+                            statusIconSize,
+                            ImVec2(startX, textY + (textSz.y - iconSz.y) * 0.5f),
+                            hasError ? IM_COL32(255, 128, 140, 240) : accent,
+                            statusIcon
+                        );
+                    }
+                    draw->AddText(
+                        bodyFont,
+                        statusSize,
+                        ImVec2(startX + iconSz.x + (iconFont != nullptr ? 9.0f : 0.0f), textY),
+                        hasError ? IM_COL32(255, 138, 150, 245) : IM_COL32(146, 142, 164, 235),
+                        statusText
+                    );
+                }
 
                 if (showKeyboard)
                     RenderVirtualKeyboard("##VirtualKeyboardLogin", s, sizeof(s), &showKeyboard);

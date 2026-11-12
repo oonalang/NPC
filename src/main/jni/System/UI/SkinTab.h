@@ -300,7 +300,7 @@ std::string GetBaseWeaponName(const std::string& fullName) {
 }
 
 namespace ImGui {
-bool AstralInput(const char* label, char* buf, size_t buf_size, const ImVec2& size = ImVec2(0, 0)) {
+bool AstralInput(const char* label, char* buf, size_t buf_size, const ImVec2& size = ImVec2(0, 0), bool showFrame = true) {
     ImGuiWindow* window = GetCurrentWindow();
     if (window->SkipItems)
         return false;
@@ -345,13 +345,14 @@ bool AstralInput(const char* label, char* buf, size_t buf_size, const ImVec2& si
         cursorVisible = true;
     }
 
-    ImU32 bgColor = GetColorU32(isActive ? c::elements::background_hovered : hovered ? c::button::background_hovered : c::widget::background);
-    ImU32 borderColor = GetColorU32(isActive ? c::accent : c::button::outline);
-
     ImDrawList* draw_list = window->DrawList;
 
-    draw_list->AddRectFilled(bb.Min, bb.Max, bgColor, 4.0f);
-    draw_list->AddRect(bb.Min, bb.Max, borderColor, 4.0f, 0, 1.0f);
+    if (showFrame) {
+        ImU32 bgColor = GetColorU32(isActive ? c::elements::background_hovered : hovered ? c::button::background_hovered : c::widget::background);
+        ImU32 borderColor = GetColorU32(isActive ? c::accent : c::button::outline);
+        draw_list->AddRectFilled(bb.Min, bb.Max, bgColor, 4.0f);
+        draw_list->AddRect(bb.Min, bb.Max, borderColor, 4.0f, 0, 1.0f);
+    }
 
     std::string text = buf;
     ImVec2 textPos = ImVec2(bb.Min.x + 15.0f, bb.Min.y + (inputSize.y - GetFontSize()) * 0.5f);
@@ -377,8 +378,8 @@ bool AstralInput(const char* label, char* buf, size_t buf_size, const ImVec2& si
 
     PopClipRect();
 
-    if (isActive) {
-        float animProgress = fmod(cursorBlinkTimer, 1.0f);
+    if (isActive && showFrame) {
+        float animProgress = fmodf(cursorBlinkTimer, 1.0f);
         float lineWidth = bb.GetWidth() * 0.3f;
         float lineStart = bb.Min.x + (bb.GetWidth() - lineWidth) * 0.5f;
         float lineEnd = lineStart + lineWidth;
