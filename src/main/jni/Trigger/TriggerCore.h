@@ -56,6 +56,9 @@ struct Frame {
     bool shotReady = false;
     std::uint64_t shotSerial = 0;
     FireMode fireMode = FireMode::Unsupported;
+    // Bolt-action/sniper weapons (Weapon.m_IsReleaseToFire) shoot on the
+    // release edge instead of the press edge.
+    bool releaseToFire = false;
 };
 
 struct Intent {
@@ -112,6 +115,28 @@ public:
 
 
             return {true, !wasHeld, false, false};
+        }
+
+        if (frame.releaseToFire) {
+            // The native input only fires these weapons when the button is
+            // released, so the press is delivered first and the release follows
+            // on the next update. Re-arming then waits for the shot to be
+            // acknowledged instead of holding until a shot that never comes.
+            if (phase_ == Phase::Held) {
+                submittedShotSerial_ = frame.shotSerial;
+                phase_ = Phase::Rearm;
+                return {false, false, true, false};
+            }
+            if (phase_ == Phase::Rearm) {
+                if (frame.shotSerial == submittedShotSerial_ && frame.shotReady) return {};
+                phase_ = Phase::Idle;
+            }
+            if (!frame.shotReady) {
+                return {};
+            }
+            submittedShotSerial_ = frame.shotSerial;
+            phase_ = Phase::Held;
+            return {true, true, false, false};
         }
 
         if (phase_ == Phase::Held) {

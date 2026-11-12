@@ -50,15 +50,24 @@ Hitscan and projectile dispatch now each acknowledge a shot once, after the
 original dispatch returns. This lets the single-shot controller release and
 rearm when a projectile shot is confirmed. Manual press, hold and release frames
 take precedence over synthetic input. Invalid gameplay context updates the
-displayed status instead of leaving a stale firing message.
+displayed status instead of leaving a stale firing message. Release-to-fire
+weapons are no longer rejected up front, so the Trigger tab reports their real
+status instead of `Release-to-fire mode unsupported`.
 
 The adapter supports ordinary automatic and single-shot weapons whose input
 preparation matches the verified base implementation. Shot readiness uses the
 actual `CanFire` virtual function and its metadata, matching the native game's
 dispatch, and requires that function to lie in the verified module's executable
 segments. This preserves subtype restrictions without rejecting every override.
-Burst and release-to-fire modes remain unsupported. The ammo query is reused
-within each input decision to avoid a second native call and inconsistent samples.
+Burst modes remain unsupported. Weapons flagged `m_IsReleaseToFire`
+(`Weapon+0x265`) fire on the button-release edge instead of the press edge;
+these include bolt-action sniper rifles and previously never triggered. They now
+follow the single-shot path: press while the crosshair is on a validated target,
+release on the next update to shoot, and re-arm once the shot is acknowledged.
+The release edge is excluded from the native release-edge cancellation only when
+a validated target backs it, so losing the target still stops without an
+unintended shot. The ammo query is reused within each input decision to avoid a
+second native call and inconsistent samples.
 
 ## Validation
 

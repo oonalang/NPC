@@ -265,12 +265,16 @@ void Buttons(void* unit, void* param, Metadata metadata) {
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
     const bool burst = At<BoolGetter>(0x5474344)(weapon,nullptr);
-    const bool potentiallyRelease = At<BoolGetter>(0x547496C)(weapon,nullptr);
-    const bool release = !knownPrepare || (potentiallyRelease &&
-        At<BoolGetter>(0xC916900)(controller,nullptr));
+    // 0x547496C is Weapon.m_IsReleaseToFire; snipers and other bolt-action
+    // weapons shoot when the fire button is released, so they follow the
+    // single-shot path with a press followed by a deliberate release.
+    const bool releaseToFire = At<BoolGetter>(0x547496C)(weapon,nullptr) &&
+        At<BoolGetter>(0xC916900)(controller,nullptr);
     const bool ordinaryGun = knownPrepare && knownReadiness && frame.ammoAvailable;
-    if (component && ordinaryGun && !burst && !release) {
-        frame.fireMode = At<BoolGetter>(0x5474278)(weapon,nullptr)
+    if (component && ordinaryGun && !burst) {
+        const bool singleShot = At<BoolGetter>(0x5474278)(weapon,nullptr);
+        frame.releaseToFire = releaseToFire;
+        frame.fireMode = (singleShot || releaseToFire)
             ? FireMode::Single : FireMode::Automatic;
     }
     if (installation.load(std::memory_order_acquire) != 2) {
@@ -299,11 +303,11 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     else if (!frame.ammoAvailable) detail = "Weapon cannot fire or out of ammo";
     else if (!knownPrepare) detail = "Unsupported weapon input handler";
     else if (!knownReadiness) detail = "Unsupported weapon readiness handler";
-    else if (release) detail = "Release-to-fire mode unsupported";
     else if (burst) detail = "Burst mode unsupported";
     else if (frame.fireMode == FireMode::Unsupported) detail = "Unsupported weapon fire mode";
     else if (frame.hardBlocked) detail = "Weapon state blocked";
-    else if (!needTarget) detail = "Waiting for weapon shot readiness";
+    else if (!needTarget) detail = releaseToFire
+        ? "Release-to-fire weapon cooling down" : "Waiting for weapon shot readiness";
     else if (!rayReady) detail = "Camera ray unavailable";
     else if (target == TargetResult::NoEligibleBody) detail = "No eligible target at crosshair";
     else if (target == TargetResult::WorldBlocked) detail = "World obstruction";
@@ -311,10 +315,17 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     else if (target == TargetResult::QueryUnavailable) detail = "Target query unavailable";
     else if (target == TargetResult::InvalidHit) detail = "Invalid target intersection";
     else if (target == TargetResult::InvalidRay) detail = "Invalid camera ray";
-    else if (intent.held || intent.down) detail = "Fire input active";
-    else if (intent.up) detail = "Rearming fire input";
+    else if (intent.held || intent.down) detail = releaseToFire
+        ? "Holding before release-to-fire" : "Fire input active";
+    else if (intent.up) detail = releaseToFire
+        ? "Releasing to fire" : "Rearming fire input";
     reason.store(detail,std::memory_order_release);
-    const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent);
+    // A released shot is the intended trigger for these weapons, so keep the
+    // native release-edge cleanup for the cases where no validated target backs
+    // the release: unknown handlers and lost targets.
+    const bool cancelRelease = !knownPrepare || (releaseToFire && !frame.targetValid);
+    const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,
+                                                     cancelRelease,intent);
     if (decision.resetController) local.controller.Reset();
     local.stopAfterUpdate = decision.stopResult;
     local.syntheticInput = !decision.input.passthrough;

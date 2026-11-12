@@ -1073,38 +1073,43 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         {
                             custom::BeginGroup();
                             {
-                                const ChildFrame left = BeginContentChild("MEMORY HACKS", ImVec2(childWidth, childHeight));                                
+                                const ChildFrame left = BeginContentChild("MEMORY HACKS", ImVec2(childWidth, childHeight));
+                                custom::Checkbox("Unlock Blueprints", &Config.ExtraMenu.Blueprints);
+                                {
+                                    // Stock ImGui widgets draw with this build's all-transparent
+                                    // style, so the tier selector uses the themed custom combo
+                                    // and stays visible regardless of the Unlock Blueprints state.
+                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT FILTER");
+                                    const std::string selectedTiers = BlueprintTierFilter::Preview();
+                                    bool allBlueprints = BlueprintTierFilter::GetMask() == 0;
+                                    bool mythicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Mythic);
+                                    bool legendaryTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Legendary);
+                                    bool epicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Epic);
+                                    bool commonTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common);
+                                    const auto tierOptions = ImGuiSelectableFlags_DontClosePopups;
+                                    if (custom::BeginCombo("Blueprint tiers", selectedTiers.c_str(), 5)) {
+                                        if (custom::Selectable("All blueprints (clear)", &allBlueprints, tierOptions))
+                                            BlueprintTierFilter::SetMask(0);
+                                        if (custom::Selectable("Mythic", &mythicTier, tierOptions))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Mythic);
+                                        if (custom::Selectable("Legendary", &legendaryTier, tierOptions))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Legendary);
+                                        if (custom::Selectable("Epic", &epicTier, tierOptions))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Epic);
+                                        if (custom::Selectable("Common", &commonTier, tierOptions))
+                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
+                                        custom::EndCombo();
+                                    }
+                                    if (!Config.ExtraMenu.Blueprints)
+                                        ImGui::TextColored(ImVec4(0.66f, 0.70f, 0.78f, 1.0f),
+                                                           "Enable Unlock Blueprints to apply these tiers");
+                                }
                                 custom::Checkbox("Auto Jump Fire", &Config.ExtraMenu.AutoJumpFire);
                                 custom::Checkbox("Fast Armor Plate", &Config.ExtraMenu.FastArmorPlate);
 								custom::Checkbox("Camera Pov", &Config.ExtraMenu.CameraPov);
 								custom::Checkbox("SmartReload", &Config.ExtraMenu.SmartReload);
 								custom::Checkbox("No Smoke", &Config.ExtraMenu.NoSmoke);
 								custom::Checkbox("ClearTerrain", &Config.ExtraMenu.ClearTerrain);
-								custom::Checkbox("Unlock Blueprints", &Config.ExtraMenu.Blueprints);
-                                {
-                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT FILTER");
-                                    ImGui::TextUnformatted("Blueprint tiers");
-                                    const std::string selectedTiers = BlueprintTierFilter::Preview();
-                                    ImGui::SetNextItemWidth(-1.0f);
-                                    if (ImGui::BeginCombo("##BlueprintTierMultiSelect", selectedTiers.c_str())) {
-                                        const auto options = ImGuiSelectableFlags_DontClosePopups;
-                                        if (ImGui::Selectable("All blueprints (clear)", BlueprintTierFilter::GetMask() == 0, options))
-                                            BlueprintTierFilter::SetMask(0);
-                                        if (ImGui::Selectable("Mythic", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Mythic), options))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Mythic);
-                                        if (ImGui::Selectable("Legendary", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Legendary), options))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Legendary);
-                                        if (ImGui::Selectable("Epic", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Epic), options))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Epic);
-                                        if (ImGui::Selectable("Common", BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common), options))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
-                                        ImGui::EndCombo();
-                                    }
-                                    if (!Config.ExtraMenu.Blueprints)
-                                        ImGui::TextDisabled("Enable Unlock Blueprints to apply selected tiers");
-                                    else if (BlueprintTierFilter::GetMask() == 0)
-                                        ImGui::TextDisabled("No tiers selected: all blueprints");
-                                }
 								custom::Checkbox("Unlimited Fly", &Config.ExtraMenu.UnlimitedFly);
                                 custom::Checkbox("Hitbox", &Config.ExtraMenu.Hit);
                                 custom::Checkbox("No Recoil", &Config.ExtraMenu.Recoil);

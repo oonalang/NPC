@@ -133,6 +133,48 @@ void SingleShotAcknowledgement() {
     Require(intent.down && intent.held, "ready single shot rearms after release");
 }
 
+void ReleaseToFireSingleShot() {
+    Controller controller;
+    Frame frame = Ready(FireMode::Single);
+    frame.releaseToFire = true;
+    auto intent = controller.Step(enabled, frame);
+    Require(intent.held && intent.down && !intent.passthrough,
+            "sniper press arms the shot");
+    ++frame.updateId;
+    intent = controller.Step(enabled, frame);
+    Require(intent.up && !intent.held && !intent.down,
+            "sniper release fires without a press-edge acknowledgement");
+    ++frame.updateId;
+    intent = controller.Step(enabled, frame);
+    Require(intent.passthrough,
+            "sniper waits for the release shot to be acknowledged");
+    ++frame.updateId;
+    ++frame.shotSerial;
+    intent = controller.Step(enabled, frame);
+    Require(intent.down && intent.held,
+            "sniper re-arms after the shot is acknowledged");
+    ++frame.updateId;
+    frame.shotReady = false;
+    intent = controller.Step(enabled, frame);
+    Require(intent.up && !intent.held,
+            "sniper still releases while the bolt is cycling");
+
+    Controller bolt;
+    Frame boltFrame = Ready(FireMode::Single);
+    boltFrame.releaseToFire = true;
+    Require(bolt.Step(enabled, boltFrame).down, "sniper arms before the bolt test");
+    ++boltFrame.updateId;
+    Require(bolt.Step(enabled, boltFrame).up, "sniper releases before the bolt test");
+    ++boltFrame.updateId;
+    boltFrame.shotReady = false;
+    Require(bolt.Step(enabled, boltFrame).passthrough,
+            "sniper does not press again while the weapon is not ready");
+    ++boltFrame.updateId;
+    boltFrame.shotReady = true;
+    Require(bolt.Step(enabled, boltFrame).down,
+            "sniper rearms once the bolt is ready");
+}
+
 void OwnershipAndLifecycle() {
     Controller controller;
     Frame frame = Ready();
@@ -305,6 +347,7 @@ void CancellationAndSettings() {
 int main() {
     VirtualWeaponReadiness();
     SingleShotAcknowledgement();
+    ReleaseToFireSingleShot();
     OwnershipAndLifecycle();
     AdsAndModeChanges();
     TargetValidation();
