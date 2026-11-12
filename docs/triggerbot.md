@@ -13,7 +13,7 @@ so this change repairs NPC's existing path.
 - NPC base: `bd3fb7187311d2e2abfa7306aca425954f176771`
 - Purple reference: `fd895e5f1023712a331fcdf530371e1332e557cc`
 
-All 44 pinned entry fingerprints and seven diagnostic probes match the supplied
+All 45 pinned entry fingerprints and seven diagnostic probes match the supplied
 ELF when virtual addresses are mapped through its program headers. The checked
 trigger RVAs map to file offsets at `RVA - 0x4000` in this image.
 
@@ -25,7 +25,7 @@ also use the ARM64 indirect aggregate return convention. Preserve these bindings
 Eight method bodies in the disk image are encoded. Their disk fingerprints are
 checked by the offline verifier rather than compared with the loaded bodies.
 Runtime validation requires the pinned build ID, readable executable ranges for
-all 44 methods, and exact prefixes for the 36 stable methods, including all four
+all 45 methods, and exact prefixes for the 37 stable methods, including all five
 input hook entry points. The encoded methods must be readable and no longer
 match their known encoded disk prefixes before hooks can be installed. Unknown
 builds and changed stable entry points leave automatic input disabled. Live
@@ -50,24 +50,40 @@ Hitscan and projectile dispatch now each acknowledge a shot once, after the
 original dispatch returns. This lets the single-shot controller release and
 rearm when a projectile shot is confirmed. Manual press, hold and release frames
 take precedence over synthetic input. Invalid gameplay context updates the
-displayed status instead of leaving a stale firing message. Release-to-fire
-weapons are no longer rejected up front, so the Trigger tab reports their real
-status instead of `Release-to-fire mode unsupported`.
+displayed status instead of leaving a stale firing message.
 
-The adapter supports ordinary automatic and single-shot weapons whose input
-preparation matches the verified base implementation. Shot readiness uses the
+The adapter supports ordinary automatic and single-shot weapons with the base
+or verified COD sniper input-preparation handler. Charged and other specialized
+preparation handlers remain excluded. Shot readiness uses the
 actual `CanFire` virtual function and its metadata, matching the native game's
 dispatch, and requires that function to lie in the verified module's executable
 segments. This preserves subtype restrictions without rejecting every override.
-Burst modes remain unsupported. Weapons flagged `m_IsReleaseToFire`
-(`Weapon+0x265`) fire on the button-release edge instead of the press edge;
-these include bolt-action sniper rifles and previously never triggered. They now
-follow the single-shot path: press while the crosshair is on a validated target,
-release on the next update to shoot, and re-arm once the shot is acknowledged.
-The release edge is excluded from the native release-edge cancellation only when
-a validated target backs it, so losing the target still stops without an
-unintended shot. The ammo query is reused within each input decision to avoid a
-second native call and inconsistent samples.
+Burst modes remain unsupported. The ammo query is reused within each input
+decision to avoid a second native call and inconsistent samples.
+
+## Sniper input
+
+Physical button state is sampled before weapon preparation, while synthetic
+input is merged at `CheckFireBtnAimAndFire` (`0xC916D64`) after the native virtual
+preparation runs. This uses the current `CheckFireParam.IsReleaseToFire` and the
+native controller's release decision, rather than stale flags from an earlier
+update. The native result's previously copied button edges are refreshed too.
+
+`WeaponCODSniper` uses preparation at `0xC38D790`; traditional `WeaponSniper`
+inherits the base handler. The client permits these two known handlers without
+calling or replacing their preparation routines.
+
+A prepared release input follows the native release/up flags regardless of the
+weapon's ordinary single-shot flag. Release input requires completed ADS in either trigger
+setting. An eligible frame arms the press; a later freshly validated frame
+commits its release while the weapon can fire. The controller then waits for
+shot acknowledgement and rearming before another press. Loss of the target,
+smoke/world obstruction, incomplete ADS, disabled trigger or a blocked weapon
+cancels an armed press without generating a shooting release edge. One neutral
+cleanup frame precedes any new press. Physical user input always takes priority.
+
+Press-to-fire rifles, shotguns and single-shot weapons retain their existing
+controller behavior. Live sniper firing still requires device validation.
 
 ## Validation
 

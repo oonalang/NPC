@@ -293,7 +293,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     io->DisplaySize = ImVec2((float)g_GlWidth, (float)g_GlHeight);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
-    clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed);
+    clay::Capture(g_GlWidth, g_GlHeight, isLogin && isMenuVisible && !windowCollapsed);
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
@@ -728,7 +728,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     {
                         const ImVec2 shellMin(runtimeWindowPos.x + 1.0f, runtimeWindowPos.y + 1.0f);
                         const ImVec2 shellMax(runtimeWindowPos.x + runtimeWindowSize.x - 1.0f, runtimeWindowPos.y + runtimeWindowSize.y - 1.0f);
-                        clay::Surface(runtimeDrawList, shellMin, shellMax, 28.f);
+                        clay::Backdrop(runtimeDrawList, shellMin, shellMax, 28.f, .76f);
 
                     }
 
@@ -762,14 +762,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     runtimeState.page = ImClamp(runtimeState.page, 1, 7);
                     runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
 
-                    clay::Surface(runtimeDrawList, headerMin, headerMax, 20.f);
-                    ImFont* titleFont = custom::shell::GetTitleFont();
-                    const ImVec2 titlePos(headerMin.x + 22.f, headerMin.y + 9.f);
-                    runtimeDrawList->AddText(titleFont, 27.f, titlePos,
-                        IM_COL32(242,238,255,255), "SHAI ETHNIR");
-                    runtimeDrawList->AddText(font::inter_semibold, 12.f,
-                        ImVec2(titlePos.x + 1.f, titlePos.y + 31.f),
-                        IM_COL32(183,166,216,255), "E D I T I O N");
+                    custom::shell::DrawBrandHeader(headerMin, headerMax);
 
                     if (custom::shell::DrawCloseCard(closeCardMin, closeCardSize)) {
                         runtime_preview_menu::CollapseMenu(runtimeState);
@@ -778,7 +771,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     const ImVec2 railMin(sidebarLeft, headerTop);
                     const ImVec2 railMax(sidebarLeft + sidebarWidth, hostMax.y);
 
-                    custom::shell::DrawPanelShell(runtimeDrawList, railMin, railMax, 22.0f);
+                    clay::Backdrop(runtimeDrawList, railMin, railMax, 22.f, .88f);
 
                     static const char *sidebarIcons[] = {
                         ICON_FA_EYE,
@@ -816,7 +809,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         runtimeState.activeTab = runtimeState.page;
                     }
 
-                    clay::Surface(runtimeDrawList, hostMin, hostMax, 22.f, false);
+                    clay::Backdrop(runtimeDrawList, hostMin, hostMax, 22.f, .93f);
 
                     ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
                     ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground);
@@ -966,7 +959,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     bool commonTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common);
                                     const auto tierOptions = ImGuiSelectableFlags_DontClosePopups;
                                     if (custom::BeginCombo("Unlock tiers", selectedTiers.c_str(), 5)) {
-                                        if (custom::Selectable("All blueprints (clear)", &allBlueprints, tierOptions))
+                                        if (custom::Selectable("All blueprints", &allBlueprints, tierOptions))
                                             BlueprintTierFilter::SetMask(0);
                                         if (custom::Selectable("Mythic", &mythicTier, tierOptions))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Mythic);
@@ -978,15 +971,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
                                         custom::EndCombo();
                                     }
-                                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.76f, .73f, .83f, 1.f));
-                                    if (Config.ExtraMenu.Blueprints && BlueprintTierFilter::GetMask() != 0 &&
-                                        !BlueprintTierFilter::catalogReady.load(std::memory_order_acquire))
-                                        ImGui::TextWrapped("Loading blueprint tiers...");
-                                    ImGui::TextWrapped("Filters added unlocks. Owned blueprints stay visible.");
-                                    ImGui::PopStyleColor();
-                                    if (!Config.ExtraMenu.Blueprints)
-                                        ImGui::TextColored(ImVec4(0.66f, 0.70f, 0.78f, 1.0f),
-                                                           "Enable Unlock Blueprints to apply these tiers");
                                 }
                                 custom::Checkbox("Auto Jump Fire", &Config.ExtraMenu.AutoJumpFire);
                                 custom::Checkbox("Fast Armor Plate", &Config.ExtraMenu.FastArmorPlate);

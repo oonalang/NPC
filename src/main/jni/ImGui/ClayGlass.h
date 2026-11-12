@@ -33,13 +33,12 @@ inline GLuint scene = 0, framebuffer = 0;
 inline int sceneWidth = 0, sceneHeight = 0;
 inline EGLContext sceneContext = EGL_NO_CONTEXT;
 inline bool sceneValid = false;
-inline bool backdropWanted = false;
 // A downsampled live scene is shared by all controls. No full-size blur passes.
 inline void Capture(int width, int height, bool visible) {
     sceneValid = false;
-    const bool needed = ImGui::GetIO().MouseDown[0] || backdropWanted;
-    backdropWanted = false;
-    if (!visible || !needed || width <= 0 || height <= 0) return;
+    // Capture before any overlay drawing, while the expanded menu needs its
+    // backdrop. Never sample an earlier overlay texture back into itself.
+    if (!visible || width <= 0 || height <= 0) return;
     const EGLContext context = eglGetCurrentContext();
     if (context == EGL_NO_CONTEXT) return;
     GLint samples = 0;
@@ -89,25 +88,48 @@ inline void Capture(int width, int height, bool visible) {
 }
 #endif
 
+inline bool SceneImage(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius,
+                       float magnification, float opacity = 1.f) {
+#ifndef CLAY_CPU_PREVIEW
+    const ImVec2 size = ImGui::GetIO().DisplaySize;
+    if (sceneValid && size.x > 0.f && size.y > 0.f) {
+        const ImVec2 center = (lo + hi) * .5f;
+        const ImVec2 a = center + (lo - center) / magnification;
+        const ImVec2 b = center + (hi - center) / magnification;
+        draw->AddImageRounded(reinterpret_cast<ImTextureID>(static_cast<intptr_t>(scene)),lo,hi,
+            ImVec2(a.x / size.x,1.f-a.y / size.y),ImVec2(b.x / size.x,1.f-b.y / size.y),
+            ImGui::GetColorU32(ImVec4(1,1,1,opacity)),radius);
+        return true;
+    }
+#else
+    (void)draw; (void)lo; (void)hi; (void)radius;
+    (void)magnification; (void)opacity;
+#endif
+    return false;
+}
+
+inline void Backdrop(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius,
+                     float tintOpacity = .80f) {
+    if (!draw || hi.x <= lo.x || hi.y <= lo.y) return;
+    draw->AddRectFilled(lo + ImVec2(0,4),hi + ImVec2(0,4),IM_COL32(5,4,12,110),radius + 1.f);
+    const bool sampled = SceneImage(draw,lo,hi,radius,1.018f);
+    draw->AddRectFilled(lo,hi,ImGui::GetColorU32(ImVec4(.105f,.098f,.15f,
+        sampled ? ImClamp(tintOpacity,0.f,1.f) : 1.f)),radius);
+    // The narrow polished rim catches light without obscuring the clay cards.
+    draw->AddRect(lo,hi,IM_COL32(224,214,255,46),radius,0,1.f);
+    draw->AddRect(lo + ImVec2(1,1),hi - ImVec2(1,1),IM_COL32(255,255,255,10),
+                  ImMax(1.f,radius - 1.f),0,1.f);
+    draw->AddLine(ImVec2(lo.x + radius,lo.y + 1.f),
+                  ImVec2(hi.x - radius,lo.y + 1.f),IM_COL32(255,245,255,36),1.f);
+}
+
 inline void Glass(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius, float amount) {
     amount = ImClamp(amount, 0.f, 1.f);
     float tintAlpha = 1.f;
-#ifndef CLAY_CPU_PREVIEW
-    if (amount > .01f) backdropWanted = true;
-#endif
     draw->AddRectFilled(lo + ImVec2(0,3), hi + ImVec2(0,3), IM_COL32(0,0,0,65), radius);
-#ifndef CLAY_CPU_PREVIEW
-    if (sceneValid && amount > .01f) {
+    if (amount > .01f && SceneImage(draw,lo,hi,radius,1.12f,amount)) {
         tintAlpha = 1.f - amount * .78f;
-        const ImVec2 size = ImGui::GetIO().DisplaySize;
-        const ImVec2 center = (lo + hi) * .5f;
-        const ImVec2 a = center + (lo - center) / 1.12f;
-        const ImVec2 b = center + (hi - center) / 1.12f;
-        draw->AddImageRounded(reinterpret_cast<ImTextureID>(static_cast<intptr_t>(scene)),lo,hi,
-            ImVec2(a.x / size.x,1.f-a.y / size.y),ImVec2(b.x / size.x,1.f-b.y / size.y),
-            ImGui::GetColorU32(ImVec4(1,1,1,amount)),radius);
     }
-#endif
     draw->AddRectFilled(lo,hi,ImGui::GetColorU32(ImVec4(.93f,.91f,1.f,tintAlpha)),radius);
     draw->AddRect(lo,hi,ImGui::GetColorU32(ImVec4(1,1,1,.35f+amount*.45f)),radius,0,1.2f);
     draw->AddLine(ImVec2(lo.x+radius*.7f,lo.y+2),ImVec2(hi.x-radius*.7f,lo.y+2),

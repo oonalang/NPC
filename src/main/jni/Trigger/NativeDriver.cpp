@@ -2,6 +2,7 @@
 #include "NativeCancellation.h"
 #include "NativeProfile.h"
 #include "NativeReadiness.h"
+#include "NativeInputStage.h"
 #include "TriggerCompatibility.h"
 #include <atomic>
 #include <cmath>
@@ -33,6 +34,7 @@ using StartMatchFunction = void(*)(void*, void*, Metadata);
 using EndMatchFunction = void(*)(void*, Metadata);
 UpdateFunction originalUpdate = nullptr;
 ButtonFunction originalButtons = nullptr;
+ButtonFunction originalCheckFire = nullptr;
 StartMatchFunction originalStart = nullptr;
 EndMatchFunction originalEnd = nullptr;
 
@@ -55,6 +57,9 @@ struct LocalState {
     std::uintptr_t scope = 0;
     unsigned depth = 0;
     bool seen = false;
+    bool buttonsSampled = false;
+    bool manualActive = false;
+    void* sampledParam = nullptr;
     std::uint64_t update = 0;
     std::uint64_t epoch = 0;
     std::uint64_t generations[5]{1,1,1,1,1};
@@ -64,6 +69,8 @@ struct LocalState {
     NativeCancellation cancellation;
     bool stopAfterUpdate = false;
     bool syntheticInput = false;
+    bool releaseSequence = false;
+    bool committedRelease = false;
 };
 thread_local LocalState local;
 
@@ -141,14 +148,11 @@ ContextIdentity Identity(std::uintptr_t match, std::uintptr_t pawn,
 }
 
 void Merge(void* param, const Intent& intent) noexcept {
-    if (intent.passthrough) return;
-
-    At<BoolSetter>(0xBA32E68)(param, intent.held, nullptr);
-    At<BoolSetter>(0xBA32E30)(param, intent.down, nullptr);
-    const bool up = intent.up;
-    std::memcpy(static_cast<unsigned char*>(param) + 0x1a, &up, sizeof(up));
-    At<BoolSetter>(0xBA32EE0)(param, intent.down, nullptr);
-    At<BoolSetter>(0xBA32EF0)(param, intent.up, nullptr);
+    const auto result = Field<std::uintptr_t>(local.scope, 0x40);
+    MergePreparedInput(param, reinterpret_cast<void*>(result), intent,
+        [](std::uintptr_t rva, void* object, bool value) noexcept {
+            At<BoolSetter>(rva)(object, value, nullptr);
+        });
 }
 
 bool PrepareViewRay(bool needed, ViewRay& ray) noexcept {
@@ -166,13 +170,27 @@ bool PrepareViewRay(bool needed, ViewRay& ray) noexcept {
 void Buttons(void* unit, void* param, Metadata metadata) {
     originalButtons(unit, param, metadata);
     if (installation.load(std::memory_order_acquire) != 2 ||
-        !local.scope || local.depth != 1 || local.seen || !unit || !param) return;
+        !local.scope || local.depth != 1 || local.buttonsSampled || !unit || !param) return;
     const auto controller = local.scope;
     if (At<Getter>(0xC918E3C)(nullptr,nullptr) != controller ||
         Field<std::uintptr_t>(controller, 0x50) != reinterpret_cast<std::uintptr_t>(unit)) return;
+    // Capture actual user input before the weapon's virtual preparation can
+    // transform these fields. The firing decision runs after preparation.
+    local.buttonsSampled = true;
+    local.sampledParam = param;
+    local.manualActive = PhysicalFire(reinterpret_cast<std::uintptr_t>(param));
+}
+
+void DecidePreparedInput(void* owner, void* param) {
+    if (installation.load(std::memory_order_acquire) != 2 ||
+        !local.scope || local.depth != 1 || local.seen || !local.buttonsSampled ||
+        reinterpret_cast<std::uintptr_t>(owner) != local.scope ||
+        !param || param != local.sampledParam) return;
+    const auto controller = local.scope;
     local.seen = true;
     const auto settings = GetSettings();
     if (!settings.enabled && !local.controller.HasOwnedInput() &&
+        !local.controller.HasPendingShot() &&
         !local.cancellation.HasPendingCleanup()) {
         local.controller.Reset();
         local.hasFrame = false;
@@ -208,7 +226,7 @@ void Buttons(void* unit, void* param, Metadata metadata) {
             auto stopped = local.lastFrame;
             stopped.updateId = local.update;
             stopped.contextValid = false;
-            stopped.manualActive = PhysicalFire(reinterpret_cast<std::uintptr_t>(param));
+            stopped.manualActive = local.manualActive;
             const auto revoke = local.controller.Step(GetSettings(),stopped);
 
 
@@ -244,7 +262,7 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     frame.updateId = local.update;
     frame.contextValid = component != 0;
     frame.bindingsReady = true;
-    frame.manualActive = PhysicalFire(reinterpret_cast<std::uintptr_t>(param));
+    frame.manualActive = local.manualActive;
     frame.hardBlocked = !Field<bool>(pawn,0x550) || HardStateBlocked(weapon) ||
         !At<BoolGetter>(0xC914698)(controller,nullptr);
     frame.ammoAvailable = At<BoolGetter>(0x5473F58)(weapon,nullptr);
@@ -255,7 +273,8 @@ void Buttons(void* unit, void* param, Metadata metadata) {
          (std::isfinite(percentage) && percentage >= 0.995f));
     const auto klass = Field<std::uintptr_t>(weapon,0);
     const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
-    const bool knownPrepare = prepare == library + 0x54A373C;
+    const bool knownPrepare = IsSupportedPreparation(library, prepare) &&
+        IsVerifiedExecutableAddress(prepare);
     // Preserve subtype readiness checks through the same virtual dispatch used
     // by the game. The verified module's executable ranges constrain the target.
     const auto readiness = QueryNativeReadiness(weapon, klass, IsVerifiedExecutableAddress);
@@ -265,18 +284,13 @@ void Buttons(void* unit, void* param, Metadata metadata) {
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
     const bool burst = At<BoolGetter>(0x5474344)(weapon,nullptr);
-    // 0x547496C is Weapon.m_IsReleaseToFire; snipers and other bolt-action
-    // weapons shoot when the fire button is released, so they follow the
-    // single-shot path with a press followed by a deliberate release.
-    const bool releaseToFire = At<BoolGetter>(0x547496C)(weapon,nullptr) &&
+    const bool preparedRelease = Field<bool>(reinterpret_cast<std::uintptr_t>(param), 0x14) &&
         At<BoolGetter>(0xC916900)(controller,nullptr);
-    const bool ordinaryGun = knownPrepare && knownReadiness && frame.ammoAvailable;
-    if (component && ordinaryGun && !burst) {
-        const bool singleShot = At<BoolGetter>(0x5474278)(weapon,nullptr);
-        frame.releaseToFire = releaseToFire;
-        frame.fireMode = (singleShot || releaseToFire)
-            ? FireMode::Single : FireMode::Automatic;
-    }
+    const bool release = !knownPrepare || preparedRelease;
+    const bool single = At<BoolGetter>(0x5474278)(weapon,nullptr);
+    frame.fireMode = PreparedFireMode(knownPrepare, knownReadiness, frame.ammoAvailable,
+                                     burst, single, preparedRelease);
+    const bool allowReleaseSequence = frame.fireMode == FireMode::SingleRelease;
     if (installation.load(std::memory_order_acquire) != 2) {
         local.controller.Reset();
         return;
@@ -304,10 +318,13 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     else if (!knownPrepare) detail = "Unsupported weapon input handler";
     else if (!knownReadiness) detail = "Unsupported weapon readiness handler";
     else if (burst) detail = "Burst mode unsupported";
+    else if (preparedRelease && !allowReleaseSequence) detail = "Unsupported release-fire weapon";
+    else if (allowReleaseSequence && (!frame.aiming || !frame.fullyAimed)) detail = "Waiting for full sniper ADS";
     else if (frame.fireMode == FireMode::Unsupported) detail = "Unsupported weapon fire mode";
     else if (frame.hardBlocked) detail = "Weapon state blocked";
-    else if (!needTarget) detail = releaseToFire
-        ? "Release-to-fire weapon cooling down" : "Waiting for weapon shot readiness";
+    else if (local.controller.HasPendingShot() && intent.passthrough)
+        detail = "Waiting for sniper shot acknowledgement";
+    else if (!needTarget) detail = "Waiting for weapon shot readiness";
     else if (!rayReady) detail = "Camera ray unavailable";
     else if (target == TargetResult::NoEligibleBody) detail = "No eligible target at crosshair";
     else if (target == TargetResult::WorldBlocked) detail = "World obstruction";
@@ -315,24 +332,27 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     else if (target == TargetResult::QueryUnavailable) detail = "Target query unavailable";
     else if (target == TargetResult::InvalidHit) detail = "Invalid target intersection";
     else if (target == TargetResult::InvalidRay) detail = "Invalid camera ray";
-    else if (intent.held || intent.down) detail = releaseToFire
-        ? "Holding before release-to-fire" : "Fire input active";
-    else if (intent.up) detail = releaseToFire
-        ? "Releasing to fire" : "Rearming fire input";
+    else if (intent.held || intent.down) detail = "Fire input active";
+    else if (intent.up) detail = intent.commitRelease ? "Releasing sniper shot" : "Rearming fire input";
     reason.store(detail,std::memory_order_release);
-    // A released shot is the intended trigger for these weapons, so keep the
-    // native release-edge cleanup for the cases where no validated target backs
-    // the release: unknown handlers and lost targets.
-    const bool cancelRelease = !knownPrepare || (releaseToFire && !frame.targetValid);
-    const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,
-                                                     cancelRelease,intent);
+    const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,
+                                                     allowReleaseSequence);
+    if (decision.stopResult) reason.store("Cancelling synthetic fire input",std::memory_order_release);
     if (decision.resetController) local.controller.Reset();
     local.stopAfterUpdate = decision.stopResult;
     local.syntheticInput = !decision.input.passthrough;
+    local.releaseSequence = allowReleaseSequence;
+    local.committedRelease = !decision.input.passthrough && decision.input.up &&
+        decision.input.commitRelease;
     local.lastFrame = frame;
     local.hasFrame = true;
     if (installation.load(std::memory_order_acquire) == 2) Merge(param,decision.input);
     else local.controller.Reset();
+}
+
+void CheckFire(void* controller, void* param, Metadata metadata) {
+    DecidePreparedInput(controller, param);
+    originalCheckFire(controller, param, metadata);
 }
 
 void Update(void* controller, float deltaTime, Metadata metadata) {
@@ -348,8 +368,12 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
     }
     local.scope = reinterpret_cast<std::uintptr_t>(controller);
     local.seen = false;
+    local.buttonsSampled = false;
+    local.sampledParam = nullptr;
     local.stopAfterUpdate = false;
     local.syntheticInput = false;
+    local.releaseSequence = false;
+    local.committedRelease = false;
     ++local.update;
     originalUpdate(controller,deltaTime,metadata);
     const bool sameOwner = local.seen && local.hasFrame && !local.lastFrame.manualActive &&
@@ -357,10 +381,23 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         local.previous[2] == Field<std::uintptr_t>(local.scope,0x68) &&
         local.epoch == lifecycle.load(std::memory_order_acquire);
 
+    // Native gates (for example a one-frame IsMustStopFire) can reject a
+    // committed release after our decision. Do not wait for an impossible ack.
+    // Observe the final result after both fire and ADS processing have run.
+    if (sameOwner && local.committedRelease &&
+        committedShots.load(std::memory_order_acquire) == local.lastFrame.shotSerial) {
+        const auto result = Field<std::uintptr_t>(local.scope,0x40);
+        if (result && !Field<bool>(result,0x13)) {
+            local.controller.RejectPendingShot();
+            local.stopAfterUpdate = true;
+            reason.store("Sniper input rejected; rearming",std::memory_order_release);
+        }
+    }
 
 
 
-    if (sameOwner && local.syntheticInput) {
+
+    if (sameOwner && local.syntheticInput && !local.releaseSequence) {
         const auto param = Field<std::uintptr_t>(local.scope,0x38);
         if (param && Field<bool>(param,0x14) &&
             At<BoolGetter>(0xC916900)(local.scope,nullptr)) {
@@ -420,6 +457,7 @@ bool InstallNativeDriver(std::uintptr_t base) noexcept {
     const Hook hooks[]{
         {0xC913748,reinterpret_cast<void*>(&Update),reinterpret_cast<void**>(&originalUpdate)},
         {0xC913FA4,reinterpret_cast<void*>(&Buttons),reinterpret_cast<void**>(&originalButtons)},
+        {0xC916D64,reinterpret_cast<void*>(&CheckFire),reinterpret_cast<void**>(&originalCheckFire)},
         {0xC917C78,reinterpret_cast<void*>(&Start),reinterpret_cast<void**>(&originalStart)},
         {0xC917D68,reinterpret_cast<void*>(&End),reinterpret_cast<void**>(&originalEnd)}
     };

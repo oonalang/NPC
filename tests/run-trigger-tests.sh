@@ -20,6 +20,7 @@ run_test 'Trigger runtime' \
     "$project_dir/tests/trigger_tests.cpp" \
     "$project_dir/src/main/jni/Trigger/TriggerRuntime.cpp"
 run_test 'Trigger dot appearance' "$project_dir/tests/trigger_dot_style_test.cpp"
+run_test 'Prepared sniper input' "$project_dir/tests/sniper_input_test.cpp"
 # This binary stubs the loader and driver to exercise the Android initialization
 # policy on the host; the actual Android hook implementation is not linked.
 run_test 'Native profile' \
