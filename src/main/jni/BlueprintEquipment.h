@@ -44,9 +44,6 @@ inline bool Read(const void* at, T& value) {
     return true;
 }
 
-// The skin list is loaded on a background thread, so the catalog must not be
-// frozen on the first frame: doing that published an empty catalog and every
-// tier filter then hid all blueprints until the filter was cleared.
 inline std::atomic<std::size_t> builtCatalogSize{0};
 
 inline void RefreshTierCatalog() {

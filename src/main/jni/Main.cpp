@@ -1083,9 +1083,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 const ChildFrame left = BeginContentChild("MEMORY HACKS", ImVec2(childWidth, childHeight));
                                 custom::Checkbox("Unlock Blueprints", &Config.ExtraMenu.Blueprints);
                                 {
-                                    // Stock ImGui widgets draw with this build's all-transparent
-                                    // style, so the tier selector uses the themed custom combo
-                                    // and stays visible regardless of the Unlock Blueprints state.
                                     ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT UNLOCK FILTER");
                                     const std::string selectedTiers = BlueprintTierFilter::Preview();
                                     bool allBlueprints = BlueprintTierFilter::GetMask() == 0;
