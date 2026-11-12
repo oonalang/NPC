@@ -1019,7 +1019,21 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             custom::EndGroup();
 
                             ImGui::SameLine(0.0f, espGap);
-                            runtime_preview_menu::DrawRuntimeEspPreviewPanel(ImGui::GetCursorScreenPos(), ImVec2(espPreviewW, childHeight));
+                            runtime_preview_menu::EspPreviewState espPreview;
+                            espPreview.line = Config.ESPMenu.isPlayerLine;
+                            espPreview.box = Config.ESPMenu.Box;
+                            espPreview.skeleton = Config.ESPMenu.Skeleton;
+                            espPreview.health = Config.ESPMenu.Health;
+                            espPreview.name = Config.ESPMenu.Name;
+                            espPreview.distance = Config.ESPMenu.Distance;
+                            espPreview.count = Config.ESPMenu.Count;
+                            espPreview.alert = Config.ESPMenu.Alert;
+                            espPreview.brClass = Config.ESPMenu.BRClass;
+                            espPreview.boxType = (int)Config.ESPMenu.BoxType;
+                            espPreview.healthPosition = (int)Config.ESPMenu.HealthPosition;
+                            espPreview.espStyle = (int)Config.ESPMenu.EspStyle;
+                            espPreview.lineTarget = (int)Config.ESPMenu.Target;
+                            runtime_preview_menu::DrawRuntimeEspPreviewPanel(ImGui::GetCursorScreenPos(), ImVec2(espPreviewW, childHeight), espPreview);
                             ImGui::Dummy(ImVec2(espPreviewW, childHeight));
                         }
 

@@ -185,11 +185,11 @@ namespace c
         button::outline = ImColor(70, 70, 84, 190);
 
         ImGuiStyle& style = ImGui::GetStyle();
-        style.ScrollbarSize = 4.0f;
-        style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(1.0f, 1.0f, 1.0f, 0.04f);
-        style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(1.0f, 1.0f, 1.0f, 0.16f);
-        style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(1.0f, 1.0f, 1.0f, 0.26f);
-        style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.69f, 0.43f, 0.96f, 0.9f);
+        style.ScrollbarSize = 10.0f;
+        style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(1.0f, 1.0f, 1.0f, 0.05f);
+        style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.69f, 0.43f, 0.96f, 0.68f);
+        style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.69f, 0.43f, 0.96f, 0.90f);
+        style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.69f, 0.43f, 0.96f, 1.0f);
     }
 
     inline void DrawWindowShadow(const ImVec2& menuSize)
@@ -488,12 +488,13 @@ namespace main_runtime_theme
 
         // Scrollbar tinted from accent
         ImGuiStyle& style = ImGui::GetStyle();
-        style.ScrollbarSize = 5.0f;
+        style.ScrollbarSize = 10.0f;
+        style.ScrollbarRounding = 5.0f;
         const ImVec4& ac = c::accent;
-        style.Colors[ImGuiCol_ScrollbarBg]          = ImVec4(bgW.x, bgW.y, bgW.z, 0.72f);
-        style.Colors[ImGuiCol_ScrollbarGrab]         = ImVec4(ac.x*0.60f, ac.y*0.60f, ac.z*0.60f, 0.80f);
-        style.Colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(ac.x*0.80f, ac.y*0.80f, ac.z*0.80f, 0.90f);
-        style.Colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(ac.x,       ac.y,       ac.z,       1.0f);
+        style.Colors[ImGuiCol_ScrollbarBg]          = ImVec4(1.0f, 1.0f, 1.0f, 0.05f);
+        style.Colors[ImGuiCol_ScrollbarGrab]         = ImVec4(ac.x, ac.y, ac.z, 0.68f);
+        style.Colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(ac.x, ac.y, ac.z, 0.90f);
+        style.Colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(ac.x, ac.y, ac.z, 1.0f);
     }
 }
 

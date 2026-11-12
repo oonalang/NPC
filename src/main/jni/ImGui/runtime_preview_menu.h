@@ -490,46 +490,319 @@ inline bool DrawRuntimeSidebarButton(const char *id, const char *icon, const cha
     return clicked;
 }
 
-inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size) {
+struct EspPreviewState {
+    bool line = false;
+    bool box = false;
+    bool skeleton = false;
+    bool health = false;
+    bool name = false;
+    bool distance = false;
+    bool count = false;
+    bool alert = false;
+    bool brClass = false;
+    int boxType = 1;
+    int healthPosition = 0;
+    int espStyle = 0;
+    int lineTarget = 0;
+};
+
+inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, const EspPreviewState &state = EspPreviewState()) {
     ImDrawList *drawList = ImGui::GetWindowDrawList();
     const ImVec2 max = min + size;
-    drawList->AddRectFilled(min, max, IM_COL32(16, 16, 21, 235), 18.0f);
-    drawList->AddRect(min, max, IM_COL32(255, 255, 255, 18), 18.0f, 0, 1.0f);
+
+    drawList->AddRectFilled(min, max, IM_COL32(16, 16, 21, 240), 18.0f);
+    drawList->AddRect(min, max, IM_COL32(255, 255, 255, 16), 18.0f, 0, 1.0f);
 
     ImFont *textFont = font::inter_semibold ? font::inter_semibold : ImGui::GetFont();
-    const float titleSize = 15.0f;
-    const char *title = "ESP PREVIEW";
-    const ImVec2 titleSz = textFont->CalcTextSizeA(titleSize, FLT_MAX, 0.0f, title);
-    drawList->AddText(textFont, titleSize,
-        ImVec2(min.x + 14.0f, min.y + 12.0f), IM_COL32(248, 248, 252, 255), title);
+    drawList->AddText(textFont, 12.5f, ImVec2(min.x + 16.0f, min.y + 14.0f), IM_COL32(240, 238, 248, 245), "ESP PREVIEW");
+    drawList->AddCircleFilled(ImVec2(max.x - 18.0f, min.y + 20.0f), 3.0f, IM_COL32(88, 226, 148, 220), 12);
 
-    const ImVec2 previewMin(min.x + 12.0f, min.y + 42.0f);
-    const ImVec2 previewMax(max.x - 12.0f, max.y - 14.0f);
-    drawList->AddRectFilled(previewMin, previewMax, IM_COL32(24, 24, 30, 235), 12.0f);
+    const ImVec2 viewMin(min.x + 12.0f, min.y + 40.0f);
+    const ImVec2 viewMax(max.x - 12.0f, max.y - 12.0f);
+    drawList->AddRectFilled(viewMin, viewMax, IM_COL32(11, 11, 15, 242), 14.0f);
+    drawList->AddRect(viewMin, viewMax, IM_COL32(255, 255, 255, 12), 14.0f, 0, 1.0f);
+    drawList->PushClipRect(viewMin, viewMax, true);
 
-    // Lightweight visual-only preview. It does not read or modify gameplay state.
-    const float groundY = previewMax.y - 34.0f;
-    drawList->AddRectFilled(ImVec2(previewMin.x, groundY), previewMax, IM_COL32(18, 26, 30, 255), 0.0f);
-    drawList->AddLine(ImVec2(previewMin.x, groundY), ImVec2(previewMax.x, groundY), IM_COL32(80, 92, 108, 180), 1.0f);
+    const float viewH = viewMax.y - viewMin.y;
+    const float floorY = viewMax.y - 28.0f;
+    drawList->AddRectFilledMultiColor(
+        viewMin,
+        ImVec2(viewMax.x, floorY),
+        IM_COL32(26, 26, 35, 235),
+        IM_COL32(26, 26, 35, 235),
+        IM_COL32(13, 13, 19, 245),
+        IM_COL32(13, 13, 19, 245)
+    );
+    drawList->AddRectFilled(ImVec2(viewMin.x, floorY), ImVec2(viewMax.x, viewMax.y), IM_COL32(15, 15, 21, 245), 0.0f);
+    drawList->AddLine(ImVec2(viewMin.x + 6.0f, floorY), ImVec2(viewMax.x - 6.0f, floorY), IM_COL32(150, 145, 175, 40), 1.0f);
 
-    const ImVec2 boxCenter((previewMin.x + previewMax.x) * 0.5f, (previewMin.y + groundY) * 0.5f + 8.0f);
-    const float boxW = ImMin(58.0f, (previewMax.x - previewMin.x) * 0.42f);
-    const float boxH = ImMin(120.0f, (groundY - previewMin.y) * 0.55f);
-    const ImVec2 boxMin(boxCenter.x - boxW * 0.5f, boxCenter.y - boxH * 0.5f);
-    const ImVec2 boxMax(boxCenter.x + boxW * 0.5f, boxCenter.y + boxH * 0.5f);
+    const float cx = (viewMin.x + viewMax.x) * 0.5f;
+    const float modelH = ImMin(viewH * 0.62f, 250.0f);
+    const float feetY = floorY;
+    const float headTop = feetY - modelH;
+    const float headR = modelH * 0.072f;
+    const float shoulderY = headTop + headR * 2.7f;
+    const float hipY = headTop + modelH * 0.54f;
+    const float kneeY = headTop + modelH * 0.79f;
+    const float torsoTop = modelH * 0.115f;
+    const float torsoBottom = modelH * 0.082f;
+    const float legHalf = modelH * 0.045f;
 
-    drawList->AddRect(boxMin, boxMax, IM_COL32(255, 48, 48, 255), 2.0f, 0, 2.0f);
-    drawList->AddRectFilled(ImVec2(boxMin.x, boxMin.y - 9.0f), ImVec2(boxMax.x, boxMin.y - 5.0f), IM_COL32(42, 255, 75, 255), 2.0f);
+    const ImU32 body = IM_COL32(56, 52, 68, 255);
+    const ImU32 bodyDark = IM_COL32(41, 38, 51, 255);
+    const ImU32 bodyLight = IM_COL32(70, 65, 84, 255);
+    const ImU32 rim = IM_COL32(168, 158, 192, 130);
 
-    const char *enemy = "Enemy";
-    const ImVec2 enemySz = textFont->CalcTextSizeA(12.0f, FLT_MAX, 0.0f, enemy);
-    drawList->AddText(textFont, 12.0f,
-        ImVec2(boxCenter.x - enemySz.x * 0.5f, boxMin.y - 27.0f), IM_COL32(255, 64, 64, 255), enemy);
+    auto fill = [&](const ImVec2 *pts, int count, ImU32 col) {
+        drawList->AddConvexPolyFilled(pts, count, col);
+    };
 
-    const char *distance = "45m";
-    const ImVec2 distanceSz = textFont->CalcTextSizeA(11.0f, FLT_MAX, 0.0f, distance);
-    drawList->AddText(textFont, 11.0f,
-        ImVec2(boxCenter.x - distanceSz.x * 0.5f, boxMax.y + 7.0f), IM_COL32(255, 74, 74, 255), distance);
+    {
+        const ImVec2 pack[] = {
+            ImVec2(cx - torsoTop * 1.18f, shoulderY + 6.0f),
+            ImVec2(cx - torsoTop * 0.72f, shoulderY + 2.0f),
+            ImVec2(cx - torsoTop * 0.55f, hipY - 8.0f),
+            ImVec2(cx - torsoTop * 1.05f, hipY - 12.0f)
+        };
+        fill(pack, 4, bodyDark);
+    }
+
+    {
+        const ImVec2 armL[] = {
+            ImVec2(cx - torsoTop * 0.94f, shoulderY + 3.0f),
+            ImVec2(cx - torsoTop * 1.72f, shoulderY + 18.0f),
+            ImVec2(cx - torsoTop * 1.44f, hipY - 4.0f),
+            ImVec2(cx - torsoTop * 0.80f, hipY - 12.0f)
+        };
+        fill(armL, 4, body);
+        const ImVec2 armR[] = {
+            ImVec2(cx + torsoTop * 0.94f, shoulderY + 3.0f),
+            ImVec2(cx + torsoTop * 1.66f, shoulderY + 20.0f),
+            ImVec2(cx + torsoTop * 1.40f, hipY - 2.0f),
+            ImVec2(cx + torsoTop * 0.80f, hipY - 12.0f)
+        };
+        fill(armR, 4, body);
+    }
+
+    {
+        const ImVec2 torso[] = {
+            ImVec2(cx - torsoTop, shoulderY),
+            ImVec2(cx + torsoTop, shoulderY),
+            ImVec2(cx + torsoBottom, hipY),
+            ImVec2(cx - torsoBottom, hipY)
+        };
+        fill(torso, 4, body);
+        const ImVec2 plate[] = {
+            ImVec2(cx - torsoTop * 0.74f, shoulderY + modelH * 0.035f),
+            ImVec2(cx + torsoTop * 0.74f, shoulderY + modelH * 0.035f),
+            ImVec2(cx + torsoBottom * 0.86f, hipY - modelH * 0.04f),
+            ImVec2(cx - torsoBottom * 0.86f, hipY - modelH * 0.04f)
+        };
+        fill(plate, 4, bodyLight);
+        drawList->AddLine(ImVec2(cx - torsoTop * 0.9f, shoulderY + 2.0f), ImVec2(cx - torsoBottom * 0.9f, hipY), rim, 1.0f);
+        drawList->AddLine(ImVec2(cx - torsoBottom, hipY), ImVec2(cx + torsoBottom, hipY), bodyDark, 4.0f);
+    }
+
+    {
+        const ImVec2 legL[] = {
+            ImVec2(cx - torsoBottom, hipY),
+            ImVec2(cx - 1.0f, hipY),
+            ImVec2(cx - legHalf * 0.6f, kneeY),
+            ImVec2(cx - legHalf, feetY),
+            ImVec2(cx - legHalf * 2.4f, feetY),
+            ImVec2(cx - legHalf * 1.5f, kneeY)
+        };
+        fill(legL, 6, body);
+        const ImVec2 legR[] = {
+            ImVec2(cx + 1.0f, hipY),
+            ImVec2(cx + torsoBottom, hipY),
+            ImVec2(cx + legHalf * 1.5f, kneeY),
+            ImVec2(cx + legHalf * 2.4f, feetY),
+            ImVec2(cx + legHalf, feetY),
+            ImVec2(cx + legHalf * 0.6f, kneeY)
+        };
+        fill(legR, 6, body);
+        drawList->AddLine(ImVec2(cx - legHalf * 1.5f, kneeY), ImVec2(cx - legHalf * 2.4f, feetY), bodyDark, 2.0f);
+        drawList->AddLine(ImVec2(cx + legHalf * 1.5f, kneeY), ImVec2(cx + legHalf * 2.4f, feetY), bodyDark, 2.0f);
+    }
+
+    {
+        const ImVec2 headCenter(cx, headTop + headR * 1.6f);
+        drawList->AddCircleFilled(headCenter, headR, body, 24);
+        drawList->AddCircleFilled(ImVec2(cx, headTop + headR * 1.25f), headR * 1.04f, bodyDark, 24);
+        drawList->AddLine(
+            ImVec2(cx - headR * 0.85f, headTop + headR * 1.75f),
+            ImVec2(cx + headR * 0.85f, headTop + headR * 1.75f),
+            IM_COL32(177, 110, 245, 220),
+            2.0f
+        );
+        drawList->AddLine(
+            ImVec2(cx - headR * 1.05f, headTop + headR * 1.5f),
+            ImVec2(cx - headR * 1.05f, headTop + headR * 2.6f),
+            rim,
+            1.0f
+        );
+    }
+
+    {
+        const ImVec2 rifleA(cx + torsoTop * 0.55f, shoulderY + modelH * 0.02f);
+        const ImVec2 rifleB(cx - torsoTop * 1.15f, hipY + modelH * 0.03f);
+        drawList->AddLine(rifleA, rifleB, IM_COL32(30, 28, 38, 255), 4.0f);
+        drawList->AddLine(rifleA, rifleB, IM_COL32(90, 84, 108, 200), 1.4f);
+        drawList->AddRectFilled(
+            ImVec2(rifleB.x - 3.0f, rifleB.y - 4.0f),
+            ImVec2(rifleB.x + 8.0f, rifleB.y + 2.0f),
+            IM_COL32(30, 28, 38, 255),
+            1.5f
+        );
+    }
+
+    const float boxHalf = modelH * 0.17f;
+    const ImVec2 bMin(cx - boxHalf, headTop - 6.0f);
+    const ImVec2 bMax(cx + boxHalf, feetY + 4.0f);
+    const ImU32 enemy = IM_COL32(255, 72, 72, 255);
+    const ImU32 healthGreen = IM_COL32(84, 224, 140, 255);
+
+    if (state.line) {
+        const float lineStartY = viewMax.y - 8.0f;
+        const float lineEndY = state.lineTarget == 0 ? bMin.y : (state.lineTarget == 1 ? (bMin.y + bMax.y) * 0.5f : bMax.y);
+        drawList->AddLine(ImVec2(cx, lineStartY), ImVec2(cx, lineEndY), enemy, 1.4f);
+        drawList->AddCircleFilled(ImVec2(cx, lineStartY), 2.0f, enemy, 10);
+    }
+
+    if (state.espStyle == 1) {
+        const float ellipseY = (bMin.y + bMax.y) * 0.5f;
+        const float rx = boxHalf * 1.6f;
+        const float ry = boxHalf * 0.42f;
+        ImVec2 pts[40];
+        for (int i = 0; i < 40; ++i) {
+            const float a = (float)i / 40.0f * 6.2831853f;
+            pts[i] = ImVec2(cx + std::cos(a) * rx, ellipseY + std::sin(a) * ry);
+        }
+        drawList->AddPolyline(pts, 40, IM_COL32(177, 110, 245, 110), ImDrawFlags_Closed, 1.2f);
+    } else if (state.espStyle == 2) {
+        const float t = (float)ImGui::GetTime();
+        for (int i = 0; i < 2; ++i) {
+            const float phase = fmodf(t * 0.8f + i * 0.5f, 1.0f);
+            const float r = boxHalf * (0.5f + phase * 1.4f);
+            const ImU32 col = ImGui::GetColorU32(ImVec4(0.69f, 0.43f, 0.96f, (1.0f - phase) * 0.35f));
+            drawList->AddCircle(ImVec2(cx, feetY), r, col, 24, 1.2f);
+        }
+    }
+
+    if (state.box) {
+        if (state.boxType == 0) {
+            drawList->AddRectFilled(bMin, bMax, IM_COL32(255, 72, 72, 28), 2.0f);
+            drawList->AddRect(bMin, bMax, enemy, 2.0f, 0, 1.4f);
+        } else if (state.boxType == 1) {
+            drawList->AddRect(bMin, bMax, enemy, 1.0f, 0, 1.5f);
+        } else if (state.boxType == 2) {
+            const float len = ImMin((bMax.x - bMin.x) * 0.34f, (bMax.y - bMin.y) * 0.22f);
+            drawList->AddLine(ImVec2(bMin.x, bMin.y), ImVec2(bMin.x + len, bMin.y), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMin.x, bMin.y), ImVec2(bMin.x, bMin.y + len), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMax.x - len, bMin.y), ImVec2(bMax.x, bMin.y), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMax.x, bMin.y), ImVec2(bMax.x, bMin.y + len), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMin.x, bMax.y - len), ImVec2(bMin.x, bMax.y), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMin.x, bMax.y), ImVec2(bMin.x + len, bMax.y), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMax.x - len, bMax.y), ImVec2(bMax.x, bMax.y), enemy, 1.8f);
+            drawList->AddLine(ImVec2(bMax.x, bMax.y - len), ImVec2(bMax.x, bMax.y), enemy, 1.8f);
+        } else {
+            const ImVec2 off(6.0f, -6.0f);
+            drawList->AddRect(ImVec2(bMin.x + off.x, bMin.y + off.y), ImVec2(bMax.x + off.x, bMax.y + off.y), IM_COL32(255, 72, 72, 120), 1.0f, 0, 1.2f);
+            drawList->AddRect(bMin, bMax, enemy, 1.0f, 0, 1.5f);
+            drawList->AddLine(bMin, ImVec2(bMin.x + off.x, bMin.y + off.y), enemy, 1.0f);
+            drawList->AddLine(ImVec2(bMax.x, bMin.y), ImVec2(bMax.x + off.x, bMin.y + off.y), enemy, 1.0f);
+            drawList->AddLine(ImVec2(bMin.x, bMax.y), ImVec2(bMin.x + off.x, bMax.y + off.y), enemy, 1.0f);
+            drawList->AddLine(bMax, ImVec2(bMax.x + off.x, bMax.y + off.y), enemy, 1.0f);
+        }
+    }
+
+    if (state.skeleton) {
+        const ImU32 bone = IM_COL32(255, 190, 190, 170);
+        const ImVec2 neck(cx, shoulderY - 2.0f);
+        const ImVec2 head(cx, headTop + headR * 1.6f);
+        const ImVec2 hip(cx, hipY);
+        drawList->AddLine(head, neck, bone, 1.4f);
+        drawList->AddLine(ImVec2(cx - torsoTop * 0.92f, shoulderY + 4.0f), ImVec2(cx + torsoTop * 0.92f, shoulderY + 4.0f), bone, 1.4f);
+        drawList->AddLine(ImVec2(cx - torsoTop * 0.92f, shoulderY + 4.0f), ImVec2(cx - torsoTop * 1.5f, hipY - 6.0f), bone, 1.4f);
+        drawList->AddLine(ImVec2(cx + torsoTop * 0.92f, shoulderY + 4.0f), ImVec2(cx + torsoTop * 1.45f, hipY - 4.0f), bone, 1.4f);
+        drawList->AddLine(neck, hip, bone, 1.4f);
+        drawList->AddLine(hip, ImVec2(cx - legHalf, kneeY), bone, 1.4f);
+        drawList->AddLine(hip, ImVec2(cx + legHalf, kneeY), bone, 1.4f);
+        drawList->AddLine(ImVec2(cx - legHalf, kneeY), ImVec2(cx - legHalf * 1.6f, feetY), bone, 1.4f);
+        drawList->AddLine(ImVec2(cx + legHalf, kneeY), ImVec2(cx + legHalf * 1.6f, feetY), bone, 1.4f);
+    }
+
+    if (state.health) {
+        const float ratio = 0.68f;
+        if (state.healthPosition == 0) {
+            const ImVec2 hMin(bMin.x, bMin.y - 9.0f);
+            const ImVec2 hMax(bMax.x, bMin.y - 5.0f);
+            drawList->AddRectFilled(hMin, hMax, IM_COL32(30, 30, 38, 235), 2.0f);
+            drawList->AddRectFilled(hMin, ImVec2(hMin.x + (hMax.x - hMin.x) * ratio, hMax.y), healthGreen, 2.0f);
+        } else {
+            const ImVec2 hMin(bMin.x - 9.0f, bMin.y);
+            const ImVec2 hMax(bMin.x - 5.0f, bMax.y);
+            drawList->AddRectFilled(hMin, hMax, IM_COL32(30, 30, 38, 235), 2.0f);
+            const float filled = (hMax.y - hMin.y) * ratio;
+            drawList->AddRectFilled(ImVec2(hMin.x, hMax.y - filled), hMax, healthGreen, 2.0f);
+        }
+    }
+
+    if (state.name) {
+        const char *label = "Enemy";
+        const ImVec2 labelSz = textFont->CalcTextSizeA(11.0f, FLT_MAX, 0.0f, label);
+        drawList->AddText(textFont, 11.0f, ImVec2(cx - labelSz.x * 0.5f, bMin.y - 24.0f), enemy, label);
+    }
+
+    if (state.brClass) {
+        const char *label = "ASSAULT";
+        const ImVec2 labelSz = textFont->CalcTextSizeA(8.5f, FLT_MAX, 0.0f, label);
+        drawList->AddText(
+            textFont,
+            8.5f,
+            ImVec2(cx - labelSz.x * 0.5f, bMin.y - (state.name ? 38.0f : 24.0f)),
+            IM_COL32(196, 170, 250, 210),
+            label
+        );
+    }
+
+    if (state.distance) {
+        const char *label = "45m";
+        const ImVec2 labelSz = textFont->CalcTextSizeA(10.0f, FLT_MAX, 0.0f, label);
+        drawList->AddText(textFont, 10.0f, ImVec2(cx - labelSz.x * 0.5f, bMax.y + 5.0f), enemy, label);
+    }
+
+    if (state.count) {
+        const ImVec2 badgeMin(viewMin.x + 10.0f, viewMin.y + 10.0f);
+        const ImVec2 badgeMax(badgeMin.x + 30.0f, badgeMin.y + 20.0f);
+        drawList->AddRectFilled(badgeMin, badgeMax, IM_COL32(255, 255, 255, 10), 6.0f);
+        drawList->AddRect(badgeMin, badgeMax, IM_COL32(255, 255, 255, 22), 6.0f, 0, 1.0f);
+        const char *label = "1 TARGET";
+        const ImVec2 labelSz = textFont->CalcTextSizeA(8.5f, FLT_MAX, 0.0f, label);
+        drawList->AddText(textFont, 8.5f, ImVec2(badgeMin.x + (30.0f - labelSz.x) * 0.5f, badgeMin.y + (20.0f - labelSz.y) * 0.5f), IM_COL32(232, 228, 244, 225), label);
+    }
+
+    if (state.alert) {
+        const ImVec2 center(viewMax.x - 26.0f, viewMax.y - 26.0f);
+        const float r = 13.0f;
+        const float t = (float)ImGui::GetTime();
+        for (int i = 0; i < 16; ++i) {
+            const float a0 = t * 1.6f + (float)i / 16.0f * 6.2831853f;
+            const float a1 = a0 + 0.28f;
+            drawList->AddLine(
+                ImVec2(center.x + std::cos(a0) * r, center.y + std::sin(a0) * r),
+                ImVec2(center.x + std::cos(a1) * r, center.y + std::sin(a1) * r),
+                IM_COL32(255, 86, 96, (int)(90 + 120 * ((float)i / 16.0f))),
+                1.4f
+            );
+        }
+        const char *label = "360";
+        const ImVec2 labelSz = textFont->CalcTextSizeA(8.0f, FLT_MAX, 0.0f, label);
+        drawList->AddText(textFont, 8.0f, ImVec2(center.x - labelSz.x * 0.5f, center.y - labelSz.y * 0.5f), IM_COL32(255, 120, 128, 235), label);
+    }
+
+    drawList->PopClipRect();
 }
 
 inline void CollapseMenu(StateRefs &state) {

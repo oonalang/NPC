@@ -894,7 +894,12 @@ ImRect ImGui::GetWindowScrollbarRect(ImGuiWindow* window, ImGuiAxis axis)
             inner_rect.Max.y - border_size
         );
     else
-        return ImRect(ImMax(outer_rect.Min.x, outer_rect.Max.x - border_size - scrollbar_size), inner_rect.Min.y, outer_rect.Max.x - border_size, inner_rect.Max.y - border_size);
+        return ImRect(
+            ImMax(outer_rect.Min.x, outer_rect.Max.x - border_size - scrollbar_size),
+            outer_rect.Min.y + 4.0f,
+            outer_rect.Max.x - border_size,
+            outer_rect.Max.y - 4.0f
+        );
 }
 
 void ImGui::Scrollbar(ImGuiAxis axis)
@@ -957,7 +962,7 @@ bool ImGui::ScrollbarEx(const ImRect& bb_frame, ImGuiID id, ImGuiAxis axis, ImS6
     const bool allow_interaction = (alpha >= 1.0f);
 
     ImRect bb = bb_frame;
-    bb.Expand(ImVec2(-ImClamp(IM_TRUNC((bb_frame_width - 2.0f) * 0.5f), 0.0f, 3.0f), -ImClamp(IM_TRUNC((bb_frame_height - 2.0f) * 0.5f), 0.0f, 3.0f)));
+    bb.Expand(ImVec2(-ImClamp(IM_TRUNC((bb_frame_width - 8.0f) * 0.5f), 0.0f, 2.0f), -ImClamp(IM_TRUNC((bb_frame_height - 2.0f) * 0.5f), 0.0f, 3.0f)));
 
     // V denote the main, longer axis of the scrollbar (= height for a vertical scrollbar)
     const float scrollbar_size_v = (axis == ImGuiAxis_X) ? bb.GetWidth() : bb.GetHeight();
@@ -1021,18 +1026,21 @@ bool ImGui::ScrollbarEx(const ImRect& bb_frame, ImGuiID id, ImGuiAxis axis, ImS6
     // Render
     const ImU32 bg_col = GetColorU32(ImGuiCol_ScrollbarBg);
     const ImU32 grab_col = GetColorU32(held ? ImGuiCol_ScrollbarGrabActive : hovered ? ImGuiCol_ScrollbarGrabHovered : ImGuiCol_ScrollbarGrab, alpha);
-    window->DrawList->AddRectFilled(bb_frame.Min, bb_frame.Max, bg_col, window->WindowRounding, flags);
+    const float track_rounding = ImMin(bb_frame.GetWidth(), bb_frame.GetHeight()) * 0.5f;
+    window->DrawList->AddRectFilled(bb_frame.Min, bb_frame.Max, bg_col, track_rounding, flags);
     ImRect grab_rect;
     if (axis == ImGuiAxis_X)
         grab_rect = ImRect(ImLerp(bb.Min.x, bb.Max.x, grab_v_norm), bb.Min.y, ImLerp(bb.Min.x, bb.Max.x, grab_v_norm) + grab_h_pixels, bb.Max.y);
     else
     {
         const float grab_pad_x = ImMax(1.0f, 1.0f * c::scale);
-        const float grab_pad_y = ImMax(4.0f, 4.0f * c::scale);
+        const float grab_pad_y = 1.5f;
         const float grab_min_y = ImLerp(bb.Min.y + grab_pad_y, bb.Max.y - grab_pad_y - grab_h_pixels, grab_v_norm);
         grab_rect = ImRect(bb.Min.x + grab_pad_x, grab_min_y, bb.Max.x - grab_pad_x, grab_min_y + grab_h_pixels);
     }
-    window->DrawList->AddRectFilled(grab_rect.Min, grab_rect.Max, GetColorU32(c::accent), 30.f);
+    const float grab_alpha = held ? 1.0f : hovered ? 0.9f : 0.68f;
+    const ImU32 grab_color = GetColorU32(ImVec4(c::accent.x, c::accent.y, c::accent.z, grab_alpha));
+    window->DrawList->AddRectFilled(grab_rect.Min, grab_rect.Max, grab_color, ImMin(grab_rect.GetWidth(), grab_rect.GetHeight()) * 0.5f);
 
     return held;
 }
