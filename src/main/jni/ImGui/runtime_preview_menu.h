@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Call_ImGui.h"
+#include "ClayGlass.h"
 #include "imgui_settings.h"
 #include "../System/Core/SaveConfig.h"
 #include "../System/UI/TextureLoader.h"
@@ -461,7 +462,7 @@ inline bool DrawRuntimeSidebarButton(const char *id, const char *icon, const cha
         ? IM_COL32(255, 255, 255, 18)
         : hovered ? IM_COL32(255, 255, 255, 8) : IM_COL32(0, 0, 0, 0);
     if (bg != IM_COL32(0, 0, 0, 0)) {
-        drawList->AddRectFilled(min, min + size, bg, pillRounding);
+        clay::Surface(drawList, min + ImVec2(5,2), min + size - ImVec2(5,2), pillRounding, active);
     }
     if (active) {
         drawList->AddRect(min, min + size, IM_COL32(255, 255, 255, 28), pillRounding, 0, 1.0f);

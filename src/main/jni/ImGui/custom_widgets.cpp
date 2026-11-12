@@ -1,6 +1,7 @@
 #include "custom_widgets.hpp"
 #include "imgui_settings.h"
 #include "Icon.h"
+#include "ClayGlass.h"
 extern ImFont* F50;
 extern ImFont* F107;
 namespace custom
@@ -18,8 +19,8 @@ namespace custom
 
         ImFont* GetTitleFont()
         {
-            if (F50)
-                return F50;
+            if (font::inter_title)
+                return font::inter_title;
             return GetTextFont();
         }
 
@@ -47,25 +48,7 @@ namespace custom
 
         void DrawPanelShell(ImDrawList* drawList, const ImVec2& min, const ImVec2& max, float rounding, bool highlighted)
         {
-            if (drawList == nullptr)
-                return;
-
-            drawList->AddRectFilled(
-                min,
-                max,
-                highlighted ? IM_COL32(25, 25, 32, 236) : IM_COL32(14, 14, 18, 224),
-                rounding
-            );
-            drawList->AddRectFilledMultiColor(
-                min,
-                ImVec2(max.x, min.y + (max.y - min.y) * 0.55f),
-                IM_COL32(255, 255, 255, 10),
-                IM_COL32(255, 255, 255, 6),
-                IM_COL32(255, 255, 255, 0),
-                IM_COL32(255, 255, 255, 0)
-            );
-            drawList->AddRect(min, max, IM_COL32(255, 255, 255, highlighted ? 30 : 18), rounding, 0, 1.0f);
-            drawList->AddRect(min + ImVec2(1.6f, 1.2f), max - ImVec2(1.2f, 1.6f), IM_COL32(255, 255, 255, 8), rounding, 0, 1.0f);
+            clay::Surface(drawList, min, max, rounding, highlighted);
         }
 
         bool DrawSidebarButton(const char* id, const char* icon, bool active, const ImVec2& min, const ImVec2& size)
@@ -673,13 +656,11 @@ namespace custom
         SetNextWindowSize(size - ImVec2(0.0f, cap_height));
 
         ImDrawList* draw = GetWindowDrawList();
-        draw->AddRectFilled(panel_min, panel_max, GetColorU32(c::child::background), rounding);
-        draw->AddRect(panel_min, panel_max, IM_COL32(255, 255, 255, 16), rounding, 0, 1.0f);
-        draw->AddRect(panel_min + ImVec2(1.6f, 1.2f), panel_max - ImVec2(1.2f, 1.6f), IM_COL32(255, 255, 255, 7), rounding, 0, 1.0f);
+        clay::Surface(draw, panel_min, panel_max, rounding, true);
 
         if (cap) {
             const ImVec2 cap_max(panel_max.x, panel_min.y + cap_height);
-            draw->AddRectFilled(panel_min, cap_max, GetColorU32(c::child::cap), rounding, ImDrawFlags_RoundCornersTop);
+            draw->AddRectFilled(panel_min, cap_max, IM_COL32(48, 46, 63, 210), rounding, ImDrawFlags_RoundCornersTop);
 
             const char* name_end = name ? FindRenderedTextEnd(name) : nullptr;
             if (name != nullptr && name_end != name) {
@@ -1216,7 +1197,7 @@ namespace custom
             MarkItemEdited(id);
         }
 
-        struct switch_state { float knob; float press; float hover; };
+        struct switch_state { float knob; float press; float hover; clay::Spring position, expansion; };
         static std::map<ImGuiID, switch_state> anim;
         auto it = anim.find(id);
         if (it == anim.end()) {
@@ -1224,12 +1205,16 @@ namespace custom
             init.knob = *v ? 1.0f : 0.0f;
             init.press = 0.0f;
             init.hover = 0.0f;
+            init.position.value = init.knob;
             anim.insert({ id, init });
             it = anim.find(id);
         }
         switch_state& state = it->second;
         const float dt = g.IO.DeltaTime;
-        state.knob = ImLerp(state.knob, *v ? 1.0f : 0.0f, ImMin(1.0f, dt * 16.0f));
+        state.position.Step(*v ? 1.f : 0.f, dt);
+        state.knob = ImClamp(state.position.value, 0.f, 1.f);
+        const float moving = ImClamp(std::fabs((*v ? 1.f : 0.f) - state.knob) * 5.f, 0.f, 1.f);
+        state.expansion.Step(held ? 1.f : moving, dt);
         state.press = ImLerp(state.press, held ? 1.0f : 0.0f, ImMin(1.0f, dt * 20.0f));
         state.hover = ImLerp(state.hover, hovered ? 1.0f : 0.0f, ImMin(1.0f, dt * 14.0f));
 
@@ -1246,15 +1231,15 @@ namespace custom
         draw->AddRectFilled(pMin, pMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.05f + state.hover * 0.04f + state.press * 0.10f)), rounding);
         draw->AddRect(pMin, pMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.10f + state.hover * 0.06f + state.press * 0.12f)), rounding, 0, 1.0f);
 
-        const float inset = 3.0f * c::scale + grow * 0.5f;
-        const float knobH = (pMax.y - pMin.y) - inset * 2.0f;
-        const float travel = (pMax.x - pMin.x) - inset * 2.0f - knobH;
-        const float knobX = ImLerp(pMin.x + inset, pMin.x + inset + travel, state.knob);
-        const ImVec2 kMin(knobX, pMin.y + inset);
-        const ImVec2 kMax(knobX + knobH, pMin.y + inset + knobH);
-        const float glass = state.press;
-        draw->AddRectFilled(kMin, kMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f - glass * 0.28f)), knobH * 0.5f);
-        draw->AddRect(kMin, kMax, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.30f + glass * 0.40f)), knobH * 0.5f, 0, 1.0f);
+        const float expansion = ImClamp(state.expansion.value, 0.f, 1.f);
+        const float inset = 3.f * c::scale;
+        const float knobH = pillH - inset * 2.f + expansion * 3.f * c::scale;
+        const float knobW = knobH * (1.f + expansion * .52f);
+        const float centerX = ImLerp(pMin.x + inset + knobW * .5f,
+                                    pMax.x - inset - knobW * .5f, state.knob);
+        const float centerY = (pMin.y + pMax.y) * .5f;
+        clay::Glass(draw, ImVec2(centerX - knobW*.5f, centerY - knobH*.5f),
+                    ImVec2(centerX + knobW*.5f, centerY + knobH*.5f), knobH*.5f, expansion);
 
         draw->AddText(
             ImVec2(pos.x, pos.y + (height - CalcTextSize(label).y) * 0.5f),
@@ -1391,12 +1376,12 @@ namespace custom
         it_anim->second.text = ImLerp(it_anim->second.text, (popup_open && it_anim->second.want_open) ? c::text::text_active : hovered ? c::text::text_hov : c::text::text_active, g.IO.DeltaTime * 10.0f);
         const ImVec4 target_combo_bg = hovered || popup_open ? ImVec4(0.0f, 0.0f, 0.0f, 0.92f) : ImVec4(0.0f, 0.0f, 0.0f, 0.84f);
         it_anim->second.background = ImLerp(it_anim->second.background, target_combo_bg, g.IO.DeltaTime * 10.0f);
-        it_anim->second.combo_size = ImLerp(it_anim->second.combo_size, popup_target, g.IO.DeltaTime * 14.0f);
+        it_anim->second.combo_size = popup_target;
         it_anim->second.popup_alpha = ImLerp(it_anim->second.popup_alpha, (popup_open && it_anim->second.want_open) ? 1.0f : 0.0f, g.IO.DeltaTime * 14.0f);
-        it_anim->second.popup_offset = ImLerp(it_anim->second.popup_offset, (popup_open && it_anim->second.want_open) ? 0.0f : -6.0f * c::scale, g.IO.DeltaTime * 14.0f);
+        it_anim->second.popup_offset = 0.f;
         it_anim->second.field_emphasis = ImLerp(it_anim->second.field_emphasis, hovered || popup_open ? 1.0f : 0.0f, g.IO.DeltaTime * 12.0f);
 
-        if (popup_open && !it_anim->second.want_open && it_anim->second.combo_size <= 2.0f && it_anim->second.popup_alpha <= 0.04f)
+        if (popup_open && !it_anim->second.want_open)
         {
             ClosePopupToLevel(g.BeginPopupStack.Size, true);
             popup_open = IsPopupOpen(popup_id, ImGuiPopupFlags_None);
@@ -1404,9 +1389,9 @@ namespace custom
 
         it_anim->second.opened_combo = popup_open;
 
-        const float field_rounding = 6.0f * control_scale;
-        GetWindowDrawList()->AddText(total_bb.Min, GetColorU32(WithAlpha(c::text::text, 0.5f)), label, label_end);
-        GetWindowDrawList()->AddRectFilled(field_bb.Min, field_bb.Max, GetColorU32(it_anim->second.background), field_rounding);
+        const float field_rounding = 11.0f * control_scale;
+        GetWindowDrawList()->AddText(total_bb.Min, GetColorU32(WithAlpha(c::text::text_hov, 0.9f)), label, label_end);
+        clay::Surface(GetWindowDrawList(), field_bb.Min, field_bb.Max, field_rounding, false);
         if (it_anim->second.field_emphasis > 0.01f)
         {
             GetWindowDrawList()->AddRectFilled(
@@ -1433,7 +1418,7 @@ namespace custom
             1.0f * control_scale
         );
 
-        PushClipRect(field_bb.Min, field_bb.Max, true);
+        PushClipRect(field_bb.Min, field_bb.Max - ImVec2(30.f * control_scale, 0), true);
         GetWindowDrawList()->AddText(
             field_bb.Min + ImVec2(10.0f * control_scale, (field_height - CalcTextSize(preview_value ? preview_value : "None").y) * 0.5f),
             GetColorU32(it_anim->second.text),
@@ -1445,15 +1430,15 @@ namespace custom
         const ImVec2 arrow_center(field_bb.Max.x - arrow_pad, field_bb.Min.y + field_height * 0.5f);
         const float arrow_size = 3.6f * control_scale;
         const float arrow_dir = it_anim->second.arrow_roll;
-        const float arrow_offset = ImLerp(-1.2f * control_scale, 1.2f * control_scale, arrow_dir);
+        const float arrow_offset = (1.f - 2.f * arrow_dir) * arrow_size * .5f;
         GetWindowDrawList()->AddLine(
             ImVec2(arrow_center.x - arrow_size, arrow_center.y - arrow_offset),
-            ImVec2(arrow_center.x, arrow_center.y + arrow_size - arrow_offset),
+            ImVec2(arrow_center.x, arrow_center.y + arrow_offset),
             GetColorU32(c::text::text_active),
             1.4f * control_scale
         );
         GetWindowDrawList()->AddLine(
-            ImVec2(arrow_center.x, arrow_center.y + arrow_size - arrow_offset),
+            ImVec2(arrow_center.x, arrow_center.y + arrow_offset),
             ImVec2(arrow_center.x + arrow_size, arrow_center.y - arrow_offset),
             GetColorU32(c::text::text_active),
             1.4f * control_scale
@@ -1476,10 +1461,10 @@ namespace custom
         ImGui::SetNextWindowBgAlpha(0.90f * ImMax(0.0f, it_anim->second.popup_alpha));
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 
-        PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.0f, 0.0f, 0.0f, 0.90f));
-        PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.90f));
+        PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.13f, 0.12f, 0.18f, 0.98f));
+        PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.12f, 0.18f, 0.98f));
         PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f * control_scale);
+        PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f * control_scale);
         PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * control_scale, 6.0f * control_scale));
         PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
@@ -1782,7 +1767,7 @@ namespace custom
 
         const bool popup_selectable = (window->Flags & ImGuiWindowFlags_Popup) != 0;
         const ImVec4 selectable_fill = popup_selectable
-            ? (selected ? AccentShade(0.76f, 0.26f) : hovered ? ImVec4(0.0f, 0.0f, 0.0f, 0.76f) : ImVec4(0.0f, 0.0f, 0.0f, 0.48f))
+            ? (selected ? AccentShade(0.76f, 0.26f) : hovered ? ImVec4(0.25f, 0.23f, 0.32f, 0.95f) : ImVec4(0.15f, 0.14f, 0.20f, 0.6f))
             : (selected ? AccentShade(0.18f, 0.30f) : hovered ? ImVec4(0.08f, 0.09f, 0.13f, 0.72f) : ImVec4(0.05f, 0.06f, 0.09f, 0.42f));
 
         GetWindowDrawList()->AddRectFilled(
@@ -1802,7 +1787,7 @@ namespace custom
         if (selected) {
             const float mark = 7.0f * c::scale;
             const ImVec2 mark_min(bb.Max.x - (mark + 10.0f * c::scale), bb.Min.y + (bb.GetHeight() - mark) * 0.5f);
-            GetWindowDrawList()->AddCircleFilled(mark_min + ImVec2(mark * 0.5f, mark * 0.5f), mark * 0.5f, GetColorU32(c::accent), 18);
+            RenderCheckMark(GetWindowDrawList(), mark_min, GetColorU32(c::accent), mark);
         }
 
         PushStyleColor(ImGuiCol_Text, GetColorU32(it_anim->second.text));
@@ -2568,6 +2553,7 @@ namespace custom
         float hover_t;
         float active_t;
         float value_alpha;
+        clay::Spring grip;
     };
 
     bool SliderScalar(const char* label, ImGuiDataType data_type, void* p_data, const void* p_min, const void* p_max, const char* format, ImGuiSliderFlags flags)
@@ -2616,7 +2602,8 @@ namespace custom
         const bool active_slider = IsItemActive();
         it_anim->second.text = ImLerp(it_anim->second.text, active_slider ? c::text::text_active : hovered ? c::text::text_hov : c::text::text, g.IO.DeltaTime * 6.f);
         it_anim->second.hover_t = ImLerp(it_anim->second.hover_t, hovered ? 1.0f : 0.0f, g.IO.DeltaTime * 10.0f);
-        it_anim->second.active_t = ImLerp(it_anim->second.active_t, active_slider ? 1.0f : 0.0f, g.IO.DeltaTime * 14.0f);
+        it_anim->second.grip.Step(active_slider ? 1.f : 0.f, g.IO.DeltaTime);
+        it_anim->second.active_t = ImClamp(it_anim->second.grip.value, 0.f, 1.f);
         it_anim->second.value_alpha = ImLerp(it_anim->second.value_alpha, active_slider ? 1.0f : hovered ? 0.9f : 0.78f, g.IO.DeltaTime * 10.0f);
 
         const bool value_changed = SliderBehavior(slider_bb, id, data_type, p_data, p_min, p_max, format, flags, &grab_bb);
@@ -2629,7 +2616,8 @@ namespace custom
         const float track_width = ImMax(1.0f, slider_bb.GetWidth() - track_margin * 2.0f);
         const float grab_center_x = (grab_bb.Min.x + grab_bb.Max.x) * 0.5f;
         const float fill_target = ImClamp(grab_center_x - (slider_bb.Min.x + track_margin), 0.0f, track_width);
-        it_anim->second.slow = ImLerp(it_anim->second.slow, fill_target, g.IO.DeltaTime * 18.0f);
+        // The handle follows the exact native value while dragging; only its material springs.
+        it_anim->second.slow = fill_target;
 
         const float header_y = total_bb.Min.y + (header_height - label_size.y) * 0.5f;
         GetWindowDrawList()->AddText(ImVec2(total_bb.Min.x, header_y), GetColorU32(it_anim->second.text), label, label_end);
@@ -2640,8 +2628,8 @@ namespace custom
         );
 
         const float track_thickness = 4.0f * control_scale;
-        const float knob_half_width = ImLerp(8.0f * control_scale, 11.0f * control_scale, it_anim->second.active_t);
-        const float knob_half_height = ImLerp(6.0f * control_scale, 8.0f * control_scale, it_anim->second.active_t);
+        const float knob_half_width = ImLerp(7.0f * control_scale, 17.0f * control_scale, it_anim->second.active_t);
+        const float knob_half_height = ImLerp(6.0f * control_scale, 10.0f * control_scale, it_anim->second.active_t);
         const ImVec2 track_start(slider_bb.Min.x + track_margin, frame_bb.Min.y + box_height * 0.5f);
         const ImVec2 track_end(slider_bb.Max.x - track_margin, track_start.y);
         GetWindowDrawList()->AddRectFilled(
@@ -2667,11 +2655,8 @@ namespace custom
                 knob_half_height + 2.0f * control_scale
             );
         }
-        const float glass_knob = it_anim->second.active_t;
-        const ImVec4 knob_fill = ImVec4(1.0f, 1.0f, 1.0f, 1.0f - glass_knob * 0.30f);
-        const float knob_rounding = knob_half_height;
-        GetWindowDrawList()->AddRectFilled(knob_min, knob_max, GetColorU32(knob_fill), knob_rounding);
-        GetWindowDrawList()->AddRect(knob_min, knob_max, GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 0.30f + glass_knob * 0.40f)), knob_rounding, 0, 1.0f * control_scale);
+        clay::Glass(GetWindowDrawList(), knob_min, knob_max, knob_half_height,
+                    it_anim->second.active_t);
 
         return value_changed;
     }
