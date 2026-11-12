@@ -12,7 +12,8 @@ enum class FireMode : std::uint8_t {
     Automatic,
     Single,
     BurstAutomatic,
-    BurstSingle
+    BurstSingle,
+    SingleRelease
 };
 
 struct Settings {
@@ -56,9 +57,6 @@ struct Frame {
     bool shotReady = false;
     std::uint64_t shotSerial = 0;
     FireMode fireMode = FireMode::Unsupported;
-    // Bolt-action/sniper weapons (Weapon.m_IsReleaseToFire) shoot on the
-    // release edge instead of the press edge.
-    bool releaseToFire = false;
 };
 
 struct Intent {
@@ -67,6 +65,7 @@ struct Intent {
     bool up = false;
 
     bool passthrough = true;
+    bool commitRelease = false;
 };
 
 
@@ -74,6 +73,10 @@ struct Intent {
 class Controller {
 public:
     bool HasOwnedInput() const noexcept { return phase_ == Phase::Held; }
+    bool HasPendingShot() const noexcept { return phase_ == Phase::AwaitShot; }
+    void RejectPendingShot() noexcept {
+        if (phase_ == Phase::AwaitShot) phase_ = Phase::RejectedRelease;
+    }
     void Reset() noexcept {
         *this = Controller{};
     }
@@ -105,6 +108,19 @@ public:
             return {};
         }
 
+        if (phase_ == Phase::RejectedRelease) {
+            phase_ = Phase::Rearm;
+            return {};
+        }
+
+        // A release has already been committed. Do not submit another press
+        // while its shot is unconfirmed, even if targeting or ADS changes.
+        if (phase_ == Phase::AwaitShot) {
+            if (frame.shotSerial != submittedShotSerial_)
+                phase_ = Phase::Rearm;
+            return {};
+        }
+
         if (modeChanged || !Eligible(settings, frame)) {
             return ReleaseOwned();
         }
@@ -117,26 +133,12 @@ public:
             return {true, !wasHeld, false, false};
         }
 
-        if (frame.releaseToFire) {
-            // The native input only fires these weapons when the button is
-            // released, so the press is delivered first and the release follows
-            // on the next update. Re-arming then waits for the shot to be
-            // acknowledged instead of holding until a shot that never comes.
-            if (phase_ == Phase::Held) {
-                submittedShotSerial_ = frame.shotSerial;
-                phase_ = Phase::Rearm;
-                return {false, false, true, false};
-            }
-            if (phase_ == Phase::Rearm) {
-                if (frame.shotSerial == submittedShotSerial_ && frame.shotReady) return {};
-                phase_ = Phase::Idle;
-            }
-            if (!frame.shotReady) {
-                return {};
-            }
+        if (frame.fireMode == FireMode::SingleRelease && phase_ == Phase::Held) {
+            if (!frame.shotReady)
+                return {true, false, false, false};
             submittedShotSerial_ = frame.shotSerial;
-            phase_ = Phase::Held;
-            return {true, true, false, false};
+            phase_ = Phase::AwaitShot;
+            return {false, false, true, false, true};
         }
 
         if (phase_ == Phase::Held) {
@@ -162,7 +164,7 @@ public:
     }
 
 private:
-    enum class Phase : std::uint8_t { Idle, Held, Rearm };
+    enum class Phase : std::uint8_t { Idle, Held, AwaitShot, RejectedRelease, Rearm };
 
     static bool IsAutomatic(FireMode mode) noexcept {
         return mode == FireMode::Automatic || mode == FireMode::BurstAutomatic;
@@ -170,14 +172,16 @@ private:
 
     static bool IsSupported(FireMode mode) noexcept {
         return IsAutomatic(mode) || mode == FireMode::Single ||
-               mode == FireMode::BurstSingle;
+               mode == FireMode::BurstSingle || mode == FireMode::SingleRelease;
     }
 
     static bool Eligible(const Settings& settings, const Frame& frame) noexcept {
         const bool validMode = settings.mode == Mode::Both ||
                                settings.mode == Mode::ADSOnly;
-        const bool adsReady = settings.mode == Mode::Both ||
-                              (frame.aiming && frame.fullyAimed);
+        const bool adsReady = (settings.mode == Mode::Both ||
+                               (frame.aiming && frame.fullyAimed)) &&
+                              (frame.fireMode != FireMode::SingleRelease ||
+                               (frame.aiming && frame.fullyAimed));
         return settings.enabled && validMode && frame.contextValid &&
                frame.bindingsReady && frame.ammoAvailable && !frame.hardBlocked &&
                frame.targetValid && IsSupported(frame.fireMode) && adsReady;

@@ -110,6 +110,7 @@ const char* GetDetectedFireModeText() noexcept {
     switch (GetDetectedFireMode()) {
         case FireMode::Automatic: return "Automatic";
         case FireMode::Single: return "Semi-auto / single shot";
+        case FireMode::SingleRelease: return "Single shot (release)";
         default: return "Unsupported or unavailable";
     }
 }
@@ -151,10 +152,13 @@ bool NeedsTargetQuery(const Settings& settings, const Frame& frame,
     const bool automatic = frame.fireMode == FireMode::Automatic ||
                            frame.fireMode == FireMode::BurstAutomatic;
     const bool single = frame.fireMode == FireMode::Single ||
-                        frame.fireMode == FireMode::BurstSingle;
+                        frame.fireMode == FireMode::BurstSingle ||
+                        frame.fireMode == FireMode::SingleRelease;
+    const bool releaseAdsReady = frame.fireMode != FireMode::SingleRelease ||
+                                 (frame.aiming && frame.fullyAimed);
     return settings.enabled && frame.contextValid && frame.bindingsReady &&
            !frame.manualActive && frame.ammoAvailable && !frame.hardBlocked &&
-           modeReady && (automatic || (single &&
+           modeReady && releaseAdsReady && (automatic || (single &&
                (frame.shotReady || controller.HasOwnedInput())));
 }
 

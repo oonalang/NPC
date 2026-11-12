@@ -69,9 +69,9 @@ def verify(library, source):
     # The live comparison flag does not change offline disk verification.
     probes = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\},\s*(?:true|false)\}',
                         (source / "TriggerCompatibility.cpp").read_text())
-    if len(checks) != 44 or len(probes) != 7:
-        raise ValueError("expected all 44 profile fingerprints and all 7 compatibility probes")
-    if len({int(rva, 16) for _, rva, _ in checks}) != 44:
+    if len(checks) != 45 or len(probes) != 7:
+        raise ValueError("expected all 45 profile fingerprints and all 7 compatibility probes")
+    if len({int(rva, 16) for _, rva, _ in checks}) != 45:
         raise ValueError("duplicate profile fingerprint addresses")
     failures = []
     for entries, width in ((checks, 16), (probes, 8)):
