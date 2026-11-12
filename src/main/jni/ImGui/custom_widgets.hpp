@@ -56,8 +56,20 @@ namespace custom
     bool                Checkbox(const char* label, bool* v);
     bool                CheckboxClicked(const char* label, bool* v);
 
-    bool                Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
-    bool                Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
+    struct MenuItemDecoration
+    {
+        enum class Kind { None, Icon, Circle, Ring };
+        Kind kind = Kind::None;
+        ImU32 color = IM_COL32(170, 166, 181, 255);
+        const char* icon = nullptr;
+
+        static MenuItemDecoration Circle(ImU32 color) { return {Kind::Circle, color, nullptr}; }
+        static MenuItemDecoration Ring(ImU32 color) { return {Kind::Ring, color, nullptr}; }
+        static MenuItemDecoration Icon(const char* icon, ImU32 color = IM_COL32(170, 166, 181, 255)) { return {Kind::Icon, color, icon}; }
+    };
+
+    bool                Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0), const MenuItemDecoration& decoration = {});
+    bool                Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0), const MenuItemDecoration& decoration = {});
 
     bool                BeginCombo(const char* label, const char* preview_value, int val = 0, bool multi = false, ImGuiComboFlags flags = 0);
     void                EndCombo();

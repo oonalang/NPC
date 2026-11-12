@@ -959,15 +959,20 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     bool commonTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common);
                                     const auto tierOptions = ImGuiSelectableFlags_DontClosePopups;
                                     if (custom::BeginCombo("Unlock tiers", selectedTiers.c_str(), 5)) {
-                                        if (custom::Selectable("All blueprints", &allBlueprints, tierOptions))
+                                        if (custom::Selectable("All blueprints", &allBlueprints, tierOptions, ImVec2(0, 0),
+                                                custom::MenuItemDecoration::Ring(IM_COL32(185, 182, 198, 255))))
                                             BlueprintTierFilter::SetMask(0);
-                                        if (custom::Selectable("Mythic", &mythicTier, tierOptions))
+                                        if (custom::Selectable("Mythic", &mythicTier, tierOptions, ImVec2(0, 0),
+                                                custom::MenuItemDecoration::Circle(IM_COL32(239, 77, 91, 255))))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Mythic);
-                                        if (custom::Selectable("Legendary", &legendaryTier, tierOptions))
+                                        if (custom::Selectable("Legendary", &legendaryTier, tierOptions, ImVec2(0, 0),
+                                                custom::MenuItemDecoration::Circle(IM_COL32(255, 208, 70, 255))))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Legendary);
-                                        if (custom::Selectable("Epic", &epicTier, tierOptions))
+                                        if (custom::Selectable("Epic", &epicTier, tierOptions, ImVec2(0, 0),
+                                                custom::MenuItemDecoration::Circle(IM_COL32(181, 119, 245, 255))))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Epic);
-                                        if (custom::Selectable("Common", &commonTier, tierOptions))
+                                        if (custom::Selectable("Common", &commonTier, tierOptions, ImVec2(0, 0),
+                                                custom::MenuItemDecoration::Circle(IM_COL32(173, 181, 193, 255))))
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
                                         custom::EndCombo();
                                     }

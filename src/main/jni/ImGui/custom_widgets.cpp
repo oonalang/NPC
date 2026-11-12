@@ -1337,6 +1337,12 @@ namespace custom
             buf[i].pos = ImRotate(buf[i].pos, s, c) - center;
     }
 
+    static float PopupRowHeight()
+    {
+        return ImMax(ImGui::GetFontSize() + 14.f * c::scale * c::widget_scale,
+                     36.f * c::scale * c::widget_scale);
+    }
+
     struct begin_state
     {
         ImVec4 background, text, outline;
@@ -1362,7 +1368,7 @@ namespace custom
         const ImGuiStyle& style = g.Style;
         const char* label_end = FindRenderedTextEnd(label);
         const ImVec2 label_size = CalcTextSize(label, label_end, true);
-        const float width = GetContentRegionMax().x - style.WindowPadding.x;
+        const float width = ImMax(1.f, GetContentRegionAvail().x);
         const float control_scale = c::scale * c::widget_scale;
         const float field_height = 24.0f * control_scale;
         const float gap = 5.0f * control_scale;
@@ -1396,9 +1402,21 @@ namespace custom
                 OpenPopupEx(popup_id, ImGuiPopupFlags_None);
         }
         popup_open = IsPopupOpen(popup_id, ImGuiPopupFlags_None);
-        const float popup_target = (popup_open && it_anim->second.want_open)
-            ? ImClamp(CalcMaxPopupHeightFromItemCount(val) + 6.0f * c::scale, 0.0f, 220.0f * c::scale)
-            : 0.0f;
+        const float popup_padding = 10.f * control_scale;
+        const float popup_spacing = 2.f * control_scale;
+        const float heading_height = g.FontSize + 14.f * control_scale;
+        const int visible_items = val > 0 ? val : 8;
+        const float requested_height = popup_padding * 2.f + heading_height +
+            PopupRowHeight() * visible_items + popup_spacing * (visible_items - 1);
+        const ImRect popup_extent = GetPopupAllowedExtentRect(window);
+        const float popup_gap = 7.f * control_scale;
+        const float room_below = ImMax(0.f, popup_extent.Max.y - field_bb.Max.y - popup_gap);
+        const float room_above = ImMax(0.f, field_bb.Min.y - popup_gap - popup_extent.Min.y);
+        const float useful_height = popup_padding * 2.f + heading_height + PopupRowHeight();
+        const float available_height = ImMax(room_below, room_above) >= useful_height
+            ? ImMax(room_below, room_above) : popup_extent.GetHeight();
+        const float popup_target = ImMax(1.f, ImMin(requested_height,
+            ImMin(320.f * control_scale, available_height)));
         it_anim->second.arrow_roll = ImLerp(it_anim->second.arrow_roll, (popup_open && it_anim->second.want_open) ? 1.0f : 0.0f, g.IO.DeltaTime * 12.0f);
         it_anim->second.text = ImLerp(it_anim->second.text, (popup_open && it_anim->second.want_open) ? c::text::text_active : hovered ? c::text::text_hov : c::text::text_active, g.IO.DeltaTime * 10.0f);
         const ImVec4 target_combo_bg = hovered || popup_open ? ImVec4(0.0f, 0.0f, 0.0f, 0.92f) : ImVec4(0.0f, 0.0f, 0.0f, 0.84f);
@@ -1474,47 +1492,56 @@ namespace custom
         if (!IsRectVisible(total_bb.Min, total_bb.Max + ImVec2(0, 2 * control_scale)))
         {
             it_anim->second.want_open = false;
-            if (popup_open && it_anim->second.combo_size <= 2.0f)
-                ClosePopupToLevel(g.BeginPopupStack.Size, true);
+            if (popup_open) ClosePopupToLevel(g.BeginPopupStack.Size, true);
             it_anim->second.opened_combo = false;
-            it_anim->second.combo_size = 0.f;
             it_anim->second.popup_alpha = 0.0f;
+            return false;
         }
+        if (!popup_open) return false;
 
-        if (!popup_open && it_anim->second.combo_size < 2.f && it_anim->second.popup_alpha < 0.04f) return false;
+        const ImVec2 popup_size(ImMin(field_bb.GetWidth(), popup_extent.GetWidth()), popup_target);
+        ImRect avoid = field_bb;
+        avoid.Expand(ImVec2(0.f, popup_gap));
+        ImGuiDir direction = (flags & ImGuiComboFlags_PopupAlignLeft) ? ImGuiDir_Left : ImGuiDir_Down;
+        const ImVec2 popup_pos = FindBestWindowPosForPopupEx(avoid.GetBL(), popup_size,
+            &direction, popup_extent, avoid, ImGuiPopupPositionPolicy_ComboBox);
+        SetNextWindowPos(popup_pos);
+        SetNextWindowSize(popup_size);
+        const ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove;
 
-        ImGui::SetNextWindowPos(ImVec2(field_bb.Min.x, field_bb.Max.y + 5.0f * control_scale + it_anim->second.popup_offset));
-        ImGui::SetNextWindowSize(ImVec2(field_bb.GetWidth(), ImMax(1.0f, it_anim->second.combo_size)));
-        ImGui::SetNextWindowBgAlpha(0.90f * ImMax(0.0f, it_anim->second.popup_alpha));
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-
-        PushStyleColor(ImGuiCol_PopupBg, ImVec4(0.13f, 0.12f, 0.18f, 0.98f));
-        PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.13f, 0.12f, 0.18f, 0.98f));
-        PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-        PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f * control_scale);
-        PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * control_scale, 6.0f * control_scale));
-        PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-        bool ret = BeginPopupEx(popup_id, window_flags);
-
-        PopStyleVar(3);
+        PushStyleColor(ImGuiCol_PopupBg, ImVec4(.085f, .081f, .10f, .98f));
+        PushStyleColor(ImGuiCol_WindowBg, ImVec4(.085f, .081f, .10f, .98f));
+        PushStyleColor(ImGuiCol_Border, ImVec4(.58f, .55f, .65f, .24f));
+        PushStyleVar(ImGuiStyleVar_Alpha, g.Style.Alpha * it_anim->second.popup_alpha);
+        PushStyleVar(ImGuiStyleVar_PopupRounding, 16.f * control_scale);
+        PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(popup_padding, popup_padding));
+        PushStyleVar(ImGuiStyleVar_PopupBorderSize, 1.f * control_scale);
+        PushStyleVar(ImGuiStyleVar_ScrollbarSize, 8.f * control_scale);
+        const bool ret = BeginPopupEx(popup_id, window_flags);
+        PopStyleVar(4);
         PopStyleColor(3);
-
         if (!ret)
         {
+            PopStyleVar();
             it_anim->second.hovered = false;
             it_anim->second.opened_combo = false;
             return false;
         }
 
+        PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.f, popup_spacing));
+        const ImVec2 heading_pos = GetCursorScreenPos() + ImVec2(8.f * control_scale, 4.f * control_scale);
+        GetWindowDrawList()->AddText(GetFont(), g.FontSize * .86f, heading_pos,
+            GetColorU32(ImVec4(.61f, .59f, .66f, 1.f)), label, label_end);
+        Dummy(ImVec2(0.f, heading_height - popup_spacing));
         it_anim->second.hovered = IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem | ImGuiHoveredFlags_ChildWindows);
         it_anim->second.opened_combo = true;
-
         return true;
     }
 
     void EndCombo()
     {
+        PopStyleVar(2); // row spacing and popup fade; both are scoped to this popup
         EndPopup();
     }
 
@@ -1541,10 +1568,7 @@ namespace custom
         {
             for (auto i = 0; i < count; i++)
             {
-                PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f * c::scale, 8.0f * c::scale));
-                PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f * c::scale, 8.0f * c::scale));
                 custom::Selectable(labels[i], &variable[i], ImGuiSelectableFlags_DontClosePopups);
-                PopStyleVar(2);
             }
             EndCombo();
         }
@@ -1630,13 +1654,11 @@ namespace custom
         if (*current_item >= 0 && *current_item < items_count)
             preview_value = getter(user_data, *current_item);
 
-        if (popup_max_height_in_items != -1 && !(g.NextWindowData.Flags & ImGuiNextWindowDataFlags_HasSizeConstraint))
-            SetNextWindowSizeConstraints(ImVec2(0, 0), ImVec2(FLT_MAX, CalcMaxPopupHeightFromItemCount(popup_max_height_in_items) * c::scale));
-
-        if (!BeginCombo(label, preview_value, items_count, ImGuiComboFlags_None)) return false;
+        const int visible_items = popup_max_height_in_items > 0
+            ? ImMin(items_count, popup_max_height_in_items) : items_count;
+        if (!BeginCombo(label, preview_value, visible_items)) return false;
 
         bool value_changed = false;
-        PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f * c::scale, 8.0f * c::scale));
         for (int i = 0; i < items_count; i++)
         {
             const char* item_text = getter(user_data, i);
@@ -1654,7 +1676,6 @@ namespace custom
                 SetItemDefaultFocus();
             PopID();
         }
-        PopStyleVar();
 
         EndCombo();
 
@@ -1688,7 +1709,7 @@ namespace custom
         ImVec4 text;
     };
 
-    bool Selectable(const char* label, bool selected, ImGuiSelectableFlags flags, const ImVec2& size_arg)
+    bool Selectable(const char* label, bool selected, ImGuiSelectableFlags flags, const ImVec2& size_arg, const MenuItemDecoration& decoration)
     {
         ImGuiWindow* window = GetCurrentWindow();
         if (window->SkipItems)
@@ -1700,20 +1721,31 @@ namespace custom
         ImGuiID id = window->GetID(label);
         ImVec2 label_size = CalcTextSize(label, NULL, true);
         ImVec2 size(size_arg.x != 0.0f ? size_arg.x : label_size.x, size_arg.y != 0.0f ? size_arg.y : label_size.y);
+        const bool popup_selectable = (window->Flags & ImGuiWindowFlags_Popup) != 0;
+        const float control_scale = c::scale * c::widget_scale;
+        if (popup_selectable) size.y = ImMax(size.y, PopupRowHeight());
         ImVec2 pos = window->DC.CursorPos;
         pos.y += window->DC.CurrLineTextBaseOffset;
-        ItemSize(size, 0.0f);
+        if (!popup_selectable) ItemSize(size, 0.0f);
 
         const bool span_all_columns = (flags & ImGuiSelectableFlags_SpanAllColumns) != 0;
         const float min_x = span_all_columns ? window->ParentWorkRect.Min.x : pos.x;
         const float max_x = span_all_columns ? window->ParentWorkRect.Max.x : window->WorkRect.Max.x;
-        if (size_arg.x == 0.0f || (flags & ImGuiSelectableFlags_SpanAvailWidth)) size.x = ImMax(label_size.x, max_x - min_x);
+        if (popup_selectable)
+        {
+            const float available_width = ImMax(1.f, max_x - min_x);
+            size.x = size_arg.x > 0.f && !(flags & ImGuiSelectableFlags_SpanAvailWidth)
+                ? ImMin(size_arg.x, available_width) : available_width;
+            ItemSize(size, 0.f);
+        }
+        else if (size_arg.x == 0.0f || (flags & ImGuiSelectableFlags_SpanAvailWidth))
+            size.x = ImMax(label_size.x, max_x - min_x);
 
         const ImVec2 text_min = pos;
         const ImVec2 text_max(min_x + size.x, pos.y + size.y);
 
         ImRect bb(min_x, pos.y, text_max.x, text_max.y);
-        if ((flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
+        if (!popup_selectable && (flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
         {
             const float spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
             const float spacing_y = style.ItemSpacing.y;
@@ -1792,34 +1824,61 @@ namespace custom
         const char* label_end = FindRenderedTextEnd(label);
         it_anim->second.text = ImLerp(it_anim->second.text, selected ? c::text::text_active : hovered ? c::text::text_hov : c::text::text, g.IO.DeltaTime * 8.f);
 
-        const bool popup_selectable = (window->Flags & ImGuiWindowFlags_Popup) != 0;
-        const ImVec4 selectable_fill = popup_selectable
-            ? (selected ? AccentShade(0.76f, 0.26f) : hovered ? ImVec4(0.25f, 0.23f, 0.32f, 0.95f) : ImVec4(0.15f, 0.14f, 0.20f, 0.6f))
-            : (selected ? AccentShade(0.18f, 0.30f) : hovered ? ImVec4(0.08f, 0.09f, 0.13f, 0.72f) : ImVec4(0.05f, 0.06f, 0.09f, 0.42f));
-
-        GetWindowDrawList()->AddRectFilled(
-            bb.Min,
-            bb.Max,
-            GetColorU32(selectable_fill),
-            6.0f * c::scale
-        );
-        GetWindowDrawList()->AddRect(
-            bb.Min,
-            bb.Max,
-            GetColorU32(selected ? AccentLift(0.08f) : c::widget::outlinecolor, selected ? 0.88f : 0.45f),
-            6.0f * c::scale,
-            0,
-            1.0f * c::scale
-        );
-        if (selected) {
-            const float mark = 7.0f * c::scale;
-            const ImVec2 mark_min(bb.Max.x - (mark + 10.0f * c::scale), bb.Min.y + (bb.GetHeight() - mark) * 0.5f);
-            RenderCheckMark(GetWindowDrawList(), mark_min, GetColorU32(c::accent), mark);
+        if (popup_selectable)
+        {
+            // The checkmark carries selection; rows stay quiet until hovered.
+            if (hovered && !disabled_item && !disabled_global)
+                GetWindowDrawList()->AddRectFilled(bb.Min, bb.Max,
+                    GetColorU32(ImVec4(1.f, 1.f, 1.f, held ? .075f : .045f)), 8.f * control_scale);
+            const ImVec2 center(bb.Min.x + 17.f * control_scale, bb.GetCenter().y);
+            const ImU32 marker_color = GetColorU32(decoration.color);
+            if (decoration.kind == MenuItemDecoration::Kind::Circle)
+                GetWindowDrawList()->AddCircleFilled(center, 6.f * control_scale, marker_color, 24);
+            else if (decoration.kind == MenuItemDecoration::Kind::Ring)
+                GetWindowDrawList()->AddCircle(center, 6.f * control_scale, marker_color, 24, 1.5f * control_scale);
+            else if (decoration.kind == MenuItemDecoration::Kind::Icon && decoration.icon)
+            {
+                ImFont* icon_font = shell::GetIconFont();
+                const float icon_size = 17.f * control_scale;
+                const ImVec2 icon_size_px = shell::MeasureText(icon_font, icon_size, decoration.icon);
+                GetWindowDrawList()->AddText(icon_font, icon_size, center - icon_size_px * .5f,
+                    marker_color, decoration.icon);
+            }
+            if (selected)
+            {
+                const float mark = 10.f * control_scale;
+                RenderCheckMark(GetWindowDrawList(),
+                    ImVec2(bb.Max.x - 24.f * control_scale, bb.GetCenter().y - mark * .5f),
+                    GetColorU32(ImVec4(.96f, .95f, .99f, 1.f)), mark);
+            }
+            const float left_inset = decoration.kind == MenuItemDecoration::Kind::None ? 10.f : 35.f;
+            PushStyleColor(ImGuiCol_Text, ImVec4(.94f, .93f, .97f, 1.f));
+            RenderTextClipped(ImVec2(bb.Min.x + left_inset * control_scale,
+                                    bb.GetCenter().y - label_size.y * .5f),
+                ImVec2(bb.Max.x - 36.f * control_scale, bb.Max.y), label, label_end,
+                &label_size, ImVec2(0.f, 0.f), &bb);
+            PopStyleColor();
         }
-
-        PushStyleColor(ImGuiCol_Text, GetColorU32(it_anim->second.text));
-        RenderTextClipped(text_min + ImVec2(4.0f * c::scale, 0.0f), text_max - ImVec2(18.0f * c::scale, 0.0f), label, label_end, &label_size, style.SelectableTextAlign, &bb);
-        PopStyleColor();
+        else
+        {
+            const ImVec4 selectable_fill = selected ? AccentShade(0.18f, 0.30f) :
+                hovered ? ImVec4(.08f, .09f, .13f, .72f) : ImVec4(.05f, .06f, .09f, .42f);
+            GetWindowDrawList()->AddRectFilled(bb.Min, bb.Max, GetColorU32(selectable_fill), 6.f * c::scale);
+            GetWindowDrawList()->AddRect(bb.Min, bb.Max,
+                GetColorU32(selected ? AccentLift(.08f) : c::widget::outlinecolor, selected ? .88f : .45f),
+                6.f * c::scale, 0, 1.f * c::scale);
+            if (selected)
+            {
+                const float mark = 7.f * c::scale;
+                RenderCheckMark(GetWindowDrawList(),
+                    ImVec2(bb.Max.x - (mark + 10.f * c::scale), bb.Min.y + (bb.GetHeight() - mark) * .5f),
+                    GetColorU32(c::accent), mark);
+            }
+            PushStyleColor(ImGuiCol_Text, GetColorU32(it_anim->second.text));
+            RenderTextClipped(text_min + ImVec2(4.f * c::scale, 0.f), text_max - ImVec2(18.f * c::scale, 0.f),
+                label, label_end, &label_size, style.SelectableTextAlign, &bb);
+            PopStyleColor();
+        }
 
         if (pressed && (window->Flags & ImGuiWindowFlags_Popup) && !(flags & ImGuiSelectableFlags_DontClosePopups) && !(g.LastItemData.InFlags & ImGuiItemFlags_SelectableDontClosePopup)) CloseCurrentPopup();
 
@@ -1828,9 +1887,9 @@ namespace custom
         return pressed;
     }
 
-    bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags, const ImVec2& size_arg)
+    bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags, const ImVec2& size_arg, const MenuItemDecoration& decoration)
     {
-        if (Selectable(label, *p_selected, flags, size_arg))
+        if (Selectable(label, *p_selected, flags, size_arg, decoration))
         {
             *p_selected = !*p_selected;
             return true;

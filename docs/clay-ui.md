@@ -6,6 +6,18 @@ sidebar's active page uses an inset clay highlight without a dot. A single-line
 Inter wordmark and a compact edition capsule sit on the glass header; blueprint
 tiers retain their selector without the explanatory descriptions underneath.
 
+Open dropdowns use a dark rounded popover, a short muted heading, roomy rows,
+and right-aligned white checkmarks. Only hovered rows receive a subtle fill.
+Blueprint rows use red Mythic, gold Legendary, purple Epic, and neutral Common
+circles; All blueprints uses an outlined neutral circle. These are explicit row
+decorations and do not change tier matching or multi-selection. Popovers keep
+their touch targets stationary, flip above the field when needed, and scroll
+when the list cannot fit within the viewport.
+
+Run `sh tests/run-dropdown-tests.sh` for native input checks covering tier
+multi-selection, clearing, single selection, disabled rows, long labels,
+outside-click dismissal, upward placement, and scrolling to the last option.
+
 Toggle thumbs expand while held and during their transition, then return to a
 resting pearl shape. Slider thumbs grow into pills while active. Slider positions
 follow ImGui's native value directly; only the material and size animate. The
