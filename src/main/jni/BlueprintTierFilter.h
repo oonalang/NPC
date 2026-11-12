@@ -57,11 +57,16 @@ inline bool Contains(uint32_t blueprintId) {
 inline bool Allows(uint32_t blueprintId) {
     const uint32_t mask = GetMask();
     if (mask == 0) return true;
-    if (blueprintId == 0 || !catalogReady.load(std::memory_order_acquire)) return false;
+    if (blueprintId == 0) return false;
+    // Until the tier catalog has been built, a selected filter must not hide
+    // everything; it only narrows blueprints once their tier is known.
+    if (!catalogReady.load(std::memory_order_acquire)) return true;
     const auto snapshot = std::atomic_load_explicit(&catalog, std::memory_order_acquire);
-    if (!snapshot) return false;
+    if (!snapshot) return true;
     const auto entry = snapshot->find(blueprintId);
-    return entry != snapshot->end() && (entry->second & mask) != 0;
+    // Blueprints with no detected tier stay visible instead of vanishing.
+    if (entry == snapshot->end() || entry->second == 0) return true;
+    return (entry->second & mask) != 0;
 }
 
 inline void Publish(TierCatalog updated) {

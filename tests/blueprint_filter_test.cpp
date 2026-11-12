@@ -15,6 +15,13 @@ int main() {
     assert(DetectTier("[C] Test Weapon") == Common);
     assert(DetectTier("Unknown skin") == 0);
 
+    // A filter selected before the (background-loaded) catalog exists must not
+    // hide every blueprint.
+    SetMask(Mythic);
+    assert(!Contains(101));
+    assert(Allows(101));
+    assert(Allows(999));
+
     TierCatalog entries;
     entries[101] = Mythic;
     entries[102] = Legendary;
@@ -34,7 +41,9 @@ int main() {
     SetMask(Mythic);
     assert(Allows(101));
     assert(!Allows(102));
-    assert(!Allows(105));
+    // Untagged and unknown blueprints stay visible rather than disappearing.
+    assert(Allows(105));
+    assert(Allows(999));
     assert(Preview() == "Mythic");
 
     Toggle(Legendary);

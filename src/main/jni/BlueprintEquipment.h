@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <mutex>
@@ -43,16 +44,26 @@ inline bool Read(const void* at, T& value) {
     return true;
 }
 
+// The skin list is loaded on a background thread, so the catalog must not be
+// frozen on the first frame: doing that published an empty catalog and every
+// tier filter then hid all blueprints until the filter was cleared.
+inline std::atomic<std::size_t> builtCatalogSize{0};
+
 inline void RefreshTierCatalog() {
-    if (!loadskinhack || BlueprintTierFilter::catalogReady.load(std::memory_order_acquire)) return;
+    if (!loadskinhack) return;
+    const std::size_t itemCount = itemData.size();
+    if (itemCount == 0) return;
+    if (BlueprintTierFilter::catalogReady.load(std::memory_order_acquire) &&
+        builtCatalogSize.load(std::memory_order_acquire) == itemCount) return;
     BlueprintTierFilter::TierCatalog updated;
-    updated.reserve(itemData.size());
+    updated.reserve(itemCount);
     for (const auto& item : itemData) {
         if (item.WeaponConf[0] <= 0 || item.WeaponConf[2] <= 0) continue;
         const auto blueprintId = static_cast<uint32_t>(item.WeaponConf[2]);
         updated[blueprintId] |= BlueprintTierFilter::DetectTier(item.itemName);
     }
     BlueprintTierFilter::Publish(std::move(updated));
+    builtCatalogSize.store(itemCount, std::memory_order_release);
 }
 
 inline bool CatalogContains(uint32_t blueprintId) {
