@@ -103,7 +103,7 @@ void ValidationPolicy(Module& module) {
     Require(encoded == 8, "exactly eight known disk-only prefixes classified");
     Require(module.Validate(reason) == ValidationResult::Ready,
             "loader-decoded bodies do not reject an otherwise matching build");
-    constexpr std::uintptr_t hooks[]{0xC913748,0xC913FA4,0xC917C78,0xC917D68};
+    constexpr std::uintptr_t hooks[]{0xC913748,0xC913FA4,0xC916D64,0xC917C78,0xC917D68};
     for (auto rva : hooks) {
         module.bytes[rva] ^= 1;
         Require(module.Validate(reason) == ValidationResult::InvalidProfile && reason,

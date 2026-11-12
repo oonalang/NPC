@@ -465,8 +465,8 @@ inline bool DrawRuntimeSidebarButton(const char *id, const char *icon, const cha
         clay::Surface(drawList, min + ImVec2(5,2), min + size - ImVec2(5,2), pillRounding, active);
     }
     if (active) {
-        drawList->AddRect(min, min + size, IM_COL32(255, 255, 255, 28), pillRounding, 0, 1.0f);
-        drawList->AddCircleFilled(ImVec2(min.x + 7.0f, min.y + size.y * 0.5f), 2.6f, main_runtime_theme::GetAccentU32(1.0f), 16);
+        drawList->AddRect(min + ImVec2(5,2), min + size - ImVec2(5,2),
+                          IM_COL32(213,184,255,44), pillRounding, 0, 1.0f);
     }
 
     ImFont *iconFont = custom::shell::GetIconFont();

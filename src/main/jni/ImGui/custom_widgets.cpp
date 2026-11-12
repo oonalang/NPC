@@ -51,6 +51,33 @@ namespace custom
             clay::Surface(drawList, min, max, rounding, highlighted);
         }
 
+        void DrawBrandHeader(const ImVec2& min, const ImVec2& max)
+        {
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            clay::Backdrop(draw,min,max,20.f,.80f);
+            ImFont* title = GetTitleFont();
+            ImFont* body = GetTextFont();
+            const float titleSize = 26.f;
+            const ImVec2 first = MeasureText(title,titleSize,"SHAI");
+            const ImVec2 second = MeasureText(title,titleSize,"ETHNIR");
+            const ImVec2 titlePos(min.x + 21.f,min.y + (max.y - min.y - first.y) * .5f - 1.f);
+            const float secondX = titlePos.x + first.x + 8.f;
+            draw->AddText(title,titleSize,titlePos,IM_COL32(246,241,255,255),"SHAI");
+            draw->AddText(title,titleSize,ImVec2(secondX,titlePos.y),
+                          ImGui::GetColorU32(c::accent),"ETHNIR");
+
+            const ImVec2 badgeSize(67.f,24.f);
+            const ImVec2 badgeMin(secondX + second.x + 17.f,min.y + (max.y - min.y - badgeSize.y) * .5f);
+            // Keep the wordmark intact when the available header is narrow.
+            if (badgeMin.x + badgeSize.x < max.x - 16.f) {
+                draw->AddRectFilled(badgeMin,badgeMin + badgeSize,IM_COL32(189,153,245,21),12.f);
+                draw->AddRect(badgeMin,badgeMin + badgeSize,IM_COL32(218,192,255,38),12.f);
+                const ImVec2 label = MeasureText(body,10.5f,"EDITION");
+                draw->AddText(body,10.5f,badgeMin + (badgeSize - label) * .5f,
+                              IM_COL32(206,189,230,255),"EDITION");
+            }
+        }
+
         bool DrawSidebarButton(const char* id, const char* icon, bool active, const ImVec2& min, const ImVec2& size)
         {
             ImGui::SetCursorScreenPos(min);

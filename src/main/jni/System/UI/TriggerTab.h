@@ -22,6 +22,8 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         triggerSettings.mode = triggerMode == 1 ? PhantomTrigger::Mode::ADSOnly : PhantomTrigger::Mode::Both;
         custom::Checkbox("Hide Record", &hideRecordEnabled);
         PhantomTrigger::SetSettings(triggerSettings);
+        // The stock theme hides ordinary text; diagnostics must stay readable.
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.78f, .75f, .86f, 1.f));
         if (hideRecordUnavailable)
             ImGui::TextWrapped("Hide Record is unsupported on this device");
         ImGui::Separator();
@@ -29,8 +31,9 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         ImGui::TextWrapped("Weapon: %s", PhantomTrigger::GetDetectedFireModeText());
         if (retrySetup && PhantomTrigger::GetRuntimeStatus() ==
                 PhantomTrigger::RuntimeStatus::WaitingForBinaryVerification &&
-            ImGui::Button("Retry trigger setup"))
+            custom::Button("Retry trigger setup", ImVec2(0, 0)))
             retrySetup();
+        ImGui::PopStyleColor();
         EndContentChild(left);
     }
     custom::EndGroup();
@@ -47,7 +50,7 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         custom::SliderFloat("Dot Size", &dotAppearance.radius, 1.0f, 12.0f, "%.1f");
         custom::SliderFloat("Outline Size", &dotAppearance.outline, 0.0f, 5.0f, "%.1f");
         custom::SliderFloat("Dot Opacity", &dotAppearance.opacity, 0.1f, 1.0f, "%.2f");
-        ImGui::TextUnformatted("Dot Color");
+        ImGui::TextColored(ImVec4(.78f, .75f, .86f, 1.f), "Dot Color");
         ImGui::SameLine();
         ImGui::ColorEdit3("##DotColor", dotAppearance.color, ImGuiColorEditFlags_NoInputs);
         TriggerDotStyle::Normalize(dotAppearance);
