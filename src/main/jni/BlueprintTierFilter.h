@@ -32,6 +32,24 @@ inline uint32_t DetectTier(const std::string& name) {
     return 0;
 }
 
+inline uint32_t TierFromColorId(int colorId) {
+    switch (colorId) {
+        case 5: return Mythic;
+        case 4: return Legendary;
+        case 3: return Epic;
+        case 0: case 1: case 2: return Common;
+        default: return 0;
+    }
+}
+
+inline void RecordTier(TierCatalog& entries, uint32_t blueprintId, uint32_t tier) {
+    if (blueprintId == 0) return;
+    const auto added = entries.emplace(blueprintId, tier);
+    // One blueprint ID must resolve to one rarity. Conflicting or unknown
+    // metadata must not turn a restricted selection into a multi-tier unlock.
+    if (!added.second && added.first->second != tier) added.first->second = 0;
+}
+
 inline uint32_t GetMask() {
     return selectedMask.load(std::memory_order_acquire);
 }
@@ -58,14 +76,13 @@ inline bool Allows(uint32_t blueprintId) {
     const uint32_t mask = GetMask();
     if (mask == 0) return true;
     if (blueprintId == 0) return false;
-    // Until the tier catalog has been built, a selected filter must not hide
-    // everything; it only narrows blueprints once their tier is known.
-    if (!catalogReady.load(std::memory_order_acquire)) return true;
+    // A restricted selection grants only verified matching tiers. Waiting for
+    // metadata or encountering an unknown ID must not unlock another rarity.
+    if (!catalogReady.load(std::memory_order_acquire)) return false;
     const auto snapshot = std::atomic_load_explicit(&catalog, std::memory_order_acquire);
-    if (!snapshot) return true;
+    if (!snapshot) return false;
     const auto entry = snapshot->find(blueprintId);
-    // Blueprints with no detected tier stay visible instead of vanishing.
-    if (entry == snapshot->end() || entry->second == 0) return true;
+    if (entry == snapshot->end() || entry->second == 0) return false;
     return (entry->second & mask) != 0;
 }
 

@@ -20,6 +20,7 @@ using namespace ImGui;
 namespace font
 {
     extern ImFont* icomoon_page;
+    extern ImFont* inter_title;
 }
 
 namespace custom 

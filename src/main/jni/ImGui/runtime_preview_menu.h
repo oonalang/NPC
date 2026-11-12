@@ -1,13 +1,13 @@
 #pragma once
 
 #include "Call_ImGui.h"
+#include "ClayGlass.h"
 #include "imgui_settings.h"
 #include "../System/Core/SaveConfig.h"
 #include "../System/UI/TextureLoader.h"
 #include "../System/UI/Logo.h"
 #include "../System/UI/SkinTab.h"
 #include "../Fonts/Icon.h"
-#include "../IMAGE/bg.h"
 
 #include <cmath>
 #include <cctype>
@@ -30,6 +30,7 @@ namespace font {
 
 namespace runtime_preview_menu {
 
+// Shared by optional image-button helpers; the unused menu background is gone.
 struct Texture {
     GLuint id = 0;
 };
@@ -47,8 +48,6 @@ struct StateRefs {
     float &collapseBarPressAnim;
 };
 
-static Texture g_menuBackground;
-
 static bool g_infoPopupRequested = false;
 static bool g_priceListPopupRequested = false;
 static bool g_popupFocusVisible = false;
@@ -61,17 +60,6 @@ static int g_espLinePosition = 1;
 static int g_espHealthPosition = 1;
 static int g_espCrosshairStyle = 0;
 static int g_espStyle = 0;
-
-inline void EnsureTexture(Texture &texture, const unsigned char *bytes, int size) {
-    if (texture.id != 0) {
-        return;
-    }
-    texture.id = LoadTextureFromMemory(bytes, size);
-}
-
-inline void EnsureTexturesLoaded() {
-    EnsureTexture(g_menuBackground, bg_data, (int)sizeof(bg_data));
-}
 
 inline std::string ToUpperAscii(std::string text) {
     for (char &ch : text) {
@@ -474,7 +462,7 @@ inline bool DrawRuntimeSidebarButton(const char *id, const char *icon, const cha
         ? IM_COL32(255, 255, 255, 18)
         : hovered ? IM_COL32(255, 255, 255, 8) : IM_COL32(0, 0, 0, 0);
     if (bg != IM_COL32(0, 0, 0, 0)) {
-        drawList->AddRectFilled(min, min + size, bg, pillRounding);
+        clay::Surface(drawList, min + ImVec2(5,2), min + size - ImVec2(5,2), pillRounding, active);
     }
     if (active) {
         drawList->AddRect(min, min + size, IM_COL32(255, 255, 255, 28), pillRounding, 0, 1.0f);

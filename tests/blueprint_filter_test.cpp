@@ -15,12 +15,21 @@ int main() {
     assert(DetectTier("[C] Test Weapon") == Common);
     assert(DetectTier("Unknown skin") == 0);
 
-    // A filter selected before the (background-loaded) catalog exists must not
-    // hide every blueprint.
-    SetMask(Mythic);
+    assert(TierFromColorId(5) == Mythic);
+    assert(TierFromColorId(4) == Legendary);
+    assert(TierFromColorId(3) == Epic);
+    assert(TierFromColorId(0) == Common);
+    assert(TierFromColorId(1) == Common);
+    assert(TierFromColorId(2) == Common);
+    assert(TierFromColorId(-1) == 0);
+    assert(TierFromColorId(6) == 0);
+
+    // Selecting Epic before metadata loads must not temporarily grant every
+    // blueprint. Native ownership remains the hook's fallback.
+    SetMask(Epic);
     assert(!Contains(101));
-    assert(Allows(101));
-    assert(Allows(999));
+    assert(!Allows(101));
+    assert(!Allows(999));
 
     TierCatalog entries;
     entries[101] = Mythic;
@@ -28,7 +37,32 @@ int main() {
     entries[103] = Epic;
     entries[104] = Common;
     entries[105] = 0;
+    RecordTier(entries, 106, Epic);
+    RecordTier(entries, 106, Epic);
+    RecordTier(entries, 107, Epic);
+    RecordTier(entries, 107, Legendary);
+    RecordTier(entries, 107, Epic);
+    RecordTier(entries, 108, Legendary);
+    RecordTier(entries, 108, Epic);
+    RecordTier(entries, 109, 0);
+    RecordTier(entries, 109, Epic);
+    RecordTier(entries, 0, Epic);
     Publish(std::move(entries));
+
+    // Regression: only Epic may be injected, including when a blueprint has an
+    // unknown or conflicting catalog entry.
+    assert(Allows(103));
+    assert(Allows(106));
+    assert(!Allows(101));
+    assert(!Allows(102));
+    assert(!Allows(104));
+    assert(!Allows(105));
+    assert(!Allows(107));
+    assert(!Allows(108));
+    assert(!Allows(109));
+    assert(!Allows(999));
+    assert(!Allows(0));
+    assert(Preview() == "Epic");
 
     SetMask(0);
     assert(Allows(101));
@@ -41,9 +75,8 @@ int main() {
     SetMask(Mythic);
     assert(Allows(101));
     assert(!Allows(102));
-    // Untagged and unknown blueprints stay visible rather than disappearing.
-    assert(Allows(105));
-    assert(Allows(999));
+    assert(!Allows(105));
+    assert(!Allows(999));
     assert(Preview() == "Mythic");
 
     Toggle(Legendary);

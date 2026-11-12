@@ -3,6 +3,7 @@
 #include "Includes/obfuscate.h"
 #include "Includes/Utils.h"
 #include "ImGui/Call_ImGui.h"
+#include "ImGui/ClayGlass.h"
 #include "IL2CppSDKGenerator/BasicStructs/Call_BasicStructs.h"
 #include "IL2CppSDKGenerator/IL2Cpp/Call_IL2Cpp.h"
 #include "Hacks/Hacks.h"
@@ -113,6 +114,7 @@ JavaVM* VM = nullptr;
 namespace font {
     ImFont* icomoon_logo = nullptr;
     ImFont* inter_semibold = nullptr;
+    ImFont* inter_title = nullptr;
     ImFont* icomoon_page = nullptr;
 }
 
@@ -203,16 +205,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         io.MouseDragThreshold = 2.f;
         ImGui_ImplOpenGL3_Init("#version 300 es");
 
-        ImFontConfig icomoon_logo_config;
-        icomoon_logo_config.MergeMode = false;
-        icomoon_logo_config.PixelSnapH = true;
-        icomoon_logo_config.FontDataOwnedByAtlas = false;
-        font::icomoon_logo = io.Fonts->AddFontFromMemoryTTF(
-            (void*)icomoon_page,
-            sizeof(icomoon_page),
-            20.f,
-            &icomoon_logo_config
-        );
+        ImFontConfig title_config;
+        title_config.FontDataOwnedByAtlas = false;
+        title_config.PixelSnapH = true;
+        font::inter_title = io.Fonts->AddFontFromMemoryTTF(
+            (void*)inter_semibold, sizeof(inter_semibold), 28.f, &title_config);
 
         ImFontConfig inter_config;
         inter_config.MergeMode = false;
@@ -296,6 +293,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     io->DisplaySize = ImVec2((float)g_GlWidth, (float)g_GlHeight);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
+    clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed);
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
@@ -422,7 +420,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             }
         }
 
-        runtime_preview_menu::EnsureTexturesLoaded();
         main_runtime_theme::ApplyThemeState();
 
         ImVec2 viewportCenter = ImGui::GetMainViewport()->GetCenter();
@@ -674,7 +671,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         }
         else if (!isLogin && ui_loading::IsActive())
         {
-            if (ui_loading::RenderWindow((ImTextureID)(intptr_t)runtime_preview_menu::g_menuBackground.id))
+            if (ui_loading::RenderWindow())
             {
                 isLogin = true;
             }
@@ -731,23 +728,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     {
                         const ImVec2 shellMin(runtimeWindowPos.x + 1.0f, runtimeWindowPos.y + 1.0f);
                         const ImVec2 shellMax(runtimeWindowPos.x + runtimeWindowSize.x - 1.0f, runtimeWindowPos.y + runtimeWindowSize.y - 1.0f);
-                        runtimeDrawList->AddRectFilled(shellMin, shellMax, IM_COL32(10, 10, 14, 246), 26.0f);
-                        runtimeDrawList->AddRectFilledMultiColor(
-                            shellMin,
-                            ImVec2(shellMax.x, shellMin.y + (shellMax.y - shellMin.y) * 0.42f),
-                            IM_COL32(255, 255, 255, 12),
-                            IM_COL32(255, 255, 255, 8),
-                            IM_COL32(255, 255, 255, 0),
-                            IM_COL32(255, 255, 255, 0)
-                        );
-                        runtimeDrawList->AddRect(shellMin, shellMax, IM_COL32(255, 255, 255, 26), 26.0f, 0, 1.0f);
-                        runtimeDrawList->AddRect(shellMin + ImVec2(2.6f, 2.2f), shellMax - ImVec2(2.2f, 2.6f), IM_COL32(255, 255, 255, 8), 24.0f, 0, 1.0f);
-                        runtimeDrawList->AddLine(
-                            ImVec2(shellMin.x + 34.0f, shellMin.y + 1.6f),
-                            ImVec2(shellMax.x - 34.0f, shellMin.y + 1.2f),
-                            main_runtime_theme::GetAccentU32(0.30f),
-                            1.4f
-                        );
+                        clay::Surface(runtimeDrawList, shellMin, shellMax, 28.f);
+
                     }
 
                     const float outerPad = 14.0f;
@@ -780,56 +762,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     runtimeState.page = ImClamp(runtimeState.page, 1, 7);
                     runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
 
-                    runtimeDrawList->AddRectFilled(headerMin, headerMax, IM_COL32(19, 19, 25, 238), 20.0f);
-                    runtimeDrawList->AddRectFilledMultiColor(
-                        headerMin,
-                        ImVec2(headerMax.x, headerMin.y + (headerMax.y - headerMin.y) * 0.55f),
-                        IM_COL32(255, 255, 255, 12),
-                        IM_COL32(255, 255, 255, 7),
-                        IM_COL32(255, 255, 255, 0),
-                        IM_COL32(255, 255, 255, 0)
-                    );
-                    runtimeDrawList->AddRect(headerMin, headerMax, IM_COL32(255, 255, 255, 22), 20.0f, 0, 1.0f);
-
-                    const ImVec2 markCenter(headerMin.x + 32.0f, headerMin.y + headerHeight * 0.5f);
-                    runtimeDrawList->AddCircleFilled(markCenter, 16.0f, IM_COL32(255, 255, 255, 8), 32);
-                    runtimeDrawList->AddCircle(markCenter, 16.0f, main_runtime_theme::GetAccentU32(0.85f), 32, 1.5f);
-                    runtimeDrawList->AddCircle(markCenter + ImVec2(1.0f, -0.8f), 16.4f, IM_COL32(255, 255, 255, 12), 32, 1.0f);
-                    {
-                        ImFont *iconFont = custom::shell::GetIconFont();
-                        const char *logoIcon = ICON_FA_FIRE;
-                        const ImVec2 logoSize = custom::shell::MeasureText(iconFont, 15.0f, logoIcon);
-                        runtimeDrawList->AddText(
-                            iconFont,
-                            15.0f,
-                            ImVec2(markCenter.x - logoSize.x * 0.5f, markCenter.y - logoSize.y * 0.5f),
-                            main_runtime_theme::GetAccentU32(),
-                            logoIcon
-                        );
-                    }
-
-                    ImFont *runtimeTitleFont = custom::shell::GetTitleFont();
-                    const float runtimeTitleSize = 25.0f;
-                    const char *titleA = "SHAI";
-                    const char *titleB = " ETHNIR ED";
-                    const ImVec2 titleASize = runtimeTitleFont->CalcTextSizeA(runtimeTitleSize, FLT_MAX, 0.0f, titleA);
-                    const ImVec2 titleBSize = runtimeTitleFont->CalcTextSizeA(runtimeTitleSize, FLT_MAX, 0.0f, titleB);
-                    const ImVec2 titlePos(headerMin.x + 58.0f, headerMin.y + 12.0f);
-                    runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize, titlePos, IM_COL32(248, 248, 252, 255), titleA);
-                    runtimeDrawList->AddText(runtimeTitleFont, runtimeTitleSize, ImVec2(titlePos.x + titleASize.x, titlePos.y), main_runtime_theme::GetAccentU32(), titleB);
-                    runtimeDrawList->AddLine(
-                        ImVec2(titlePos.x, titlePos.y + runtimeTitleSize + 2.0f),
-                        ImVec2(titlePos.x + titleASize.x + titleBSize.x + 5.0f, titlePos.y + runtimeTitleSize + 0.5f),
-                        main_runtime_theme::GetAccentU32(0.55f),
-                        1.2f
-                    );
-                    runtimeDrawList->AddText(
-                        runtimeTitleFont,
-                        10.0f,
-                        ImVec2(headerMin.x + 59.0f, headerMin.y + 41.0f),
-                        IM_COL32(144, 144, 160, 225),
-                        "CONTROL PANEL  |  ARM64"
-                    );
+                    clay::Surface(runtimeDrawList, headerMin, headerMax, 20.f);
+                    ImFont* titleFont = custom::shell::GetTitleFont();
+                    const ImVec2 titlePos(headerMin.x + 22.f, headerMin.y + 9.f);
+                    runtimeDrawList->AddText(titleFont, 27.f, titlePos,
+                        IM_COL32(242,238,255,255), "SHAI ETHNIR");
+                    runtimeDrawList->AddText(font::inter_semibold, 12.f,
+                        ImVec2(titlePos.x + 1.f, titlePos.y + 31.f),
+                        IM_COL32(183,166,216,255), "E D I T I O N");
 
                     if (custom::shell::DrawCloseCard(closeCardMin, closeCardSize)) {
                         runtime_preview_menu::CollapseMenu(runtimeState);
@@ -876,8 +816,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         runtimeState.activeTab = runtimeState.page;
                     }
 
-                    runtimeDrawList->AddRectFilled(hostMin, hostMax, IM_COL32(13, 13, 17, 216), 22.0f);
-                    runtimeDrawList->AddRect(hostMin, hostMax, IM_COL32(255, 255, 255, 14), 22.0f, 0, 1.0f);
+                    clay::Surface(runtimeDrawList, hostMin, hostMax, 22.f, false);
 
                     ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
                     ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground);
@@ -1018,7 +957,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     // Stock ImGui widgets draw with this build's all-transparent
                                     // style, so the tier selector uses the themed custom combo
                                     // and stays visible regardless of the Unlock Blueprints state.
-                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT FILTER");
+                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT UNLOCK FILTER");
                                     const std::string selectedTiers = BlueprintTierFilter::Preview();
                                     bool allBlueprints = BlueprintTierFilter::GetMask() == 0;
                                     bool mythicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Mythic);
@@ -1026,7 +965,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     bool epicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Epic);
                                     bool commonTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common);
                                     const auto tierOptions = ImGuiSelectableFlags_DontClosePopups;
-                                    if (custom::BeginCombo("Blueprint tiers", selectedTiers.c_str(), 5)) {
+                                    if (custom::BeginCombo("Unlock tiers", selectedTiers.c_str(), 5)) {
                                         if (custom::Selectable("All blueprints (clear)", &allBlueprints, tierOptions))
                                             BlueprintTierFilter::SetMask(0);
                                         if (custom::Selectable("Mythic", &mythicTier, tierOptions))
@@ -1039,6 +978,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                             BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
                                         custom::EndCombo();
                                     }
+                                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.76f, .73f, .83f, 1.f));
+                                    if (Config.ExtraMenu.Blueprints && BlueprintTierFilter::GetMask() != 0 &&
+                                        !BlueprintTierFilter::catalogReady.load(std::memory_order_acquire))
+                                        ImGui::TextWrapped("Loading blueprint tiers...");
+                                    ImGui::TextWrapped("Filters added unlocks. Owned blueprints stay visible.");
+                                    ImGui::PopStyleColor();
                                     if (!Config.ExtraMenu.Blueprints)
                                         ImGui::TextColored(ImVec4(0.66f, 0.70f, 0.78f, 1.0f),
                                                            "Enable Unlock Blueprints to apply these tiers");
