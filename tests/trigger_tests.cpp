@@ -133,46 +133,202 @@ void SingleShotAcknowledgement() {
     Require(intent.down && intent.held, "ready single shot rearms after release");
 }
 
-void ReleaseToFireSingleShot() {
+Frame ReleaseReady() {
+    auto frame = Ready(FireMode::SingleRelease);
+    frame.aiming = true;
+    frame.fullyAimed = true;
+    return frame;
+}
+
+void ReleaseShotAcknowledgement() {
     Controller controller;
-    Frame frame = Ready(FireMode::Single);
-    frame.releaseToFire = true;
-    auto intent = controller.Step(enabled, frame);
-    Require(intent.held && intent.down && !intent.passthrough,
-            "sniper press arms the shot");
+    NativeCancellation cancellation;
+    Queries queries;
+    auto frame = ReleaseReady();
+    auto intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    auto decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+    Require(decision.input.down && decision.input.held && !decision.input.up &&
+            !decision.input.commitRelease && !decision.stopResult,
+            "release-shot weapon starts with an allowed press");
+    Require(EvaluateInput(enabled, frame, centerRay, queries, controller).passthrough,
+            "duplicate update cannot commit a release shot");
+
     ++frame.updateId;
-    intent = controller.Step(enabled, frame);
-    Require(intent.up && !intent.held && !intent.down,
-            "sniper release fires without a press-edge acknowledgement");
+    const auto bodyCalls = queries.bodyCalls;
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+    Require(queries.bodyCalls == bodyCalls + 1 && decision.input.up &&
+            decision.input.commitRelease && !decision.input.held &&
+            !decision.stopResult && !controller.HasOwnedInput() && controller.HasPendingShot(),
+            "fresh eligible target commits release before shot acknowledgement");
     ++frame.updateId;
-    intent = controller.Step(enabled, frame);
-    Require(intent.passthrough,
-            "sniper waits for the release shot to be acknowledged");
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.passthrough && !intent.up && !intent.down,
+            "unacknowledged release cannot submit another shot");
+
+    ++frame.updateId;
+    frame.aiming = false;
+    frame.fullyAimed = false;
+    intent = EvaluateInput(Settings{}, frame, centerRay, queries, controller);
+    Require(intent.passthrough && !intent.up && !intent.down,
+            "disabled ADS loss does not replay an already committed release");
+    ++frame.updateId;
+    frame.aiming = true;
+    frame.fullyAimed = true;
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.passthrough, "target recovery still waits for shot acknowledgement");
     ++frame.updateId;
     ++frame.shotSerial;
-    intent = controller.Step(enabled, frame);
-    Require(intent.down && intent.held,
-            "sniper re-arms after the shot is acknowledged");
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.passthrough && !intent.down && !intent.up && !controller.HasPendingShot(),
+            "release-shot acknowledgement reserves a neutral rearm frame");
+    ++frame.updateId;
+    Require(EvaluateInput(enabled, frame, centerRay, queries, controller).down,
+            "acknowledged release shot can start a fresh sequence");
+}
+
+void ReleaseShotReadiness() {
+    Controller controller;
+    Queries queries;
+    auto frame = ReleaseReady();
+    frame.fullyAimed = false;
+    Require(EvaluateInput(enabled, frame, centerRay, queries, controller).passthrough &&
+            queries.bodyCalls == 0,
+            "release-shot weapon requires completed ADS even in Both mode");
+    ++frame.updateId;
+    frame.fullyAimed = true;
+    frame.shotReady = false;
+    Require(EvaluateInput(enabled, frame, centerRay, queries, controller).passthrough &&
+            queries.bodyCalls == 0,
+            "idle release-shot cooldown skips target queries and presses");
+    ++frame.updateId;
+    frame.shotReady = true;
+    Require(EvaluateInput(enabled, frame, centerRay, queries, controller).down,
+            "ready fully aimed release-shot weapon acquires input");
     ++frame.updateId;
     frame.shotReady = false;
-    intent = controller.Step(enabled, frame);
-    Require(intent.up && !intent.held,
-            "sniper still releases while the bolt is cycling");
+    const auto bodyCalls = queries.bodyCalls;
+    auto intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.held && !intent.up && !intent.commitRelease &&
+            queries.bodyCalls == bodyCalls + 1,
+            "held release-shot weapon keeps checking target while readiness recovers");
+    ++frame.updateId;
+    frame.shotReady = true;
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.up && intent.commitRelease,
+            "release-shot readiness recovery permits one committed release");
+}
 
-    Controller bolt;
-    Frame boltFrame = Ready(FireMode::Single);
-    boltFrame.releaseToFire = true;
-    Require(bolt.Step(enabled, boltFrame).down, "sniper arms before the bolt test");
-    ++boltFrame.updateId;
-    Require(bolt.Step(enabled, boltFrame).up, "sniper releases before the bolt test");
-    ++boltFrame.updateId;
-    boltFrame.shotReady = false;
-    Require(bolt.Step(enabled, boltFrame).passthrough,
-            "sniper does not press again while the weapon is not ready");
-    ++boltFrame.updateId;
-    boltFrame.shotReady = true;
-    Require(bolt.Step(enabled, boltFrame).down,
-            "sniper rearms once the bolt is ready");
+void ReleaseShotLifetimes() {
+    Controller controller;
+    Queries queries;
+    auto frame = ReleaseReady();
+    EvaluateInput(enabled, frame, centerRay, queries, controller);
+    ++frame.updateId;
+    EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(controller.HasPendingShot(), "committed release owns an acknowledgement lifetime");
+    ++frame.updateId;
+    frame.manualActive = true;
+    auto intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.passthrough && !intent.up && !controller.HasPendingShot(),
+            "manual input takes over while a release shot awaits acknowledgement");
+
+    frame = ReleaseReady();
+    controller.Reset();
+    EvaluateInput(enabled, frame, centerRay, queries, controller);
+    ++frame.updateId;
+    EvaluateInput(enabled, frame, centerRay, queries, controller);
+    ++frame.identity.weapon;
+    frame.updateId = 1;
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.down && !intent.up && !intent.commitRelease && !controller.HasPendingShot(),
+            "new weapon lifetime cannot inherit an earlier release acknowledgement wait");
+    ++frame.updateId;
+    frame.manualActive = true;
+    intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+    Require(intent.passthrough && !intent.up && !controller.HasOwnedInput(),
+            "manual takeover of a held release weapon never emits a synthetic release");
+}
+
+void ReleaseShotCancellation() {
+    for (int failure = 0; failure < 10; ++failure) {
+        Controller controller;
+        NativeCancellation cancellation;
+        Queries queries;
+        auto frame = ReleaseReady();
+        auto settings = enabled;
+        auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        cancellation.Resolve(frame.identity, false, true, intent, true);
+        ++frame.updateId;
+        switch (failure) {
+            case 0: queries.body.alive = false; break;
+            case 1: settings.enabled = false; break;
+            case 2: frame.aiming = false; frame.fullyAimed = false; break;
+            case 3: frame.fullyAimed = false; break;
+            case 4: queries.world = Occlusion::Blocked; break;
+            case 5: queries.smoke = Occlusion::Blocked; break;
+            case 6: frame.ammoAvailable = false; break;
+            case 7: frame.hardBlocked = true; break;
+            case 8: frame.fireMode = FireMode::Unsupported; break;
+            case 9: settings.mode = Mode::ADSOnly; break;
+        }
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.up && !intent.commitRelease,
+                "lost release-shot eligibility requests cancellation without firing");
+        auto decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+        Require(decision.input.passthrough && !decision.input.up &&
+                !decision.input.commitRelease && decision.stopResult &&
+                cancellation.HasPendingCleanup(),
+                "uncommitted release is suppressed and cancels the prepared result");
+
+        const auto update = frame.updateId;
+        frame = ReleaseReady();
+        frame.updateId = update + 1;
+        queries = Queries{};
+        intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+        decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+        Require(!decision.input.passthrough && !decision.input.held &&
+                !decision.input.down && !decision.input.up &&
+                !decision.input.commitRelease && decision.stopResult &&
+                decision.resetController && !cancellation.HasPendingCleanup(),
+                "cancelled release shot receives one neutral cleanup frame");
+        controller.Reset();
+        ++frame.updateId;
+        intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+        decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+        Require(decision.input.down && !decision.input.up && !decision.stopResult,
+                "release-shot sequence can restart after neutral cleanup");
+    }
+
+    NativeCancellation cancellation;
+    const auto identity = ReleaseReady().identity;
+    const Intent cancel{false, false, true, false};
+    cancellation.Resolve(identity, false, true, cancel, true);
+    auto decision = cancellation.Resolve(identity, true, true, cancel, true);
+    Require(decision.input.passthrough && !decision.stopResult &&
+            !cancellation.HasPendingCleanup(),
+            "manual fire takes over a cancelled release-shot sequence");
+    cancellation.Resolve(identity, false, true, cancel, true);
+    auto changed = identity;
+    ++changed.weapon;
+    decision = cancellation.Resolve(changed, false, true, Intent{}, true);
+    Require(decision.input.passthrough && !decision.stopResult &&
+            !cancellation.HasPendingCleanup(),
+            "release-shot cleanup cannot affect a new weapon lifetime");
+    cancellation.Resolve(identity, false, true, cancel, true);
+    decision = cancellation.Resolve(identity, false, false, Intent{}, false);
+    Require(!decision.input.up && !decision.input.down && !decision.input.held &&
+            decision.stopResult && decision.resetController,
+            "pending release-shot cleanup stays neutral if the input handler changes");
+    const Intent committed{false, false, true, false, true};
+    decision = cancellation.Resolve(identity, false, true, committed);
+    Require(decision.input.passthrough && decision.stopResult,
+            "release commitment never bypasses rejection for unsupported handlers");
+    decision = cancellation.Resolve(identity, false, true, Intent{}, true);
+    Require(!decision.input.passthrough && !decision.input.held &&
+            !decision.input.down && !decision.input.up && decision.stopResult &&
+            decision.resetController && !cancellation.HasPendingCleanup(),
+            "newly verified release handler clears prior unsupported cancellation neutrally");
 }
 
 void OwnershipAndLifecycle() {
@@ -347,7 +503,10 @@ void CancellationAndSettings() {
 int main() {
     VirtualWeaponReadiness();
     SingleShotAcknowledgement();
-    ReleaseToFireSingleShot();
+    ReleaseShotAcknowledgement();
+    ReleaseShotReadiness();
+    ReleaseShotLifetimes();
+    ReleaseShotCancellation();
     OwnershipAndLifecycle();
     AdsAndModeChanges();
     TargetValidation();

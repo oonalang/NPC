@@ -38,7 +38,7 @@ const char* PendingDecodeReason(std::uintptr_t rva) noexcept {
     // when the game's loader prepares them. Keep their disk fingerprints for
     // offline identity checks; require readable executable ranges and wait
     // until the mapped entry differs from its known encoded representation.
-    // Stable methods, including all four hook targets, still match exactly.
+    // Stable methods, including all five hook targets, still match exactly.
     switch (rva) {
         case 0x530005C: return "Waiting for decoded Screen.get_width (0x530005C)";
         case 0x53000C0: return "Waiting for decoded Screen.get_height (0x53000C0)";
