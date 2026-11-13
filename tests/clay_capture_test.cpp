@@ -179,6 +179,38 @@ int main() {
         assert(bentEdge[channel]-flatEdge[channel]>=10);
         assert(std::abs(int(flatCenter[channel])-int(bentCenter[channel]))<=1);
     }
+    for(float opacity : {.76f,.80f,.88f,.93f}) {
+        glBindFramebuffer(GL_FRAMEBUFFER,buffers[0]);
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0.f,1.f,0.f,1.f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        ImGui_ImplOpenGL3_NewFrame(); ImGui::NewFrame();
+        const auto serial=clay::captureSerial;
+        clay::Capture(64,64,true,false,11.0+opacity);
+        assert(clay::captureSerial==serial+1 && clay::materialCount==0);
+        ImGui::SetNextWindowPos({0,0}); ImGui::SetNextWindowSize({64,64});
+        ImGui::Begin("Shared backdrop",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground);
+        auto* draw=ImGui::GetWindowDrawList();
+        clay::Backdrop(draw,{8,8},{56,56},12,opacity);
+        assert(clay::materialCount==1);
+        int liquidCallbacks=0;
+        for(const auto& command : draw->CmdBuffer)
+            if(command.UserCallback==clay::DrawMaterial) ++liquidCallbacks;
+        assert(liquidCallbacks==1);
+        ImGui::End(); ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        assert(clay::captureSerial==serial+1);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,buffers[0]);
+        glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+        assert(pixel[1]>pixel[0]+50 && pixel[1]>pixel[2]+50);
+        glReadPixels(0,0,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+        assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0 && pixel[3]==255);
+        glActiveTexture(GL_TEXTURE1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D,&actual); assert(actual==static_cast<GLint>(textures[2]));
+        glGetIntegerv(GL_SAMPLER_BINDING,&actual); assert(actual==static_cast<GLint>(sampler1));
+        glActiveTexture(GL_TEXTURE0);
+        assert(glGetError()==GL_NO_ERROR);
+    }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER,pbo);
     glPixelStorei(GL_UNPACK_ALIGNMENT,8);glPixelStorei(GL_UNPACK_ROW_LENGTH,33);
     glPixelStorei(GL_UNPACK_SKIP_ROWS,2);glPixelStorei(GL_UNPACK_SKIP_PIXELS,3);
@@ -226,7 +258,7 @@ int main() {
     assert(glGetError()==GL_NO_ERROR);
     glBindSampler(0,0); glBindSampler(1,0); glDeleteSamplers(1,&sampler); glDeleteSamplers(1,&sampler1);
     ImGui_ImplOpenGL3_Shutdown();
-    std::puts("Capture and blur pixels, GL state, drag capture budget, inward X/Y refraction, chroma fringe, neutral center, clipping and sampler restoration passed");
+    std::puts("Capture and blur pixels, GL state, drag capture budget, inward X/Y refraction, chroma fringe, neutral center, shared backdrop modes, clipping and sampler restoration passed");
     ImGui::DestroyContext();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroySurface(display,surface); eglDestroyContext(display,context); eglTerminate(display);

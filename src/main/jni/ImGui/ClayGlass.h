@@ -331,8 +331,8 @@ inline void Backdrop(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius,
                      float tintOpacity=.76f) {
     if(!draw || hi.x<=lo.x || hi.y<=lo.y) return;
     draw->AddRectFilled(lo+ImVec2(0,4),hi+ImVec2(0,4),IM_COL32(4,3,10,85),radius);
-    if(tintOpacity<=.78f) Liquid(draw,lo,hi,radius,ImVec4(.055f,.045f,.095f,.25f),1.2f);
-    else draw->AddRectFilled(lo,hi,ImGui::GetColorU32(ImVec4(.09f,.075f,.125f,tintOpacity*.64f)),radius);
+    const float density=ImLerp(.25f,.55f,ImClamp((tintOpacity-.76f)/.17f,0.f,1.f));
+    Liquid(draw,lo,hi,radius,ImVec4(.055f,.045f,.095f,density),1.2f);
     draw->AddRect(lo,hi,ImGui::GetColorU32(ImVec4(.86f,.80f,1.f,.13f)),radius,0,1.f);
 }
 

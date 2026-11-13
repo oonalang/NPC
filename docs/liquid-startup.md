@@ -77,7 +77,10 @@ Capture is capped at 30 Hz while stationary and 20 Hz while a window is moving.
 The lens and UI continue to render at the overlay's frame rate, so dragging uses
 the current pointer position and current screen-space texture coordinates. A
 simulated 60 FPS drag verifies 20 copies in one second instead of one per frame.
-Nested menu panels tint the parent material instead of resampling the scene.
+The menu shell, header, sidebar and content host use the same refractive material,
+with denser tints on structural regions. Login and loading footers share it too.
+All glass surfaces reuse the same captured scene textures; clay cards and
+dropdowns retain their raised material.
 Closing or collapsing the menu stops capture; login and loading can use glass
 before authentication. Delta time follows the actual frame interval.
 
