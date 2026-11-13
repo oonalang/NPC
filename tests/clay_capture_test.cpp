@@ -116,10 +116,10 @@ int main() {
     std::array<unsigned char,64*64*4> pattern;
     for(int y=0;y<64;++y) for(int x=0;x<64;++x) {
         const int offset=(y*64+x)*4;
-        pattern[offset]=pattern[offset+1]=pattern[offset+2]=static_cast<unsigned char>(x*2);
+        pattern[offset]=pattern[offset+1]=pattern[offset+2]=static_cast<unsigned char>(x*3);
         pattern[offset+3]=255;
     }
-    const auto renderPattern=[&](float strength,double now,std::array<unsigned char,4>& edge,std::array<unsigned char,4>& center) {
+    const auto renderPattern=[&](float strength,double now,int sampleX,int sampleY,std::array<unsigned char,4>& edge,std::array<unsigned char,4>& center) {
         glBindFramebuffer(GL_FRAMEBUFFER,buffers[0]);
         glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,textures[0]);
         glTexSubImage2D(GL_TEXTURE_2D,0,0,0,64,64,GL_RGBA,GL_UNSIGNED_BYTE,pattern.data());
@@ -131,7 +131,7 @@ int main() {
         ImGui::End(); ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glBindFramebuffer(GL_READ_FRAMEBUFFER,buffers[0]);
-        glReadPixels(12,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,edge.data());
+        glReadPixels(sampleX,sampleY,1,1,GL_RGBA,GL_UNSIGNED_BYTE,edge.data());
         glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,center.data());
         glActiveTexture(GL_TEXTURE1);
         glGetIntegerv(GL_TEXTURE_BINDING_2D,&actual); assert(actual==static_cast<GLint>(textures[2]));
@@ -140,12 +140,44 @@ int main() {
         assert(glGetError()==GL_NO_ERROR);
     };
     std::array<unsigned char,4> flatEdge,flatCenter,bentEdge,bentCenter;
-    renderPattern(0.f,3.0,flatEdge,flatCenter);
-    renderPattern(1.25f,4.0,bentEdge,bentCenter);
+    renderPattern(0.f,3.0,12,32,flatEdge,flatCenter);
+    renderPattern(1.25f,4.0,12,32,bentEdge,bentCenter);
     for(int channel=0;channel<3;++channel) {
-        assert(flatEdge[channel]-bentEdge[channel]>=12);
+        assert(bentEdge[channel]-flatEdge[channel]>=10);
         assert(std::abs(int(flatCenter[channel])-int(bentCenter[channel]))<=1);
         assert(std::abs(int(bentCenter[channel])-int(pattern[(32*64+32)*4+channel]))<=2);
+    }
+    const int redShift=int(bentEdge[0])-int(flatEdge[0]);
+    const int greenShift=int(bentEdge[1])-int(flatEdge[1]);
+    const int blueShift=int(bentEdge[2])-int(flatEdge[2]);
+    assert(redShift>=greenShift && greenShift>=blueShift);
+    assert(redShift-blueShift>=2);
+    renderPattern(0.f,5.0,51,32,flatEdge,flatCenter);
+    renderPattern(1.25f,6.0,51,32,bentEdge,bentCenter);
+    for(int channel=0;channel<3;++channel) {
+        assert(flatEdge[channel]-bentEdge[channel]>=10);
+        assert(std::abs(int(flatCenter[channel])-int(bentCenter[channel]))<=1);
+    }
+    renderPattern(0.f,6.2,25,32,flatEdge,flatCenter);
+    renderPattern(1.25f,6.4,25,32,bentEdge,bentCenter);
+    for(int channel=0;channel<3;++channel)
+        assert(std::abs(int(flatEdge[channel])-int(bentEdge[channel]))<=2);
+    for(int y=0;y<64;++y) for(int x=0;x<64;++x) {
+        const int offset=(y*64+x)*4;
+        pattern[offset]=pattern[offset+1]=pattern[offset+2]=static_cast<unsigned char>(y*3);
+    }
+    renderPattern(0.f,7.0,32,51,flatEdge,flatCenter);
+    renderPattern(1.25f,8.0,32,51,bentEdge,bentCenter);
+    for(int channel=0;channel<3;++channel) {
+        assert(flatEdge[channel]-bentEdge[channel]>=10);
+        assert(std::abs(int(flatCenter[channel])-int(bentCenter[channel]))<=1);
+        assert(std::abs(int(bentCenter[channel])-int(pattern[(32*64+32)*4+channel]))<=2);
+    }
+    renderPattern(0.f,9.0,32,12,flatEdge,flatCenter);
+    renderPattern(1.25f,10.0,32,12,bentEdge,bentCenter);
+    for(int channel=0;channel<3;++channel) {
+        assert(bentEdge[channel]-flatEdge[channel]>=10);
+        assert(std::abs(int(flatCenter[channel])-int(bentCenter[channel]))<=1);
     }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER,pbo);
     glPixelStorei(GL_UNPACK_ALIGNMENT,8);glPixelStorei(GL_UNPACK_ROW_LENGTH,33);
@@ -194,7 +226,7 @@ int main() {
     assert(glGetError()==GL_NO_ERROR);
     glBindSampler(0,0); glBindSampler(1,0); glDeleteSamplers(1,&sampler); glDeleteSamplers(1,&sampler1);
     ImGui_ImplOpenGL3_Shutdown();
-    std::puts("Capture and blur pixels, GL state, drag capture budget, patterned refraction, center transmission, clipping and sampler restoration passed");
+    std::puts("Capture and blur pixels, GL state, drag capture budget, inward X/Y refraction, chroma fringe, neutral center, clipping and sampler restoration passed");
     ImGui::DestroyContext();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroySurface(display,surface); eglDestroyContext(display,context); eglTerminate(display);

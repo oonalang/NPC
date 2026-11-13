@@ -44,7 +44,7 @@ inline GLint blurSource=-1, blurTexel=-1, lensBackdrop=-1, lensDiffuse=-1, lensL
 struct MaterialDraw {
     ImVec2 lo, hi;
     ImVec4 tint;
-    float radius, strength, alpha, time;
+    float radius, strength, alpha;
 };
 inline std::array<MaterialDraw, 128> materialDraws{};
 inline unsigned materialCount = 0;
@@ -131,26 +131,37 @@ void main(){
     if(coverage<=0.0) discard;
     vec2 normal=length(outer)>0.001 ? normalize(outer)*sign(p) :
         (q.x>q.y?vec2(sign(p.x),0):vec2(0,sign(p.y)));
-    float band=min(58.0,min(halfSize.x,halfSize.y)*0.85);
-    float edge=1.0-smoothstep(0.0,max(band,1.0),-sd);
-    float shoulder=sin(edge*2.65)*edge;
-    float bend=(edge*edge*8.0+shoulder*16.0)*material.y;
-    vec2 shift=vec2(normal.x,-normal.y)*bend/display;
+    float minSide=min(bounds.z,bounds.w);
+    float inset=minSide*0.07;
+    vec2 innerHalf=halfSize-vec2(inset);
+    float innerRadius=min(max(r-inset,2.0*material.w),min(innerHalf.x,innerHalf.y));
+    vec2 innerQ=abs(p)-innerHalf+innerRadius;
+    float innerSd=length(max(innerQ,vec2(0)))+min(max(innerQ.x,innerQ.y),0.0)-innerRadius;
+    float curve=min(12.0*material.w,minSide*0.12);
+    float neutral=1.0-smoothstep(-curve*1.5,curve*1.5,innerSd);
+    vec2 ramp=(local/bounds.zw-0.5)*(1.0-neutral*0.93);
+    float optics=material.y*min(1.0,minSide/(180.0*material.w))*material.w;
+    vec2 direction=vec2(ramp.x,-ramp.y)/display;
     vec2 uv=gl_FragCoord.xy/display;
     vec3 refracted;
-    refracted.r=texture(backdrop,clamp(uv+shift*1.035,vec2(0),vec2(1))).r;
-    refracted.g=texture(backdrop,clamp(uv+shift,vec2(0),vec2(1))).g;
-    refracted.b=texture(backdrop,clamp(uv+shift*0.965,vec2(0),vec2(1))).b;
-    vec3 scattered=texture(diffuse,clamp(uv+shift,vec2(0),vec2(1))).rgb;
-    refracted=mix(refracted,scattered,0.10+0.28*edge*edge);
-    vec3 base=mix(refracted,tint.rgb,tint.a);
+    refracted.r=texture(backdrop,clamp(uv+direction*(-112.0*optics),vec2(0),vec2(1))).r;
+    refracted.g=texture(backdrop,clamp(uv+direction*(-106.0*optics),vec2(0),vec2(1))).g;
+    refracted.b=texture(backdrop,clamp(uv+direction*(-100.0*optics),vec2(0),vec2(1))).b;
+    vec3 scattered=texture(diffuse,clamp(uv+direction*(-106.0*optics),vec2(0),vec2(1))).rgb;
+    refracted=mix(refracted,scattered,0.18);
+    float luminance=dot(refracted,vec3(0.2126,0.7152,0.0722));
+    refracted=clamp(mix(vec3(luminance),refracted,1.5),vec3(0),vec3(1));
+    float tintAlpha=tint.a;
+    if(tintAlpha<0.4) tintAlpha*=mix(0.6666667,1.1851852,local.y/bounds.w);
+    vec3 base=mix(refracted,tint.rgb,tintAlpha);
+    float edge=1.0-neutral;
     float rim=1.0-smoothstep(0.4,2.0,-sd);
     float highlight=pow(max(dot(normal,normalize(light)),0.0),4.0);
     float reflection=pow(max(dot(normal,-normalize(light)),0.0),6.0);
-    float caustic=exp(-pow((-sd-band*0.24)/max(2.0,band*0.10),2.0));
+    float insetGlow=exp(-max(0.0,-sd)/max(1.0,8.0*material.w));
     base+=vec3(0.88,0.88,1.0)*rim*(0.12+0.46*highlight);
     base+=vec3(0.74,0.64,1.0)*pow(edge,3.0)*reflection*0.20;
-    base+=vec3(0.86,0.82,1.0)*caustic*highlight*0.10;
+    base+=vec3(0.86,0.82,1.0)*insetGlow*reflection*0.06;
     color=vec4(base,coverage*material.z);
 })";
     blurProgram = Program(fullscreen, blur);
@@ -286,7 +297,7 @@ inline void DrawMaterial(const ImDrawList*, const ImDrawCmd* cmd) {
     glUniform2f(lensDisplay,static_cast<float>(width),static_cast<float>(height));
     glUniform4f(lensBounds,lo.x,lo.y,size.x,size.y);
     glUniform4f(lensTint,p.tint.x,p.tint.y,p.tint.z,p.tint.w);
-    glUniform4f(lensMaterial,p.radius*scale.x,p.strength,p.alpha,p.time);
+    glUniform4f(lensMaterial,p.radius*scale.x,p.strength,p.alpha,scale.x);
     glDrawArrays(GL_TRIANGLES,0,6);
     glBindSampler(0,previousSampler);
     glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D,previousTexture1); glBindSampler(1,previousSampler1);
@@ -300,7 +311,7 @@ inline bool Liquid(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius, ImVec4 
 #ifndef CLAY_CPU_PREVIEW
     if(materialValid && liquidProgram && materialCount<materialDraws.size()) {
         auto& p=materialDraws[materialCount++];
-        p={lo,hi,tint,radius,strength,ImGui::GetStyle().Alpha*opacity,static_cast<float>(std::fmod(ImGui::GetTime(),4096.0))};
+        p={lo,hi,tint,radius,strength,ImGui::GetStyle().Alpha*opacity};
         if(draw->VtxBuffer.Size==0) draw->AddRectFilled(lo,lo,IM_COL32_WHITE);
         draw->AddCallback(DrawMaterial,&p);
         draw->AddCallback(ImDrawCallback_ResetRenderState,nullptr);

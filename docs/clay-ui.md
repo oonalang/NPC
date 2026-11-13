@@ -38,8 +38,12 @@ scrolling over controls, cancellation, final release samples, slider endpoints,
 dropdowns and child panel geometry. Run `sh tests/run-startup-tests.sh` for login
 centering and existing input/timing checks.
 
-The glass material combines sharp scene transmission with a five-tap blur,
-rounded lens refraction and pointer-reactive directional highlights. Captures are capped at 30 Hz while
+The glass material adapts the gradient displacement model from
+[deepika-builds/liquid-glass](https://github.com/deepika-builds/liquid-glass).
+Negative per-channel offsets create inward lensing and a prism fringe, with an
+inset mask keeping the interior nearly neutral. Sharp and blurred scene samples,
+background saturation and pointer-reactive highlights complete the material.
+Captures are capped at 30 Hz while
 stationary and 20 Hz while dragging; the UI and lens positions track every frame.
 Login and loading use the same material. The two bounded RGBA textures together
 use at most 1.125 MiB. A separate official Waguri portrait and GIF frame atlas
