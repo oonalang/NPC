@@ -2,6 +2,7 @@
 #include "../src/main/jni/ImGui/imgui_internal.h"
 #include "../src/main/jni/ImGui/ClayGlass.h"
 #include <EGL/eglext.h>
+#include "../src/main/jni/ImGui/imgui_impl_opengl3.h"
 #include <cassert>
 #include <cstdio>
 
@@ -26,6 +27,7 @@ int main() {
     assert(eglMakeCurrent(display,surface,surface,context));
     std::printf("GLES: %s\n",glGetString(GL_VERSION));
     ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
     ImGui::GetIO().MouseDown[0] = true;
     ImGui::GetIO().DisplaySize = {64,64};
     GLuint textures[3], buffers[2], pbo;
@@ -47,9 +49,19 @@ int main() {
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER,pbo);
     glEnable(GL_SCISSOR_TEST);
     glScissor(0,0,1,1);
-    clay::Capture(64,64,true);
+    glViewport(3,4,51,49);
+    glColorMask(GL_FALSE,GL_TRUE,GL_FALSE,GL_FALSE);
+    glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glEnable(GL_STENCIL_TEST); glEnable(GL_RASTERIZER_DISCARD);
+    glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D,textures[2]);
+    clay::Capture(64,64,true,false,0.0);
     assert(glGetError()==GL_NO_ERROR);
-    assert(clay::sceneValid);
+    assert(clay::sceneValid && clay::materialValid && clay::liquidProgram && clay::blurProgram);
+    GLboolean mask[4]; glGetBooleanv(GL_COLOR_WRITEMASK,mask);
+    assert(!mask[0] && mask[1] && !mask[2] && !mask[3]);
+    assert(glIsEnabled(GL_DEPTH_TEST) && glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_STENCIL_TEST) && glIsEnabled(GL_RASTERIZER_DISCARD));
+    GLint viewport[4]; glGetIntegerv(GL_VIEWPORT,viewport);
+    assert(viewport[0]==3 && viewport[1]==4 && viewport[2]==51 && viewport[3]==49);
+    GLint active; glGetIntegerv(GL_ACTIVE_TEXTURE,&active); assert(active==GL_TEXTURE3);
     GLint actual;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&actual); assert(actual==static_cast<GLint>(buffers[1]));
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&actual); assert(actual==static_cast<GLint>(buffers[0]));
@@ -60,10 +72,40 @@ int main() {
     unsigned char pixel[4]{};
     glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
     assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0 && pixel[3]==255);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER,clay::softFramebuffer);
+    glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0 && pixel[3]==255);
+    const auto before=clay::captureSerial;
+    for(int i=1;i<=60;++i) clay::Capture(64,64,true,true,i/60.0);
+    assert(clay::captureSerial-before==20);
+    assert(glGetError()==GL_NO_ERROR);
     clay::Capture(64,64,false);
     assert(!clay::sceneValid);
     assert(glGetError()==GL_NO_ERROR);
-    std::puts("Capture pixels, hidden-menu skip and GL state restoration passed");
+    glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDisable(GL_STENCIL_TEST); glDisable(GL_RASTERIZER_DISCARD);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER,0);
+    assert(ImGui_ImplOpenGL3_Init("#version 300 es"));
+    ImGui_ImplOpenGL3_NewFrame(); ImGui::NewFrame();
+    clay::Capture(64,64,true,false,2.0);
+    ImGui::SetNextWindowPos({0,0}); ImGui::SetNextWindowSize({64,64});
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
+    ImGui::Begin("Lens",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground);
+    assert(clay::Liquid(ImGui::GetWindowDrawList(),{8,8},{56,56},12,ImVec4(.10f,.06f,.16f,.46f)));
+    ImGui::End(); ImGui::PopStyleVar(); ImGui::Render();
+    GLuint sampler; glGenSamplers(1,&sampler); glBindSampler(0,sampler);
+    glSamplerParameteri(sampler,GL_TEXTURE_MIN_FILTER,GL_LINEAR); glSamplerParameteri(sampler,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    glActiveTexture(GL_TEXTURE0); glGetIntegerv(GL_SAMPLER_BINDING,&actual); assert(actual==static_cast<GLint>(sampler));
+    glBindFramebuffer(GL_READ_FRAMEBUFFER,buffers[0]);
+    glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    assert(pixel[0]>=8 && pixel[0]<=16 && pixel[1]>=140 && pixel[1]<=150 && pixel[2]>=14 && pixel[2]<=24);
+    glReadPixels(9,9,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0);
+    assert(glGetError()==GL_NO_ERROR);
+    glBindSampler(0,0); glDeleteSamplers(1,&sampler);
+    ImGui_ImplOpenGL3_Shutdown();
+    std::puts("Capture and blur pixels, GL state, drag capture budget, liquid rendering, clipping and sampler restoration passed");
     ImGui::DestroyContext();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroySurface(display,surface); eglDestroyContext(display,context); eglTerminate(display);
