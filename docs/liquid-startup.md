@@ -6,10 +6,21 @@ badge, a clean glass rim with muted corner marks, and pill controls. Login adds
 an Access key label, sentence-case actions and an inset status footer. The
 primary action remains visually distinct, with its purple rim. Authentication
 still submits a captured key through the existing worker, consumes its published
-result, saves the verified key, and then starts the loading animation. Paste and
-cached-key actions use their existing handlers. The primary action is disabled
-while a request is pending. The key field moves above the on-screen keyboard and
-the card returns to its prior position after the keyboard closes.
+result and saves the verified key. Its sign-in icon enlarges and moves to the
+center while the label fades, then rotates for two seconds. A successful result
+allows a white fill to expand across the button, followed by a black check,
+a short hold and a complete card fade before loading begins. Slow verification
+keeps rotating until the result arrives. Failure restores the editable form;
+it never displays a success check or starts loading. Input, paste, cached-key
+and submit actions are disabled throughout the transition. The sequence uses
+monotonic elapsed time and does not block the render thread.
+
+The login card centers on its first frame, when reopened, and whenever the
+viewport changes size or position. This handles the game's initial surface
+resolution changes. Manual dragging is retained at a stable viewport size.
+The key field moves above the on-screen keyboard and the card returns to its
+resting position after the keyboard closes; a resize refreshes that resting
+position to the new viewport center.
 
 The loading view follows the supplied window layout: a clear lavender glass
 shell with a silver rim, muted corner marks, a centered header,

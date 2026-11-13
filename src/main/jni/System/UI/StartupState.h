@@ -1,8 +1,12 @@
 #pragma once
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace startup_ui {
+inline double Now() {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 inline constexpr const char* loadingTips[]{
     "triggerbot auto shoots for you when your crosshair is aiming at the enemy.",
     "One of the best mods out there.",
@@ -34,6 +38,46 @@ struct LoadingTimeline {
         if (!active || Progress(now) < 1.f) return false;
         active = false;
         return true;
+    }
+};
+struct LoginTransitionFrame {
+    float morph=0.f, rotation=0.f, fill=0.f, check=0.f, opacity=1.f;
+    bool ready=false;
+};
+struct LoginTransition {
+    static constexpr double morphSeconds=.24, spinSeconds=2., fillSeconds=.32;
+    static constexpr double checkSeconds=.20, holdSeconds=.45, fadeSeconds=.22;
+    double started=0., accepted=0.;
+    bool active=false, succeeded=false;
+    void Reset() { *this={}; }
+    bool Start(double now) {
+        if(active || !std::isfinite(now)) return false;
+        started=now;
+        accepted=0.;
+        active=true;
+        succeeded=false;
+        return true;
+    }
+    void Resolve(double now,bool success) {
+        if(!active || succeeded || !std::isfinite(now)) return;
+        if(!success) { Reset(); return; }
+        accepted=std::max(now,started+morphSeconds+spinSeconds);
+        succeeded=true;
+    }
+    LoginTransitionFrame At(double now) const {
+        LoginTransitionFrame frame;
+        if(!active || !std::isfinite(now)) return frame;
+        const double elapsed=std::max(0.,now-started);
+        const auto unit=[](double value) { return static_cast<float>(std::clamp(value,0.,1.)); };
+        frame.morph=unit(elapsed/morphSeconds);
+        frame.rotation=static_cast<float>(std::fmod(std::max(0.,elapsed-morphSeconds),1.)*6.283185307179586);
+        if(!succeeded || now<accepted) return frame;
+        const double reveal=now-accepted;
+        frame.fill=unit(reveal/fillSeconds);
+        frame.check=unit((reveal-fillSeconds)/checkSeconds);
+        frame.opacity=1.f-unit((reveal-fillSeconds-checkSeconds-holdSeconds)/fadeSeconds);
+        frame.ready=reveal>=fillSeconds+checkSeconds+holdSeconds+fadeSeconds;
+        return frame;
     }
 };
 }

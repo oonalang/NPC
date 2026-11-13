@@ -444,9 +444,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 SaveLoginTextToFile(logintext);
                 g_LoginTextLoaded = true;
                 err.clear();
-                ui_loading::Start(7.0f);
-            } else if (err == "OK") {
-                err = "License rejected";
+                startup_ui::loginTransition.Resolve(startup_ui::Now(),true);
+            } else {
+                if (err == "OK") err = "License rejected";
+                else if (err.empty()) err = "Authentication failed.";
+                startup_ui::loginTransition.Resolve(startup_ui::Now(),false);
             }
         }
         if (!isLogin && !ui_loading::IsActive())
@@ -470,12 +472,15 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 s[sizeof(s) - 1] = '\0';
                 err.clear();
             }
-            if (actions.submit && !g_LoginPending) {
+            if (actions.submit && !g_LoginPending && !startup_ui::loginTransition.active) {
                 if (s[0] == '\0') err = "Enter a key first.";
                 else {
                     g_SubmittedKey = s;
                     g_LoginPending = true;
                     err.clear();
+                    showKeyboard = false;
+                    ImGui::ClearActiveID();
+                    startup_ui::loginTransition.Start(startup_ui::Now());
                     std::thread([](std::string key) {
                         g_LoginResult = Login(key.c_str());
                         g_LoginFinished.store(true, std::memory_order_release);
@@ -484,6 +489,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             }
             if (showKeyboard)
                 RenderVirtualKeyboard("##VirtualKeyboardLogin", s, sizeof(s), &showKeyboard);
+            if (startup_ui::loginTransition.At(startup_ui::Now()).ready) {
+                startup_ui::loginTransition.Reset();
+                ui_loading::Start(7.0f);
+            }
         }
         else if (!isLogin && ui_loading::IsActive())
         {
