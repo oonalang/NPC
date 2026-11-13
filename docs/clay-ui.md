@@ -26,16 +26,15 @@ resting pearl shape. Slider thumbs grow into pills while active. Slider position
 follow ImGui's native value directly; only the material and size animate. The
 critically damped spring preserves velocity when its target changes.
 
-The glass material samples the live game framebuffer before drawing the overlay.
-One shared RGBA texture has a maximum dimension of 384 pixels (at most 576 KiB).
-The expanded authenticated menu refreshes that texture each frame, before any
-overlay drawing. Closing or collapsing the menu stops capture. The shell and
-header use restrained dark glass with mild refraction; the clay cards remain
-opaque for readability. Linear downsampling and a small magnification provide
-the material without additional blur passes. Framebuffer, texture, pixel unpack
-buffer, and scissor state are preserved. Multisampled sources and unavailable
-contexts use an opaque fallback; control size feedback remains active. The
-continuous visible-menu capture trades more GPU bandwidth for a live background.
+The glass material combines sharp scene transmission with a five-tap blur,
+rounded lens refraction and pointer-reactive directional highlights. Captures are capped at 30 Hz while
+stationary and 20 Hz while dragging; the UI and lens positions track every frame.
+Login and loading use the same material. The two bounded RGBA textures together
+use at most 1.125 MiB. A separate official Waguri portrait and GIF frame atlas
+use about 3.18 MiB across two textures, uploaded once per EGL context. Nested menu panels
+tint the parent glass, and opaque clay
+cards keep text readable. See [Liquid startup UI](liquid-startup.md) for pipeline,
+state preservation, fallback and validation details.
 
 Run the motion regression with:
 
@@ -44,21 +43,6 @@ c++ -std=c++17 tests/clay_motion_test.cpp -o /tmp/clay-motion-test
 /tmp/clay-motion-test
 ```
 
-The optional `tests/clay_capture_test.cpp` uses a surfaceless Mesa EGL/GLES3
-context. It checks captured pixels, hidden-menu skipping, and preservation of
-separate read/draw framebuffers, texture, unpack buffer, and scissor state.
-With EGL/GLES3 headers available under `CLAY_GL_INCLUDE`, run it on Linux with:
-
-```sh
-c++ -std=c++17 -O0 -DWL_EGL_PLATFORM -I"$CLAY_GL_INCLUDE" -Isrc/main/jni \
-  tests/clay_capture_test.cpp src/main/jni/ImGui/imgui.cpp \
-  src/main/jni/ImGui/imgui_draw.cpp src/main/jni/ImGui/imgui_widgets.cpp \
-  src/main/jni/ImGui/imgui_tables.cpp \
-  -Wl,-l:libEGL.so.1,-l:libGL.so.1 -o /tmp/clay-capture-test
-MESA_SHADER_CACHE_DISABLE=true /tmp/clay-capture-test
-```
-
-The ARM64 Android build, native widget preview, and Mesa capture check pass.
-The supplied capture test checks real GL behavior on Mesa; in-game appearance,
-touch feel, and Android GPU cost still require a device check. No FPS improvement
-is claimed.
+The GLES capture/material integration check and its build command are documented
+in [Liquid startup UI](liquid-startup.md). Device FPS and Android GPU cost still
+require an in-game check; the bounded capture budget is verified separately.
