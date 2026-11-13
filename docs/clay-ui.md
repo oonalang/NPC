@@ -26,6 +26,18 @@ resting pearl shape. Slider thumbs grow into pills while active. Slider position
 follow ImGui's native value directly; only the material and size animate. The
 critically damped spring preserves velocity when its target changes.
 
+Slider fill reaches both track endpoints, and the thumb stays inside the track
+in both its resting and expanded shapes. Content panes and dropdown lists scroll
+by touch without visible scrollbars. A vertical gesture cancels control presses;
+a horizontal slider gesture adjusts its value, and a stationary tap commits on
+release. Content gestures keep the menu in place while its header remains draggable.
+Login starts centered when it appears, including after being reopened.
+
+Run `sh tests/run-touch-slider-tests.sh` for queued touch input checks covering
+scrolling over controls, cancellation, final release samples, slider endpoints,
+dropdowns and child panel geometry. Run `sh tests/run-startup-tests.sh` for login
+centering and existing input/timing checks.
+
 The glass material combines sharp scene transmission with a five-tap blur,
 rounded lens refraction and pointer-reactive directional highlights. Captures are capped at 30 Hz while
 stationary and 20 Hz while dragging; the UI and lens positions track every frame.

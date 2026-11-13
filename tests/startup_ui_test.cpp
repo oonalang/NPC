@@ -93,6 +93,11 @@ int main() {
     }
     io.AddMouseButtonEvent(0,false);frame();
     assert(GImGui->MovingWindow==nullptr);
+    ImGui::NewFrame();ImGui::Render();
+    frame();
+    window=ImGui::FindWindowByName("Login Menu");
+    const auto centered=ImGui::GetMainViewport()->GetCenter()-window->Size*.5f;
+    assert(ImLengthSqr(window->Pos-centered)<=2.f);
     ImGui::DestroyContext();
     std::puts("Startup actions, pending state, keyboard layout, direct dragging, loading timing and capture budgets passed");
 }

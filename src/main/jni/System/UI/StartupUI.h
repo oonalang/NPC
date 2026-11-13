@@ -125,7 +125,12 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
     const ImVec2 logical(720,500); const float scale=Fit(logical);
     const auto size=logical*scale;
     const auto windowSize=size+ImVec2(20,20)*scale;
-    if(!ImGui::FindWindowByName("Login Menu")) loginPosition={};
+    auto* loginWindow=ImGui::FindWindowByName("Login Menu");
+    const bool appearing=!loginWindow || !loginWindow->WasActive;
+    if(appearing) {
+        loginPosition={};
+        keyboard=false;
+    }
     if(keyboard) {
         if(!loginPosition.known) loginPosition.resting=ImGui::GetMainViewport()->GetCenter()-windowSize*.5f;
         ImGui::SetNextWindowPos({loginPosition.resting.x,ImGui::GetIO().DisplaySize.y*.44f-272.f*scale},ImGuiCond_Always);
@@ -133,7 +138,7 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
     } else if(loginPosition.shifted) {
         ImGui::SetNextWindowPos(loginPosition.resting,ImGuiCond_Always);
         loginPosition.shifted=false;
-    } else ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),ImGuiCond_Appearing,{.5f,.5f});
+    } else if(appearing) ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),ImGuiCond_Always,{.5f,.5f});
     ImGui::SetNextWindowSize(windowSize,ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
     if(ImGui::Begin("Login Menu",nullptr,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings|

@@ -17,9 +17,9 @@ inline void DrawTopContainer(ImDrawList *drawList, const ImVec2 &min, const ImVe
 
 inline bool DrawSidebarButton(const char *id, const char *label, const Texture &icon, bool active, const ImVec2 &size) {
     const ImVec2 min = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton(id, size);
+    const bool released=ImGui::InvisibleButton(id, size);
     const bool hovered = ImGui::IsItemHovered();
-    const bool clicked = ImGui::IsItemClicked();
+    const bool clicked = released && (!custom::touch::Applies() || custom::touch::Tap());
 
     ImDrawList *drawList = ImGui::GetWindowDrawList();
 
@@ -64,10 +64,10 @@ inline bool DrawSidebarButton(const char *id, const char *label, const Texture &
 
 inline bool DrawHeaderImageButton(const char *id, const Texture &icon, const ImVec2 &size, const char *fallbackIcon, const char *fallbackAscii) {
     const ImVec2 min = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton(id, size);
+    const bool released=ImGui::InvisibleButton(id, size);
     const bool hovered = ImGui::IsItemHovered();
     const bool held = ImGui::IsItemActive();
-    const bool clicked = ImGui::IsItemClicked();
+    const bool clicked = released && (!custom::touch::Applies() || custom::touch::Tap());
     ImDrawList *drawList = ImGui::GetWindowDrawList();
     const float pressOffset = held ? 1.0f : 0.0f;
     const ImVec2 iconMin(min.x, min.y + pressOffset);
@@ -134,8 +134,8 @@ inline bool DrawActionButton(const char *id, const char *label, float h = 50.0f)
     const ImVec2 size(ImMax(1.0f, rowAvailW - sidePad * 2.0f), h);
 
     ImGui::SetCursorScreenPos(p);
-    ImGui::InvisibleButton(id, size);
-    const bool clicked = ImGui::IsItemClicked();
+    const bool released=ImGui::InvisibleButton(id, size);
+    const bool clicked = released && (!custom::touch::Applies() || custom::touch::Tap());
     const bool hovered = ImGui::IsItemHovered();
     const bool held = ImGui::IsItemActive();
 
@@ -168,9 +168,9 @@ inline void DrawToggleRow(const char *label, bool *value) {
 
     ImGui::PushID(label);
     const ImGuiID animId = ImGui::GetID("##toggle_anim");
-    ImGui::InvisibleButton("##toggle_row", ImVec2(rowW, rowH));
+    const bool released=ImGui::InvisibleButton("##toggle_row", ImVec2(rowW, rowH));
     const bool hovered = ImGui::IsItemHovered();
-    if (ImGui::IsItemClicked()) {
+    if (released && (!custom::touch::Applies() || custom::touch::Tap())) {
         *value = !(*value);
     }
     ImGui::PopID();
