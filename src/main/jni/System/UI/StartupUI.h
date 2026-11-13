@@ -125,7 +125,12 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
     const ImVec2 logical(720,500); const float scale=Fit(logical);
     const auto size=logical*scale;
     const auto windowSize=size+ImVec2(20,20)*scale;
-    if(!ImGui::FindWindowByName("Login Menu")) loginPosition={};
+    auto* loginWindow=ImGui::FindWindowByName("Login Menu");
+    const bool appearing=!loginWindow || !loginWindow->WasActive;
+    if(appearing) {
+        loginPosition={};
+        keyboard=false;
+    }
     if(keyboard) {
         if(!loginPosition.known) loginPosition.resting=ImGui::GetMainViewport()->GetCenter()-windowSize*.5f;
         ImGui::SetNextWindowPos({loginPosition.resting.x,ImGui::GetIO().DisplaySize.y*.44f-272.f*scale},ImGuiCond_Always);
@@ -133,7 +138,7 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
     } else if(loginPosition.shifted) {
         ImGui::SetNextWindowPos(loginPosition.resting,ImGuiCond_Always);
         loginPosition.shifted=false;
-    } else ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),ImGuiCond_Appearing,{.5f,.5f});
+    } else if(appearing) ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),ImGuiCond_Always,{.5f,.5f});
     ImGui::SetNextWindowSize(windowSize,ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
     if(ImGui::Begin("Login Menu",nullptr,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings|
@@ -168,8 +173,8 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         const bool failed=error && *error && std::strcmp(error,"OK")!=0;
         const char* status=failed?error:pending?"Checking access...":cached?"Saved key available":"Enter your access key to continue";
         const auto statusCard=pos+ImVec2(60,444)*scale;
-        Gradient(draw,statusCard,statusCard+ImVec2(600,42)*scale,21.f*scale,
-            ImVec4(.09f,.075f,.14f,.66f),ImVec4(.065f,.05f,.11f,.70f));
+        clay::Liquid(draw,statusCard,statusCard+ImVec2(600,42)*scale,21.f*scale,
+            ImVec4(.075f,.06f,.125f,.68f),1.2f);
         draw->AddRect(statusCard,statusCard+ImVec2(600,42)*scale,IM_COL32(220,205,242,40),21.f*scale,0,1.f*scale);
         const ImVec2 statusMin=statusCard+ImVec2(14,10)*scale,statusMax=statusCard+ImVec2(586,40)*scale;
         draw->PushClipRect(statusMin,statusMax,true);
@@ -230,7 +235,7 @@ inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, 
     char percentage[16]; std::snprintf(percentage,sizeof(percentage),"%d%%",static_cast<int>(progress*100.f+.5f));
     Text(draw,Body(),20.f*scale,pos+ImVec2(600,477)*scale,IM_COL32(238,233,247,255),percentage);
     const auto info=pos+ImVec2(34,519)*scale;
-    Gradient(draw,info,info+ImVec2(612,58)*scale,29.f*scale,ImVec4(.09f,.075f,.14f,.66f),ImVec4(.065f,.05f,.11f,.70f));
+    clay::Liquid(draw,info,info+ImVec2(612,58)*scale,29.f*scale,ImVec4(.075f,.06f,.125f,.68f),1.2f);
     draw->AddRect(info,info+ImVec2(612,58)*scale,IM_COL32(229,222,248,68),29.f*scale,0,1.f*scale);
     Icon(draw,ICON_FA_INFO_CIRCLE,info+ImVec2(40,29)*scale,23.f*scale,IM_COL32(225,219,241,245));
     Text(draw,Body(),14.f*scale,info+ImVec2(66,9)*scale,IM_COL32(242,237,250,255),"Please wait");

@@ -25,6 +25,8 @@ namespace font
 
 namespace custom 
 {
+    void UpdateTouchScroll();
+    void CancelTouchScroll();
     namespace shell
     {
         ImFont*             GetTextFont();

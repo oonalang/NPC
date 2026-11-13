@@ -48,15 +48,22 @@ second texture. Together they allocate at most 1.125 MiB. Resources and shader
 uniform locations are cached per current EGL context and resized only when
 needed. There is no CPU pixel readback or full-resolution blur buffer.
 
-The custom GLES material follows Apple's documented clear-glass properties:
-[lensing and reactive highlights](https://developer.apple.com/videos/play/wwdc2025/219/),
-with [transmission over rich backgrounds](https://developer.apple.com/design/human-interface-guidelines/materials).
-It samples both the sharp scene and its blur, preserving center detail while
-softening the curved edges. SDF lens normals displace edge samples, concentrate
-light into a narrow highlight and caustic, and apply restrained color separation.
-The highlight direction follows pointer position. The loading panel uses a 27%
-dark tint and a light veil, replacing the prior 74% charcoal tint. This is a
-custom GLES approximation, not Apple's platform material.
+The custom GLES material adapts the displacement model from
+[deepika-builds/liquid-glass](https://github.com/deepika-builds/liquid-glass/blob/98ed97bd99def529493fd37177228810f6422f6d/liquid-glass.js).
+Local X/Y gradients encode displacement. A softened inset rounded-rectangle mask
+neutralizes 93% of the interior ramp. Negative per-channel scales (-112, -106,
+-100) magnify the scene inward at the rim and add a prism fringe, with screen Y
+converted to GLES texture Y. Background saturation is 1.5, and thin surfaces use
+an approximately 18% to 32% dark tint gradient.
+
+The mask uses a smooth SDF transition as an analytic approximation of the
+reference's Canvas blur. Small controls attenuate displacement and curvature to
+fit their size. Existing sharp and blurred scene textures provide sampling;
+there is no DOM, SVG filter, CPU displacement map or additional render target.
+Pointer-reactive highlights and the light veil remain native renderer features.
+This is a GLES adaptation of the web reference, not a pixel-identical Canvas
+filter or Apple's platform material. The source's MIT notice is retained in
+[third_party/liquid-glass/LICENSE](../third_party/liquid-glass/LICENSE).
 Startup text uses a fine dark contour shadow for bright-scene contrast; the
 input, action buttons and footer use denser local glass tints. The outer shell
 retains clear scene transmission. White-background previews cover this case.
@@ -70,7 +77,10 @@ Capture is capped at 30 Hz while stationary and 20 Hz while a window is moving.
 The lens and UI continue to render at the overlay's frame rate, so dragging uses
 the current pointer position and current screen-space texture coordinates. A
 simulated 60 FPS drag verifies 20 copies in one second instead of one per frame.
-Nested menu panels tint the parent material instead of resampling the scene.
+The menu shell, header, sidebar and content host use the same refractive material,
+with denser tints on structural regions. Login and loading footers share it too.
+All glass surfaces reuse the same captured scene textures; clay cards and
+dropdowns retain their raised material.
 Closing or collapsing the menu stops capture; login and loading can use glass
 before authentication. Delta time follows the actual frame interval.
 
@@ -86,6 +96,9 @@ rounded clipping and sampler restoration. It also verifies the artwork's decoded
 pixels, separate cached portrait/atlas uploads, differing animation frames, and
 unpack-state preservation. A patterned background verifies edge displacement and
 center transmission; both texture units' sampler/texture bindings are checked.
+Four rim probes check inward X/Y displacement, channel deltas check the prism
+fringe, and an off-center interior probe checks neutralization away from the
+trivial zero-gradient midpoint.
 With EGL/GLES3 headers in
 `CLAY_GL_INCLUDE`, build it on Linux with:
 

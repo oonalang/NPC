@@ -2,10 +2,23 @@
 #include "imgui_settings.h"
 #include "Icon.h"
 #include "ClayGlass.h"
+#include "TouchScroll.h"
+#include "SliderGeometry.h"
 extern ImFont* F50;
 extern ImFont* F107;
 namespace custom
 {
+    void UpdateTouchScroll() { touch::Update(); }
+    void CancelTouchScroll() { touch::Cancel(); }
+    static bool GestureButtonBehavior(const ImRect& bounds,ImGuiID id,bool* hovered,bool* held,ImGuiButtonFlags flags=0) {
+        const bool applies=touch::Applies();
+        if(applies) {
+            flags&=~ImGuiButtonFlags_PressedOnMask_;
+            flags|=ImGuiButtonFlags_PressedOnClickRelease;
+        }
+        const bool pressed=ImGui::ButtonBehavior(bounds,id,hovered,held,flags);
+        return pressed && (!applies || touch::Tap() || GImGui->NavActivateId==id);
+    }
     namespace shell
     {
         ImFont* GetTextFont()
@@ -665,7 +678,7 @@ namespace custom
         ImGuiContext& g = *GImGui;
         ImGuiWindow* parent_window = g.CurrentWindow;
 
-        flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_ChildWindow;
+        flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove;
         flags |= (parent_window->Flags & ImGuiWindowFlags_NoMove);
 
         const ImVec2 content_avail = GetContentRegionAvail();
@@ -738,7 +751,8 @@ namespace custom
         child_window->ChildId = id;
         child_window->AutoFitChildAxises = (ImS8)auto_fit_axises;
 
-        if (child_window->BeginCount == 1) parent_window->DC.CursorPos = child_window->Pos;
+        child_window->StateStorage.SetFloat(ImHashStr("##panel_cap"),cap_height);
+        if (child_window->BeginCount == 1) parent_window->DC.CursorPos = panel_min;
 
         const ImGuiID temp_id_for_activation = ImHashStr("##Child", 0, id);
         if (g.ActiveId == temp_id_for_activation) ClearActiveID();
@@ -785,7 +799,7 @@ namespace custom
         }
         else
         {
-            ImVec2 sz = window->Size;
+            ImVec2 sz = window->Size + ImVec2(0.f,window->StateStorage.GetFloat(ImHashStr("##panel_cap")));
 
             if (window->AutoFitChildAxises & (1 << ImGuiAxis_X)) sz.x = ImMax(4.0f * c::scale, sz.x);
             if (window->AutoFitChildAxises & (1 << ImGuiAxis_Y)) sz.y = ImMax(4.0f * c::scale, sz.y);
@@ -987,7 +1001,7 @@ namespace custom
         ItemSize(size, 0.f);
         if (!ItemAdd(bb, id)) return false;
 
-        bool hovered, held, pressed = ButtonBehavior(bb, id, &hovered, &held, NULL);
+        bool hovered, held, pressed = GestureButtonBehavior(bb, id, &hovered, &held, NULL);
 
         static std::map<ImGuiID, theme_state> anim;
         auto it_anim = anim.find(id);
@@ -1047,7 +1061,7 @@ namespace custom
         ItemSize(size, 0.f);
         if (!ItemAdd(bb, id)) return false;
 
-        bool hovered, held, pressed = ButtonBehavior(bb, id, &hovered, &held, NULL);
+        bool hovered, held, pressed = GestureButtonBehavior(bb, id, &hovered, &held, NULL);
 
         static std::map<ImGuiID, button_state> anim;
         auto it_anim = anim.find(id);
@@ -1132,7 +1146,7 @@ namespace custom
         ItemSize(size, 0.f);
         if (!ItemAdd(bb, id)) return false;
 
-        bool hovered, held, pressed = ButtonBehavior(bb, id, &hovered, &held, NULL);
+        bool hovered, held, pressed = GestureButtonBehavior(bb, id, &hovered, &held, NULL);
 
         static std::map<ImGuiID, page_state> anim;
         auto it_anim = anim.find(id);
@@ -1217,7 +1231,7 @@ namespace custom
         if (!ItemAdd(total, id)) return false;
 
         bool hovered, held;
-        bool pressed = ButtonBehavior(total, id, &hovered, &held);
+        bool pressed = GestureButtonBehavior(total, id, &hovered, &held);
         if (pressed) {
             *v = !*v;
             MarkItemEdited(id);
@@ -1290,7 +1304,7 @@ namespace custom
 
         if (!ItemAdd(bb, id)) return false;
 
-        bool hovered, held, pressed = ButtonBehavior(bb, id, &hovered, &held, NULL);
+        bool hovered, held, pressed = GestureButtonBehavior(bb, id, &hovered, &held, NULL);
         
         custom::Checkbox(label, v);
 
@@ -1378,7 +1392,7 @@ namespace custom
 
         if (!ItemAdd(total_bb, id, &field_bb)) return false;
 
-        bool hovered, held, pressed = ButtonBehavior(field_bb, id, &hovered, &held);
+        bool hovered, held, pressed = GestureButtonBehavior(field_bb, id, &hovered, &held);
         const ImGuiID popup_id = ImHashStr("##CustomComboPopup", 0, id);
 
         static std::map<ImGuiID, begin_state> anim;
@@ -1491,7 +1505,7 @@ namespace custom
         SetNextWindowPos(popup_pos);
         SetNextWindowSize(popup_size);
         const ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove;
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar;
 
         PushStyleColor(ImGuiCol_PopupBg, ImVec4(.085f, .081f, .10f, .98f));
         PushStyleColor(ImGuiCol_WindowBg, ImVec4(.085f, .081f, .10f, .98f));
@@ -1773,7 +1787,7 @@ namespace custom
         if ((flags & ImGuiSelectableFlags_AllowOverlap) || (g.LastItemData.InFlags & ImGuiItemFlags_AllowOverlap)) { button_flags |= ImGuiButtonFlags_AllowOverlap; }
 
         const bool was_selected = selected;
-        bool hovered, held, pressed = ButtonBehavior(bb, id, &hovered, &held, button_flags);
+        bool hovered, held, pressed = GestureButtonBehavior(bb, id, &hovered, &held, button_flags);
 
         if ((flags & ImGuiSelectableFlags_SelectOnNav) && g.NavJustMovedToId != 0 && g.NavJustMovedToFocusScopeId == g.CurrentFocusScopeId)
             if (g.NavJustMovedToId == id)  selected = pressed = true;
@@ -2492,7 +2506,7 @@ namespace custom
         ItemSize(ImRect(rect.Min, rect.Max - ImVec2(0, 0)));
         if (!ItemAdd(rect, id)) return false;
 
-        bool hovered, held, pressed = ButtonBehavior(rect, id, &hovered, &held);
+        bool hovered, held, pressed = GestureButtonBehavior(rect, id, &hovered, &held);
 
         if (flags & ImGuiColorEditFlags_NoAlpha) flags &= ~(ImGuiColorEditFlags_AlphaPreview | ImGuiColorEditFlags_AlphaPreviewHalf);
 
@@ -2549,7 +2563,7 @@ namespace custom
 
         if (format == NULL) format = DataTypeGetInfo(data_type)->PrintFmt;
 
-        bool hovered = ItemHoverable(frame_bb, id, g.LastItemData.InFlags), held, pressed = ButtonBehavior(frame_bb, id, &hovered, &held, NULL);
+        bool hovered = ItemHoverable(frame_bb, id, g.LastItemData.InFlags), held, pressed = GestureButtonBehavior(frame_bb, id, &hovered, &held, NULL);
 
         ImRect grab_bb;
 
@@ -2653,7 +2667,7 @@ namespace custom
 
         if (!ItemAdd(total_bb, id, &slider_bb, temp_input_allowed ? ImGuiItemFlags_Inputable : 0)) return false;
 
-        bool hovered = ItemHoverable(slider_bb, id, g.LastItemData.InFlags), held, pressed = ButtonBehavior(slider_bb, id, &hovered, &held, NULL);
+        bool hovered = ItemHoverable(slider_bb, id, g.LastItemData.InFlags), held, pressed = GestureButtonBehavior(slider_bb, id, &hovered, &held, NULL);
 
         ImRect grab_bb;
 
@@ -2674,7 +2688,26 @@ namespace custom
         it_anim->second.active_t = ImClamp(it_anim->second.grip.value, 0.f, 1.f);
         it_anim->second.value_alpha = ImLerp(it_anim->second.value_alpha, active_slider ? 1.0f : hovered ? 0.9f : 0.78f, g.IO.DeltaTime * 10.0f);
 
-        const bool value_changed = SliderBehavior(slider_bb, id, data_type, p_data, p_min, p_max, format, flags, &grab_bb);
+        const bool touch_tap=touch::Tap() && hovered;
+        const bool touch_finish=touch::Horizontal() && touch::gesture.released && g.ActiveIdPreviousFrame==id;
+        const bool touch_commit=touch_tap || touch_finish;
+        const bool allow_value=!touch::Applies() || touch::Horizontal() || touch_tap;
+        bool value_changed=false;
+        const auto previous_active=g.ActiveId;
+        const bool mouse_down=g.IO.MouseDown[0];
+        if(touch_commit) {
+            SetActiveID(id,window);g.ActiveIdSource=ImGuiInputSource_Mouse;
+            g.ActiveIdIsJustActivated=touch_tap || touch::gesture.intentFrame==g.FrameCount;
+            g.IO.MouseDown[0]=true;
+        }
+        if(touch::Horizontal() && touch::gesture.intentFrame==g.FrameCount && g.ActiveId==id) g.ActiveIdIsJustActivated=true;
+        if(allow_value) value_changed=SliderBehavior(slider_bb,id,data_type,p_data,p_min,p_max,format,flags,&grab_bb);
+        else {
+            if(g.ActiveId==id) g.ActiveId=0;
+            SliderBehavior(slider_bb,id,data_type,p_data,p_min,p_max,format,flags,&grab_bb);
+            g.ActiveId=previous_active;
+        }
+        if(touch_commit) { g.IO.MouseDown[0]=mouse_down;ClearActiveID(); }
 
         if (value_changed) MarkItemEdited(id);
 
@@ -2683,8 +2716,10 @@ namespace custom
         const float track_margin = 2.0f * control_scale;
         const float track_width = ImMax(1.0f, slider_bb.GetWidth() - track_margin * 2.0f);
         const float grab_center_x = (grab_bb.Min.x + grab_bb.Max.x) * 0.5f;
-        const float fill_target = ImClamp(grab_center_x - (slider_bb.Min.x + track_margin), 0.0f, track_width);
-        it_anim->second.slow = fill_target;
+        const float native_half=grab_bb.GetWidth()*.5f;
+        const float native_start=slider_bb.Min.x+2.f+native_half;
+        const float native_end=slider_bb.Max.x-2.f-native_half;
+        const float ratio=ImClamp((grab_center_x-native_start)/ImMax(1.f,native_end-native_start),0.f,1.f);
 
         const float header_y = total_bb.Min.y + (header_height - label_size.y) * 0.5f;
         GetWindowDrawList()->AddText(ImVec2(total_bb.Min.x, header_y), GetColorU32(it_anim->second.text), label, label_end);
@@ -2695,7 +2730,10 @@ namespace custom
         );
 
         const float track_thickness = 4.0f * control_scale;
-        const float knob_half_width = ImLerp(7.0f * control_scale, 17.0f * control_scale, it_anim->second.active_t);
+        const auto geometry=MakeSliderGeometry(slider_bb.Min.x+track_margin,slider_bb.Max.x-track_margin,
+            ImLerp(7.f*control_scale,17.f*control_scale,it_anim->second.active_t),ratio);
+        const float knob_half_width=geometry.halfWidth;
+        it_anim->second.slow=geometry.fill-geometry.start;
         const float knob_half_height = ImLerp(6.0f * control_scale, 10.0f * control_scale, it_anim->second.active_t);
         const ImVec2 track_start(slider_bb.Min.x + track_margin, frame_bb.Min.y + box_height * 0.5f);
         const ImVec2 track_end(slider_bb.Max.x - track_margin, track_start.y);
@@ -2711,7 +2749,7 @@ namespace custom
             GetColorU32(c::accent),
             track_thickness * 0.5f
         );
-        const ImVec2 knob_center(track_start.x + it_anim->second.slow, track_start.y);
+        const ImVec2 knob_center(geometry.center, track_start.y);
         const ImVec2 knob_min(knob_center.x - knob_half_width, knob_center.y - knob_half_height);
         const ImVec2 knob_max(knob_center.x + knob_half_width, knob_center.y + knob_half_height);
         if (it_anim->second.hover_t > 0.01f || it_anim->second.active_t > 0.01f) {

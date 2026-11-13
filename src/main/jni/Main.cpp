@@ -299,6 +299,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     previousFrameTime = frameTime;
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
+    custom::UpdateTouchScroll();
     clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed, GImGui->MovingWindow != nullptr);
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
@@ -627,7 +628,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     clay::Backdrop(runtimeDrawList, hostMin, hostMax, 22.f, .93f);
 
                     ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
-                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground);
+                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
                     {
                         const bool pushedContentFont = (font::inter_semibold != nullptr);
                         if (pushedContentFont) {
@@ -703,10 +704,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Combo("Health Position", (int *)&Config.ESPMenu.HealthPosition, healthPositions, IM_ARRAYSIZE(healthPositions), -1);
                                 custom::Combo("ESP Style", (int *)&Config.ESPMenu.EspStyle, espStyles, IM_ARRAYSIZE(espStyles), -1);
 
-                                ImGui::Dummy(ImVec2(0.0f, 8.0f));
-                                ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "EXTRA OPTIONS");
-                                ImGui::TextUnformatted("Player ESP Color");
-                                ImGui::TextUnformatted("Bot ESP Color");
                                 EndContentChild(options);
                             }
                             custom::EndGroup();
@@ -732,7 +729,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 2)
                         {
-                            const float aimHeight = ImMin(childHeight, 310.0f);
+                            const float aimHeight = childHeight;
                             custom::BeginGroup();
                             {
                                 const ChildFrame left = BeginContentChild("AIMBOT", ImVec2(childWidth, aimHeight));
@@ -990,6 +987,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         auto Input_get_mousePosition = (Vector3(*)(uintptr_t))(Class_Input_get_mousePosition);
 
         Touch t = Input_GetTouch(Config.ImGuiMenu.thiz, 0);
+        io->AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
         Vector3 mp = Input_get_mousePosition(Config.ImGuiMenu.thiz);
 
         // 1.6.57 safe: cache once, use everywhere
@@ -1009,8 +1007,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             io->MousePos     = ImVec2(mx, my);
             break;
 
-        case TouchPhase::Ended:
         case TouchPhase::Canceled:
+            custom::CancelTouchScroll();
+            io->MouseDown[0] = false;
+            g_clearMousePos = true;
+            break;
+
+        case TouchPhase::Ended:
+            io->MousePos = ImVec2(mx, my);
             io->MouseDown[0] = false;
             g_clearMousePos  = true;
             break;

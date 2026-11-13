@@ -1,4 +1,5 @@
 #pragma once
+#include "../../ImGui/TouchScroll.h"
 #include "../ImGui/imgui.h"
 #include "Keyboard.h"
 #include <string>
@@ -324,7 +325,7 @@ bool AstralInput(const char* label, char* buf, size_t buf_size, const ImVec2& si
 
     bool hovered, held;
     ButtonBehavior(bb, id, &hovered, &held);
-    bool clicked = hovered && IsMouseClicked(0);
+    bool clicked = custom::touch::Applies() ? (custom::touch::Tap() && hovered) : (hovered && IsMouseClicked(0));
     bool isActive = (g.ActiveId == id);
 
     if (clicked) {
@@ -528,7 +529,7 @@ inline void RenderSkinCategoryContent(int categoryIndex, bool drawSubTabs = fals
     #define ID_AETHER_CRYSTAL 0x1D37F77D
     #define ID_GLACIAL_RIPPLE 0x1D37F77F
     
-    ImGui::BeginChild("SkinContent", ImVec2(0, 0));
+    ImGui::BeginChild("SkinContent", ImVec2(0, 0),false,ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
     ImGui::Dummy(ImVec2(0, 8 * c::scale));
     
     if (drawSubTabs) {
@@ -578,7 +579,7 @@ inline void RenderSkinCategoryContent(int categoryIndex, bool drawSubTabs = fals
     bool skinClicked = ImGui::IsItemClicked();
     bool skinActive  = ImGui::IsItemActive();
     bool skinHovered = ImGui::IsItemHovered();
-    if (skinClicked || (!skinSearchWasActive && skinActive)) {
+    if (custom::touch::Applies() ? (custom::touch::Tap() && skinHovered) : (skinClicked || (!skinSearchWasActive && skinActive))) {
         activeInputID = "##SearchSkin";
         showKeyboard = true;
     }
@@ -590,7 +591,7 @@ inline void RenderSkinCategoryContent(int categoryIndex, bool drawSubTabs = fals
         bool charClicked = ImGui::IsItemClicked();
         charActive = ImGui::IsItemActive();
         charHovered = ImGui::IsItemHovered();
-        if (charClicked || (!charSearchWasActive && charActive)) {
+        if (custom::touch::Applies() ? (custom::touch::Tap() && charHovered) : (charClicked || (!charSearchWasActive && charActive))) {
             activeInputID = "##SearchCustomChar";
             showKeyboard = true;
         }
@@ -670,7 +671,7 @@ inline void RenderSkinCategoryContent(int categoryIndex, bool drawSubTabs = fals
         }
     }
 
-    ImGui::BeginChild("##SkinList", ImVec2(0, ImGui::GetContentRegionAvail().y - 10), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    ImGui::BeginChild("##SkinList", ImVec2(0, ImMax(1.f,ImGui::GetContentRegionAvail().y - 10)), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
 
     switch (skinSubTab) {
 case 0:

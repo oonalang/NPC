@@ -6,6 +6,8 @@
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
+#include <chrono>
 #include "BlueprintTierFilter.h"
 
 namespace BlueprintEquipment {
@@ -46,26 +48,38 @@ inline bool Read(const void* at, T& value) {
 
 inline std::atomic<std::size_t> builtCatalogSize{0};
 
-inline void RefreshTierCatalog() {
-    if (!loadskinhack) return;
-    const std::size_t itemCount = itemData.size();
-    if (itemCount == 0) return;
-    if (BlueprintTierFilter::catalogReady.load(std::memory_order_acquire) &&
-        builtCatalogSize.load(std::memory_order_acquire) == itemCount) return;
-    BlueprintTierFilter::TierCatalog updated;
-    updated.reserve(itemCount);
-    for (const auto& item : itemData) {
-        if (item.WeaponConf[0] <= 0 || item.WeaponConf[2] <= 0) continue;
-        const auto blueprintId = static_cast<uint32_t>(item.WeaponConf[2]);
-        BlueprintTierFilter::RecordTier(updated, blueprintId,
-            BlueprintTierFilter::TierFromColorId(item.WeaponConf[1]));
+inline double nextCatalogRefresh=0.0;
+
+inline void RefreshTierCatalog(double now=-1.0) {
+    std::vector<void*> configs;
+    {
+        std::lock_guard<std::mutex> lock(g_dataMutex);
+        const auto count=weaponConfInstance.size();
+        if(count==0 || (BlueprintTierFilter::catalogReady.load(std::memory_order_acquire) &&
+            builtCatalogSize.load(std::memory_order_acquire)==count)) return;
+        if(now<0.0) now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        if(now<nextCatalogRefresh) return;
+        nextCatalogRefresh=now+.5;
+        configs=weaponConfInstance;
     }
+    BlueprintTierFilter::TierCatalog updated;
+    updated.reserve(configs.size());
+    std::size_t initialized=0;
+    for(const auto* conf : configs) {
+        const auto* fields=static_cast<const unsigned char*>(conf);
+        uint32_t id=0;
+        uint8_t color=0;
+        if(!conf || !Read(fields+0x40,id) || !Read(fields+0x22,color) || id==0) continue;
+        ++initialized;
+        BlueprintTierFilter::RecordTier(updated,id,BlueprintTierFilter::TierFromColorId(color));
+    }
+    if(updated.empty()) return;
     BlueprintTierFilter::Publish(std::move(updated));
-    builtCatalogSize.store(itemCount, std::memory_order_release);
+    builtCatalogSize.store(initialized==configs.size()?configs.size():0, std::memory_order_release);
 }
 
 inline bool CatalogContains(uint32_t blueprintId) {
-    return loadskinhack && BlueprintTierFilter::Contains(blueprintId) &&
+    return BlueprintTierFilter::Contains(blueprintId) &&
            BlueprintTierFilter::Allows(blueprintId);
 }
 
@@ -107,7 +121,10 @@ inline bool QueueSelected(void* controller) {
     if (!Config.ExtraMenu.Blueprints) return false;
     uint32_t id = 0;
     int diy = -1;
-    if (!SelectBlueprint(controller, id, diy) || !CatalogContains(id)) return false;
+    if (!SelectBlueprint(controller, id, diy) || !CatalogContains(id) || !loadskinhack) return false;
+    if(std::none_of(itemData.begin(),itemData.end(),[id](const itemInfo& item) {
+        return item.WeaponConf[0]>0 && static_cast<uint32_t>(item.WeaponConf[2])==id;
+    })) return false;
     pendingDiy.store(diy, std::memory_order_relaxed);
     pendingId.store(id, std::memory_order_release);
     return true;
@@ -189,8 +206,9 @@ inline bool IsQuickItemEquipped(void* view, void* info, void* method) {
 }
 
 inline void ApplyPending() {
-    if (!Config.ExtraMenu.Blueprints || !loadskinhack) return;
+    if (!Config.ExtraMenu.Blueprints) return;
     RefreshTierCatalog();
+    if (!loadskinhack) return;
     const uint32_t blueprintId = pendingId.exchange(0, std::memory_order_acq_rel);
     if (blueprintId == 0) return;
     const int diyIndex = pendingDiy.exchange(-1, std::memory_order_acq_rel);

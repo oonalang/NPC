@@ -978,8 +978,8 @@ void LoadWeaponSkins() {
         void* item = itItem->second;
         if (!item || !Tools::IsPtrValid(item)) continue;
         int itemIDbase = *(int*)((uintptr_t)item + 0x20);
-        int itemBaseModified;
-        int itemBase;
+        int itemBaseModified = baseID + 200;
+        int itemBase = baseID;
         if (baseID == itemIDbase) {
             itemBase = *(int*)((uintptr_t)item + 0x20);
             itemBaseModified = itemBase + 200;
@@ -1143,7 +1143,7 @@ void LoadWeaponSkins() {
         }
     }
 
-    loadskinhack = true;
+    loadskinhack = !itemData.empty();
 }
 
 void LoadPlaneSkins() {
