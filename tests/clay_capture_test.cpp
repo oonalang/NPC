@@ -6,6 +6,7 @@
 #include "../src/main/jni/ImGui/imgui_impl_opengl3.h"
 #include <cassert>
 #include <cstdio>
+#include <array>
 
 ImFont* F50 = nullptr;
 namespace font { ImFont* inter_semibold = nullptr; }
@@ -96,14 +97,56 @@ int main() {
     ImGui::End(); ImGui::PopStyleVar(); ImGui::Render();
     GLuint sampler; glGenSamplers(1,&sampler); glBindSampler(0,sampler);
     glSamplerParameteri(sampler,GL_TEXTURE_MIN_FILTER,GL_LINEAR); glSamplerParameteri(sampler,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    GLuint sampler1; glGenSamplers(1,&sampler1);
+    glSamplerParameteri(sampler1,GL_TEXTURE_MIN_FILTER,GL_NEAREST); glSamplerParameteri(sampler1,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D,textures[2]); glBindSampler(1,sampler1);
+    glActiveTexture(GL_TEXTURE0);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     glActiveTexture(GL_TEXTURE0); glGetIntegerv(GL_SAMPLER_BINDING,&actual); assert(actual==static_cast<GLint>(sampler));
+    glActiveTexture(GL_TEXTURE1);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D,&actual); assert(actual==static_cast<GLint>(textures[2]));
+    glGetIntegerv(GL_SAMPLER_BINDING,&actual); assert(actual==static_cast<GLint>(sampler1));
+    glActiveTexture(GL_TEXTURE0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER,buffers[0]);
     glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
     assert(pixel[0]>=8 && pixel[0]<=16 && pixel[1]>=140 && pixel[1]<=150 && pixel[2]>=14 && pixel[2]<=24);
     glReadPixels(9,9,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
     assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0);
     assert(glGetError()==GL_NO_ERROR);
+    std::array<unsigned char,64*64*4> pattern;
+    for(int y=0;y<64;++y) for(int x=0;x<64;++x) {
+        const int offset=(y*64+x)*4;
+        pattern[offset]=pattern[offset+1]=pattern[offset+2]=static_cast<unsigned char>(x*2);
+        pattern[offset+3]=255;
+    }
+    const auto renderPattern=[&](float strength,double now,std::array<unsigned char,4>& edge,std::array<unsigned char,4>& center) {
+        glBindFramebuffer(GL_FRAMEBUFFER,buffers[0]);
+        glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,textures[0]);
+        glTexSubImage2D(GL_TEXTURE_2D,0,0,0,64,64,GL_RGBA,GL_UNSIGNED_BYTE,pattern.data());
+        ImGui_ImplOpenGL3_NewFrame(); ImGui::NewFrame();
+        clay::Capture(64,64,true,false,now);
+        ImGui::SetNextWindowPos({0,0}); ImGui::SetNextWindowSize({64,64});
+        ImGui::Begin("Pattern lens",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground);
+        assert(clay::Liquid(ImGui::GetWindowDrawList(),{8,8},{56,56},12,ImVec4(0,0,0,0),strength));
+        ImGui::End(); ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,buffers[0]);
+        glReadPixels(12,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,edge.data());
+        glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,center.data());
+        glActiveTexture(GL_TEXTURE1);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D,&actual); assert(actual==static_cast<GLint>(textures[2]));
+        glGetIntegerv(GL_SAMPLER_BINDING,&actual); assert(actual==static_cast<GLint>(sampler1));
+        glActiveTexture(GL_TEXTURE0);
+        assert(glGetError()==GL_NO_ERROR);
+    };
+    std::array<unsigned char,4> flatEdge,flatCenter,bentEdge,bentCenter;
+    renderPattern(0.f,3.0,flatEdge,flatCenter);
+    renderPattern(1.25f,4.0,bentEdge,bentCenter);
+    for(int channel=0;channel<3;++channel) {
+        assert(flatEdge[channel]-bentEdge[channel]>=12);
+        assert(std::abs(int(flatCenter[channel])-int(bentCenter[channel]))<=1);
+        assert(std::abs(int(bentCenter[channel])-int(pattern[(32*64+32)*4+channel]))<=2);
+    }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER,pbo);
     glPixelStorei(GL_UNPACK_ALIGNMENT,8);glPixelStorei(GL_UNPACK_ROW_LENGTH,33);
     glPixelStorei(GL_UNPACK_SKIP_ROWS,2);glPixelStorei(GL_UNPACK_SKIP_PIXELS,3);
@@ -111,6 +154,10 @@ int main() {
     assert(art && startup_ui::media::uploads==1);
     for(int i=0;i<90;++i) assert(startup_ui::media::Ensure()==art);
     assert(startup_ui::media::uploads==1);
+    const auto banner=startup_ui::media::Ensure(true);
+    assert(banner && banner!=art && startup_ui::media::uploads==2);
+    for(int i=0;i<90;++i) assert(startup_ui::media::Ensure(true)==banner);
+    assert(startup_ui::media::uploads==2 && startup_ui::media::uploadCount[0]==1 && startup_ui::media::uploadCount[1]==1);
     glGetIntegerv(GL_UNPACK_ALIGNMENT,&actual);assert(actual==8);
     glGetIntegerv(GL_UNPACK_ROW_LENGTH,&actual);assert(actual==33);
     glGetIntegerv(GL_UNPACK_SKIP_ROWS,&actual);assert(actual==2);
@@ -119,20 +166,35 @@ int main() {
     glGetIntegerv(GL_SAMPLER_BINDING,&actual);assert(actual==static_cast<GLint>(sampler));
     int imageWidth,imageHeight,components;
     auto* decoded=stbi_load_from_memory(startup_ui::media::artwork,sizeof(startup_ui::media::artwork),&imageWidth,&imageHeight,&components,4);
-    assert(decoded && imageWidth==768 && imageHeight==256);
+    assert(decoded && imageWidth==startup_ui::media::artworkWidth && imageHeight==startup_ui::media::artworkHeight);
     GLuint artFramebuffer;glGenFramebuffers(1,&artFramebuffer);glBindFramebuffer(GL_READ_FRAMEBUFFER,artFramebuffer);
     glFramebufferTexture2D(GL_READ_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,art,0);
     assert(glCheckFramebufferStatus(GL_READ_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
-    glReadPixels(320,128,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
-    for(int i=0;i<4;++i) assert(pixel[i]==decoded[(128*768+320)*4+i]);
+    glReadPixels(80,80,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    for(int i=0;i<4;++i) assert(pixel[i]==decoded[(80*imageWidth+80)*4+i]);
+    stbi_image_free(decoded);
+    decoded=stbi_load_from_memory(startup_ui::media::bannerArtwork,sizeof(startup_ui::media::bannerArtwork),&imageWidth,&imageHeight,&components,4);
+    assert(decoded && imageWidth==startup_ui::media::bannerWidth && imageHeight==startup_ui::media::bannerHeight);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,banner,0);
+    assert(glCheckFramebufferStatus(GL_READ_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
+    const auto firstFrame=startup_ui::media::BannerCrop(3.2f,0.);
+    const auto laterFrame=startup_ui::media::BannerCrop(3.2f,.9);
+    unsigned char firstPixel[4]{};
+    const auto readFrame=[&](startup_ui::media::Crop crop,unsigned char* result) {
+        const int x=int((crop.lo.x+crop.hi.x)*.5f*imageWidth),y=int((crop.lo.y+crop.hi.y)*.5f*imageHeight);
+        glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,result);
+        for(int channel=0;channel<4;++channel) assert(result[channel]==decoded[(y*imageWidth+x)*4+channel]);
+    };
+    readFrame(firstFrame,firstPixel); readFrame(laterFrame,pixel);
+    assert(firstPixel[0]!=pixel[0] || firstPixel[1]!=pixel[1] || firstPixel[2]!=pixel[2]);
     stbi_image_free(decoded);glDeleteFramebuffers(1,&artFramebuffer);
     glPixelStorei(GL_UNPACK_ALIGNMENT,4);glPixelStorei(GL_UNPACK_ROW_LENGTH,0);
     glPixelStorei(GL_UNPACK_SKIP_ROWS,0);glPixelStorei(GL_UNPACK_SKIP_PIXELS,0);
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER,0);
     assert(glGetError()==GL_NO_ERROR);
-    glBindSampler(0,0); glDeleteSamplers(1,&sampler);
+    glBindSampler(0,0); glBindSampler(1,0); glDeleteSamplers(1,&sampler); glDeleteSamplers(1,&sampler1);
     ImGui_ImplOpenGL3_Shutdown();
-    std::puts("Capture and blur pixels, GL state, drag capture budget, liquid rendering, clipping and sampler restoration passed");
+    std::puts("Capture and blur pixels, GL state, drag capture budget, patterned refraction, center transmission, clipping and sampler restoration passed");
     ImGui::DestroyContext();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroySurface(display,surface); eglDestroyContext(display,context); eglTerminate(display);

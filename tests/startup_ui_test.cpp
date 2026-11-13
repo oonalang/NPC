@@ -37,8 +37,12 @@ int main() {
     }
     assert(startup_ui::TipAt(0.).index==0 && startup_ui::TipAt(3.).index==1 && startup_ui::TipAt(5.5).index==2);
     assert(startup_ui::TipAt(7.6).index==0 && startup_ui::TipAt(-1.).index==0);
+    assert(startup_ui::media::FrameAt(0.)==0 && startup_ui::media::FrameAt(-1.)==0);
+    assert(startup_ui::media::FrameAt(startup_ui::media::bannerDurationMs/1000.0)==0);
+    assert(startup_ui::media::FrameAt(.2)>0);
     for(float aspect : {1.f,2.7f,3.2f,4.f}) for(int i=0;i<100;++i) {
         const auto crop=startup_ui::media::BannerCrop(aspect,i*.1);
+        assert(startup_ui::media::FrameAt(i*.1)>=0 && startup_ui::media::FrameAt(i*.1)<startup_ui::media::bannerFrameCount);
         assert(crop.lo.x>=0.f && crop.lo.y>=0.f && crop.hi.x<=1.f && crop.hi.y<=1.f);
         assert(crop.hi.x>crop.lo.x && crop.hi.y>crop.lo.y);
         const auto tip=startup_ui::TipAt(i*.1);

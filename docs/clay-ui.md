@@ -26,12 +26,12 @@ resting pearl shape. Slider thumbs grow into pills while active. Slider position
 follow ImGui's native value directly; only the material and size animate. The
 critically damped spring preserves velocity when its target changes.
 
-The glass material uses a shared downsampled scene, a five-tap blur and a rounded
-refraction shader with directional highlights. Captures are capped at 30 Hz while
+The glass material combines sharp scene transmission with a five-tap blur,
+rounded lens refraction and pointer-reactive directional highlights. Captures are capped at 30 Hz while
 stationary and 20 Hz while dragging; the UI and lens positions track every frame.
 Login and loading use the same material. The two bounded RGBA textures together
-use at most 1.125 MiB. The startup portrait and moving illustrated banner share
-one additional 0.75 MiB texture, uploaded once per EGL context. Nested menu panels
+use at most 1.125 MiB. A separate official Waguri portrait and GIF frame atlas
+use about 3.18 MiB across two textures, uploaded once per EGL context. Nested menu panels
 tint the parent glass, and opaque clay
 cards keep text readable. See [Liquid startup UI](liquid-startup.md) for pipeline,
 state preservation, fallback and validation details.

@@ -1,20 +1,22 @@
 # Liquid startup UI
 
-The login and loading views share a live glass material, a Waguri-inspired anime
+The login and loading views share a live glass material, an official Waguri
 portrait inside a glass rim, a simple Inter SHAI ETHNIR title, a small EDITION
-badge, flowing edge ribbons, and pill controls. Authentication
+badge, a clean glass rim with muted corner marks, and pill controls. Login adds
+an Access key label, sentence-case actions and an inset status footer. The
+primary action remains visually distinct, with its purple rim. Authentication
 still submits a captured key through the existing worker, consumes its published
 result, saves the verified key, and then starts the loading animation. Paste and
 cached-key actions use their existing handlers. The primary action is disabled
 while a request is pending. The key field moves above the on-screen keyboard and
 the card returns to its prior position after the keyboard closes.
 
-The loading view follows the supplied window layout: a softly frosted charcoal
+The loading view follows the supplied window layout: a clear lavender glass
 shell with a silver rim, muted corner marks, a centered header and divider,
-wide illustrated banner, compact square stages, a lavender progress capsule and
-an information pill. Its clean rim replaces the login view's flowing ribbons.
-The banner has gentle camera drift and six floating
-petals. It uses an original generated illustration and animated texture coordinates.
+wide animated banner, compact square stages, a lavender progress capsule and
+an information pill. Both startup views use the same restrained window frame.
+The banner uses a separate official nighttime Waguri GIF, with actual blinking,
+hair and expression changes. The static brand portrait is a distinct character icon.
 Three requested tips replace the system labels, switching every 2.5 seconds with
 a short fade. Tip timing resets with each loading sequence. The four compact
 loading stages, percentage and progress fill share a single progress value.
@@ -22,15 +24,20 @@ Completion uses monotonic elapsed time rather than a
 frame counter, so the configured seven-second sequence does not stretch when
 frames are dropped. The standalone timeline keeps the original minimum duration.
 
-The portrait and banner share one embedded 768 by 256 JPEG (44,691 bytes),
-decoded and uploaded once per current EGL context. Its RGBA texture uses 0.75 MiB.
-There is no video decoder, network fetch, per-frame decoding or texture upload.
+The portrait is a 160 by 160 JPEG (11,279 bytes). The 2.52-second GIF is resampled
+offline into 24 frames in a 1296 by 624 JPEG atlas (157,953 bytes). Two-pixel
+gutters prevent filtering from bleeding into neighboring frames. Their RGBA
+textures use about 3.18 MiB together. Each texture is decoded and uploaded once
+per current EGL context; playback only selects a frame's texture coordinates.
+There is no runtime GIF/video decoder, network fetch or per-frame texture upload.
 Image upload preserves the caller's texture, unpack-buffer and pixel-store state.
-`StartupArtData.h` contains the optimized artwork. To replace it from an original
-3:1 illustration, install Pillow and run:
+`StartupArtData.h` declares the optimized assets; generated hex parts in
+`StartupMediaData` keep individual source files small without adding runtime
+decoding or allocations. Sources and attribution are in
+[Startup media](startup-media.md). To replace them, install Pillow and run:
 
 ```sh
-python3 tools/embed-startup-art.py /path/to/illustration.png
+python3 tools/embed-startup-art.py /path/to/portrait.png /path/to/animation.gif
 ```
 
 ## Rendering and drag cost
@@ -41,10 +48,21 @@ second texture. Together they allocate at most 1.125 MiB. Resources and shader
 uniform locations are cached per current EGL context and resized only when
 needed. There is no CPU pixel readback or full-resolution blur buffer.
 
-Rounded material shaders sample the blurred live scene with edge refraction,
-slight color separation and directional highlights. They run through bounded
+The custom GLES material follows Apple's documented clear-glass properties:
+[lensing and reactive highlights](https://developer.apple.com/videos/play/wwdc2025/219/),
+with [transmission over rich backgrounds](https://developer.apple.com/design/human-interface-guidelines/materials).
+It samples both the sharp scene and its blur, preserving center detail while
+softening the curved edges. SDF lens normals displace edge samples, concentrate
+light into a narrow highlight and caustic, and apply restrained color separation.
+The highlight direction follows pointer position. The loading panel uses a 27%
+dark tint and a light veil, replacing the prior 74% charcoal tint. This is a
+custom GLES approximation, not Apple's platform material.
+Startup text uses a fine dark contour shadow for bright-scene contrast; the
+input, action buttons and footer use denser local glass tints. The outer shell
+retains clear scene transmission. White-background previews cover this case.
+Shaders run through bounded
 ImGui draw callbacks and restore the normal renderer afterwards. Sampler state is
-restored locally; capture also preserves framebuffers, program, VAO, viewport,
+restored locally on both texture units; capture also preserves framebuffers, program, VAO, viewport,
 active texture, texture bindings, unpack buffer, color mask and raster states.
 Unsupported or multisampled capture sources use the opaque material fallback.
 
@@ -60,12 +78,14 @@ before authentication. Delta time follows the actual frame interval.
 
 Run the native input/timing checks with `sh tests/run-startup-tests.sh` and the
 existing dropdown checks with `sh tests/run-dropdown-tests.sh`.
-Startup checks also cover rotating-tip timing, opacity and banner crop bounds.
+Startup checks also cover rotating-tip timing, opacity, GIF loop timing and atlas crop bounds.
 
 The optional Mesa GLES test in `tests/clay_capture_test.cpp` verifies copied and
 blurred pixels, state restoration, capture cadence, shader-rendered output,
 rounded clipping and sampler restoration. It also verifies the artwork's decoded
-pixels, a single upload across repeated calls, and unpack-state preservation.
+pixels, separate cached portrait/atlas uploads, differing animation frames, and
+unpack-state preservation. A patterned background verifies edge displacement and
+center transmission; both texture units' sampler/texture bindings are checked.
 With EGL/GLES3 headers in
 `CLAY_GL_INCLUDE`, build it on Linux with:
 

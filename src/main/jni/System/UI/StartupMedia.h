@@ -1,37 +1,51 @@
 #pragma once
 #include "../../ImGui/imgui_internal.h"
 #include "../../ImGui/ClayGlass.h"
+#include "StartupArtData.h"
 #include <cmath>
 #ifndef CLAY_CPU_PREVIEW
-#include "StartupArtData.h"
 #include "../../ImGui/stb_image.h"
 #endif
 
 namespace startup_ui { namespace media {
 struct Crop { ImVec2 lo,hi; };
+inline int FrameAt(double elapsed) {
+    const double safe=std::isfinite(elapsed)?ImMax(0.0,elapsed):0.0;
+    const double phase=std::fmod(safe,bannerDurationMs/1000.0);
+    return ImMin(bannerFrameCount-1,static_cast<int>(phase*1000.0*bannerFrameCount/bannerDurationMs));
+}
 inline Crop BannerCrop(float aspect,double elapsed) {
-    const float time=std::isfinite(elapsed)?static_cast<float>(std::fmod(ImMax(0.0,elapsed),1000.0)):0.f;
-    aspect=std::isfinite(aspect)?ImMax(.1f,aspect):3.f;
-    const float zoom=1.045f+.010f*std::sin(time*.30f);
-    const float sx=ImMin(1.f,aspect/3.f)/zoom,sy=ImMin(1.f,3.f/aspect)/zoom;
-    const float cx=ImClamp(.5f+.010f*std::sin(time*.19f),sx*.5f,1.f-sx*.5f);
-    const float cy=ImClamp(.5f+.008f*std::cos(time*.23f),sy*.5f,1.f-sy*.5f);
-    return {{cx-sx*.5f,cy-sy*.5f},{cx+sx*.5f,cy+sy*.5f}};
+    aspect=std::isfinite(aspect)?ImMax(.1f,aspect):3.2f;
+    const float width=ImMin(float(bannerFrameWidth),bannerFrameHeight*aspect);
+    const float height=ImMin(float(bannerFrameHeight),bannerFrameWidth/aspect);
+    const int frame=FrameAt(elapsed);
+    const float x=(frame%bannerColumns)*(bannerFrameWidth+2*bannerGutter)+bannerGutter+(bannerFrameWidth-width)*.5f;
+    const float y=(frame/bannerColumns)*(bannerFrameHeight+2*bannerGutter)+bannerGutter+(bannerFrameHeight-height)*.5f;
+    return {{(x+.5f)/bannerWidth,(y+.5f)/bannerHeight},{(x+width-.5f)/bannerWidth,(y+height-.5f)/bannerHeight}};
 }
 #ifndef CLAY_CPU_PREVIEW
-inline GLuint texture=0;
+inline GLuint textures[2]{};
 inline EGLContext context=EGL_NO_CONTEXT;
-inline bool attempted=false;
-inline unsigned uploads=0;
-inline GLuint Ensure() {
+inline bool attempted[2]{};
+inline unsigned uploads=0,uploadCount[2]{};
+inline GLuint Ensure(bool animated=false) {
     const auto current=eglGetCurrentContext();
     if(current==EGL_NO_CONTEXT) return 0;
-    if(current!=context) { context=current;texture=0;attempted=false; }
-    if(texture || attempted) return texture;
-    attempted=true;
+    if(current!=context) {
+        context=current;
+        for(int i=0;i<2;++i) { textures[i]=0;attempted[i]=false; }
+    }
+    const int index=animated?1:0;
+    auto& texture=textures[index];
+    if(texture || attempted[index]) return texture;
+    attempted[index]=true;
+    const auto* encoded=animated?bannerArtwork:artwork;
+    const int length=animated?sizeof(bannerArtwork):sizeof(artwork);
     int width=0,height=0,components=0;
-    unsigned char* pixels=stbi_load_from_memory(artwork,sizeof(artwork),&width,&height,&components,4);
-    if(!pixels || width!=artworkWidth || height!=artworkHeight) { stbi_image_free(pixels); return 0; }
+    unsigned char* pixels=stbi_load_from_memory(encoded,length,&width,&height,&components,4);
+    if(!pixels || width!=(animated?bannerWidth:artworkWidth) || height!=(animated?bannerHeight:artworkHeight)) {
+        stbi_image_free(pixels); return 0;
+    }
     clay::SavedGl saved;
     GLint alignment,rowLength,skipRows,skipPixels;
     glGetIntegerv(GL_UNPACK_ALIGNMENT,&alignment); glGetIntegerv(GL_UNPACK_ROW_LENGTH,&rowLength);
@@ -45,13 +59,13 @@ inline GLuint Ensure() {
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glPixelStorei(GL_UNPACK_ALIGNMENT,alignment);glPixelStorei(GL_UNPACK_ROW_LENGTH,rowLength);
     glPixelStorei(GL_UNPACK_SKIP_ROWS,skipRows);glPixelStorei(GL_UNPACK_SKIP_PIXELS,skipPixels);
-    stbi_image_free(pixels);++uploads;
+    stbi_image_free(pixels);++uploads;++uploadCount[index];
     return texture;
 }
 #endif
-inline bool Image(ImDrawList* draw,ImVec2 lo,ImVec2 hi,float radius,Crop crop) {
+inline bool Image(ImDrawList* draw,ImVec2 lo,ImVec2 hi,float radius,Crop crop,bool animated=false) {
 #ifndef CLAY_CPU_PREVIEW
-    const auto id=Ensure();
+    const auto id=Ensure(animated);
     if(id) {
         draw->AddImageRounded(reinterpret_cast<ImTextureID>(static_cast<intptr_t>(id)),lo,hi,crop.lo,crop.hi,IM_COL32_WHITE,radius);
         return true;
@@ -63,22 +77,12 @@ inline bool Image(ImDrawList* draw,ImVec2 lo,ImVec2 hi,float radius,Crop crop) {
 inline void Avatar(ImDrawList* draw,ImVec2 lo,float size) {
     const float inset=size*.065f;
     clay::Liquid(draw,lo,lo+ImVec2(size,size),size*.30f,ImVec4(.52f,.37f,.71f,.16f),1.2f);
-    Image(draw,lo+ImVec2(inset,inset),lo+ImVec2(size-inset,size-inset),size*.24f,{{.22f,.02f},{.54f,.98f}});
+    Image(draw,lo+ImVec2(inset,inset),lo+ImVec2(size-inset,size-inset),size*.24f,{{0,0},{1,1}});
     draw->AddRect(lo,lo+ImVec2(size,size),IM_COL32(231,216,255,110),size*.30f,0,1.f);
 }
 inline void Banner(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,double elapsed) {
     const float radius=28.f*scale;
-    Image(draw,lo,lo+size,radius,BannerCrop(size.x/size.y,elapsed));
-    draw->PushClipRect(lo+ImVec2(22,22)*scale,lo+size-ImVec2(22,22)*scale,true);
-    const float time=std::isfinite(elapsed)?static_cast<float>(std::fmod(ImMax(0.0,elapsed),1000.0)):0.f;
-    for(int i=0;i<6;++i) {
-        const float spanX=ImMax(1.f,size.x-52.f*scale),spanY=ImMax(1.f,size.y-52.f*scale);
-        const float x=lo.x+26.f*scale+std::fmod(i*.173f*spanX+time*(5.f+i*.4f)*scale,spanX);
-        const float y=lo.y+26.f*scale+std::fmod(i*.291f*spanY+time*(2.f+i*.2f)*scale,spanY);
-        const float radius=(2.0f+(i%3)*.6f)*scale;
-        draw->AddNgonFilled({x,y},radius,IM_COL32(231,194,255,85),5);
-    }
-    draw->PopClipRect();
+    Image(draw,lo,lo+size,radius,BannerCrop(size.x/size.y,elapsed),true);
     draw->AddRect(lo,lo+size,IM_COL32(230,217,255,84),radius,0,1.f*scale);
     draw->AddLine(lo+ImVec2(radius,1.f*scale),{lo.x+size.x-radius,lo.y+1.f*scale},IM_COL32(255,240,255,82),1.f*scale);
 }
