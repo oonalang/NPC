@@ -194,8 +194,6 @@ inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, 
     Text(draw,Body(),tipSize,tipPos,
         ImGui::GetColorU32(ImVec4(.86f,.84f,.92f,tip.opacity)),loadingTips[tip.index],tipWidth);
     draw->PopClipRect();
-    Gradient(draw,{cx-22.f*scale,pos.y+169.f*scale},{cx+22.f*scale,pos.y+177.f*scale},4.f*scale,
-        ImVec4(.83f,.68f,1.f,1.f),ImVec4(.60f,.40f,.83f,1.f));
     media::Banner(draw,pos+ImVec2(24,188)*scale,ImVec2(632,194)*scale,scale,time);
     const char* labels[]{"Initializing","Verifying","Loading Data","Finalizing"};
     for(int i=0;i<4;++i) {

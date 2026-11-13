@@ -12,7 +12,7 @@ while a request is pending. The key field moves above the on-screen keyboard and
 the card returns to its prior position after the keyboard closes.
 
 The loading view follows the supplied window layout: a clear lavender glass
-shell with a silver rim, muted corner marks, a centered header and divider,
+shell with a silver rim, muted corner marks, a centered header,
 wide animated banner, compact square stages, a lavender progress capsule and
 an information pill. Both startup views use the same restrained window frame.
 The banner uses a separate official nighttime Waguri GIF, with actual blinking,
