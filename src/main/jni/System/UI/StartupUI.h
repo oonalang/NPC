@@ -3,13 +3,17 @@
 #include "../../ImGui/ClayGlass.h"
 #include "../../ImGui/imgui_settings.h"
 #include "../../Fonts/Icon.h"
+#include "StartupMedia.h"
+#include "StartupState.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
+namespace font { extern ImFont* inter_title; }
+
 namespace startup_ui {
 inline ImFont* Body() { return font::inter_semibold ? font::inter_semibold : ImGui::GetFont(); }
-inline ImFont* Title() { return F50 ? F50 : Body(); }
+inline ImFont* Title() { return font::inter_title ? font::inter_title : Body(); }
 inline ImFont* Icons() { return F107 ? F107 : Body(); }
 inline ImU32 Accent(float alpha = 1.f) { auto color=c::accent; color.w=alpha; return ImGui::GetColorU32(color); }
 inline float Fit(ImVec2 logical) {
@@ -86,35 +90,61 @@ inline void Frame(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale) {
     const float y=hi.y-2.f*scale,cx=(pos.x+hi.x)*.5f;
     draw->AddLine({cx-60.f*scale,y},{cx+60.f*scale,y},Accent(.65f),1.4f*scale);
 }
+inline void TintVertices(ImDrawList* draw,int first,ImVec2 lo,ImVec2 hi,ImVec4 top,ImVec4 bottom) {
+    for(int i=first;i<draw->VtxBuffer.Size;++i) {
+        auto& vertex=draw->VtxBuffer[i];
+        const float t=ImClamp((vertex.pos.y-lo.y)/ImMax(1.f,hi.y-lo.y),0.f,1.f);
+        auto color=ImLerp(top,bottom,t);
+        color.w*=ImGui::ColorConvertU32ToFloat4(vertex.col).w;
+        vertex.col=ImGui::ColorConvertFloat4ToU32(color);
+    }
+}
+inline void Gradient(ImDrawList* draw,ImVec2 lo,ImVec2 hi,float radius,ImVec4 top,ImVec4 bottom) {
+    const int first=draw->VtxBuffer.Size;
+    draw->AddRectFilled(lo,hi,IM_COL32_WHITE,radius);
+    TintVertices(draw,first,lo,hi,top,bottom);
+}
+inline void LoadingFrame(ImDrawList* draw,ImVec2 pos,ImVec2 size,float scale) {
+    const auto hi=pos+size;
+    const float radius=56.f*scale;
+    for(int i=5;i>0;--i) {
+        const float spread=i*2.f*scale;
+        draw->AddRectFilled(pos+ImVec2(-spread,spread),hi+ImVec2(spread,spread*2.f),
+            IM_COL32(8,7,17,10),radius+spread);
+    }
+    clay::Liquid(draw,pos,hi,radius,ImVec4(.17f,.17f,.215f,.74f),.55f);
+    Gradient(draw,pos,hi,radius,ImVec4(.81f,.81f,.94f,.14f),ImVec4(.40f,.36f,.58f,.03f));
+    const int border=draw->VtxBuffer.Size;
+    draw->AddRect(pos,hi,IM_COL32_WHITE,radius,0,1.2f*scale);
+    TintVertices(draw,border,pos,hi,ImVec4(.91f,.91f,1.f,.65f),ImVec4(.74f,.70f,.92f,.27f));
+    draw->AddRect(pos+ImVec2(2,2)*scale,hi-ImVec2(2,2)*scale,
+        IM_COL32(233,228,255,18),radius-2.f*scale,0,1.f*scale);
+    draw->AddCircleFilled(pos+ImVec2(40,33)*scale,4.f*scale,IM_COL32(187,188,206,175));
+    draw->AddCircleFilled(pos+ImVec2(56,33)*scale,4.f*scale,IM_COL32(187,188,206,175));
+    draw->AddRectFilled(pos+ImVec2(68,29)*scale,pos+ImVec2(84,37)*scale,
+        IM_COL32(187,188,206,175),4.f*scale);
+    const auto mark=pos+ImVec2(size.x/scale-70.f,26)*scale;
+    draw->AddRectFilled(mark,mark+ImVec2(32,17)*scale,IM_COL32(180,177,202,14),8.5f*scale);
+    draw->AddRect(mark,mark+ImVec2(32,17)*scale,IM_COL32(223,221,242,72),8.5f*scale,0,1.f*scale);
+    draw->AddLine(mark+ImVec2(9,8.5f)*scale,mark+ImVec2(23,8.5f)*scale,
+        IM_COL32(224,222,240,205),1.2f*scale);
+}
 inline void Brand(ImDrawList* draw, ImVec2 pos, float width, float scale, bool loading=false) {
     const float cx=pos.x+width*.5f;
-    const ImVec2 center(cx,pos.y+49.f*scale);
-    ImVec2 points[6];
-    for(int i=0;i<6;++i) {
-        const float a=-1.5707963f+i*1.0471976f;
-        points[i]=center+ImVec2(std::cos(a),std::sin(a))*26.f*scale;
-    }
-    draw->AddConvexPolyFilled(points,6,Accent(.10f));
-    draw->AddPolyline(points,6,Accent(.10f),ImDrawFlags_Closed,9.f*scale);
-    draw->AddPolyline(points,6,Accent(.80f),ImDrawFlags_Closed,1.2f*scale);
-    CenterText(draw,Title(),25.f*scale,cx,center.y-15.f*scale,IM_COL32(250,245,255,255),"E");
-    const char* text="ETHNIR NOIR";
-    const float size=(loading?29.f:32.f)*scale;
-    const float tracking=3.f*scale;
-    float total=0.f;
-    for(const char* p=text;*p;++p) { char letter[2]{*p,0}; total+=Title()->CalcTextSizeA(size,FLT_MAX,0,letter).x+tracking; }
-    float x=cx-(total-tracking)*.5f;
-    const float y=pos.y+90.f*scale;
-    for(const char* p=text;*p;++p) {
-        char letter[2]{*p,0}; Text(draw,Title(),size,{x,y},IM_COL32(247,243,255,255),letter);
-        x+=Title()->CalcTextSizeA(size,FLT_MAX,0,letter).x+tracking;
-    }
-    const float railY=y+size*.48f;
-    const float railWidth=ImMax(10.f*scale,(width-total)*.5f-42.f*scale);
-    draw->AddLine({pos.x+24.f*scale,railY},{pos.x+24.f*scale+railWidth,railY},Accent(.4f),1.f*scale);
-    draw->AddLine({pos.x+width-24.f*scale-railWidth,railY},{pos.x+width-24.f*scale,railY},Accent(.4f),1.f*scale);
-    for(int i=0;i<3;++i) draw->AddLine({cx-13.f*scale+i*9.f*scale,y+size+9.f*scale},
-        {cx-7.f*scale+i*9.f*scale,y+size+3.f*scale},Accent(.85f),2.f*scale);
+    const float avatarSize=(loading?56.f:68.f)*scale;
+    media::Avatar(draw,{cx-avatarSize*.5f,pos.y+(loading?26.f:16.f)*scale},avatarSize);
+    const float titleSize=30.f*scale;
+    const auto titleSizePx=Title()->CalcTextSizeA(titleSize,FLT_MAX,0.f,"SHAI ETHNIR");
+    const ImVec2 badgeSize(66.f*scale,23.f*scale);
+    const float gap=12.f*scale;
+    const float left=cx-(titleSizePx.x+gap+badgeSize.x)*.5f;
+    const float y=pos.y+(loading?99.f:103.f)*scale;
+    Text(draw,Title(),titleSize,{left,y},IM_COL32(246,241,255,255),"SHAI ETHNIR");
+    const auto badge=ImVec2(left+titleSizePx.x+gap,y+(titleSizePx.y-badgeSize.y)*.5f);
+    draw->AddRectFilled(badge,badge+badgeSize,IM_COL32(183,145,229,26),badgeSize.y*.5f);
+    draw->AddRect(badge,badge+badgeSize,IM_COL32(228,208,255,44),badgeSize.y*.5f,0,1.f*scale);
+    const auto label=Body()->CalcTextSizeA(10.5f*scale,FLT_MAX,0.f,"EDITION");
+    Text(draw,Body(),10.5f*scale,badge+(badgeSize-label)*.5f,IM_COL32(210,194,231,255),"EDITION");
 }
 inline bool Pill(const char* id, const char* label, const char* icon, ImVec2 lo, ImVec2 size, float scale,
                  bool primary=false, bool disabled=false) {
@@ -204,56 +234,57 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
 }
 
 inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, float progress, float time) {
-    Frame(draw,pos,size,scale); Brand(draw,pos,size.x,scale,true);
+    LoadingFrame(draw,pos,size,scale); Brand(draw,pos,size.x,scale,true);
     const float cx=pos.x+size.x*.5f;
-    CenterText(draw,Body(),12.5f*scale,cx,pos.y+139.f*scale,IM_COL32(181,163,207,255),"SYSTEM START   |   VERIFY   |   LOAD");
-    const auto center=pos+ImVec2(310,282)*scale;
-    const float radii[]{31,57,84,108};
-    const int dots[]{5,7,9,11};
-    for(int ring=0;ring<4;++ring) {
-        const float radius=radii[ring]*scale, direction=ring%2?-1.f:1.f;
-        draw->AddCircle(center,radius,Accent(.15f),64,1.f*scale);
-        const float start=time*direction*(.28f+ring*.06f);
-        draw->PathArcTo(center,radius,start,start+1.10f+ring*.13f,22);
-        draw->PathStroke(Accent(ring==3?.8f:.46f),0,(ring==3?2.5f:1.4f)*scale);
-        for(int i=0;i<dots[ring];++i) {
-            const float a=start+i*6.2831853f/dots[ring];
-            const auto p=center+ImVec2(std::cos(a),std::sin(a))*radius;
-            draw->AddCircleFilled(p,(i==0?3.f:1.8f)*scale,Accent(i==0?.95f:.42f),10);
-        }
-    }
-    draw->AddCircleFilled(center,16.f*scale,Accent(.12f),32);
-    draw->AddCircle(center,20.f*scale,Accent(.32f),32,1.f*scale);
-    draw->AddCircleFilled(center,8.f*scale,IM_COL32(248,237,255,255),24);
+    const auto tip=TipAt(time);
+    const float tipSize=13.f*scale,tipWidth=612.f*scale;
+    const auto tipBounds=Body()->CalcTextSizeA(tipSize,FLT_MAX,tipWidth,loadingTips[tip.index]);
+    draw->PushClipRect(pos+ImVec2(30,134)*scale,pos+ImVec2(650,160)*scale,true);
+    draw->AddText(Body(),tipSize,{cx-tipBounds.x*.5f,pos.y+146.f*scale-tipBounds.y*.5f},
+        ImGui::GetColorU32(ImVec4(.80f,.78f,.88f,tip.opacity)),loadingTips[tip.index],nullptr,tipWidth);
+    draw->PopClipRect();
+    Gradient(draw,{cx-22.f*scale,pos.y+169.f*scale},{cx+22.f*scale,pos.y+177.f*scale},4.f*scale,
+        ImVec4(.83f,.68f,1.f,1.f),ImVec4(.60f,.40f,.83f,1.f));
+    media::Banner(draw,pos+ImVec2(24,188)*scale,ImVec2(632,194)*scale,scale,time);
     const char* labels[]{"Initializing","Verifying","Loading Data","Finalizing"};
     for(int i=0;i<4;++i) {
-        const float x=pos.x+(83.f+i*151.f)*scale,y=pos.y+424.f*scale;
-        const float done=(i+1)*.25f;
-        const bool complete=progress>=done, current=progress>=i*.25f && !complete;
-        if(i<3) draw->AddLine({x+25.f*scale,y},{x+126.f*scale,y},Accent(complete?.70f:.16f),1.3f*scale);
-        if(complete) { auto tint=c::accent; tint.w=.68f;
-            clay::Liquid(draw,{x-24.f*scale,y-24.f*scale},{x+24.f*scale,y+24.f*scale},24.f*scale,tint,1.1f);
-        } else draw->AddCircleFilled({x,y},24.f*scale,IM_COL32(35,24,49,190),36);
-        draw->AddCircle({x,y},24.f*scale,Accent(current?.9f:.30f),36,1.3f*scale);
-        if(complete) ImGui::RenderCheckMark(draw,{x-7.f*scale,y-5.f*scale},IM_COL32(255,248,255,255),13.f*scale);
-        if(current) { draw->PathArcTo({x,y},20.f*scale,time*2.4f,time*2.4f+2.9f,20); draw->PathStroke(Accent(.95f),0,2.f*scale); }
-        CenterText(draw,Body(),12.5f*scale,x,y+32.f*scale,complete?IM_COL32(226,211,246,255):IM_COL32(162,148,180,255),labels[i]);
+        const auto lo=pos+ImVec2(50.f+i*154.f,408.f)*scale;
+        const auto hi=lo+ImVec2(38,38)*scale;
+        const bool complete=progress>=(i+1)*.25f,current=progress>=i*.25f && !complete;
+        if(current) draw->AddRect(lo-ImVec2(1,1)*scale,hi+ImVec2(1,1)*scale,
+            Accent(.17f),12.f*scale,0,5.f*scale);
+        Gradient(draw,lo,hi,11.f*scale,
+            complete?ImVec4(.64f,.58f,.75f,.85f):current?ImVec4(.70f,.51f,.91f,.95f):ImVec4(.36f,.34f,.44f,.34f),
+            complete?ImVec4(.42f,.36f,.56f,.9f):current?ImVec4(.42f,.26f,.65f,.96f):ImVec4(.24f,.22f,.31f,.34f));
+        draw->AddRect(lo,hi,IM_COL32(225,211,255,current?155:complete?55:22),11.f*scale,0,1.f*scale);
+        const auto center=(lo+hi)*.5f;
+        if(complete) ImGui::RenderCheckMark(draw,center-ImVec2(6,4)*scale,IM_COL32(251,244,255,255),12.f*scale);
+        if(current) { draw->PathArcTo(center,10.f*scale,time*2.4f,time*2.4f+3.8f,18); draw->PathStroke(Accent(.92f),0,2.f*scale); }
+        const float labelSize=12.f*scale;
+        const auto textSize=Body()->CalcTextSizeA(labelSize,FLT_MAX,0.f,labels[i]);
+        Text(draw,Body(),labelSize,{hi.x+8.f*scale,center.y-textSize.y*.5f},
+            complete?IM_COL32(237,233,246,255):IM_COL32(184,176,200,255),labels[i]);
+        if(i<3) {
+            const float start=hi.x+16.f*scale+textSize.x,end=lo.x+146.f*scale;
+            if(end>start) draw->AddLine({start,center.y},{end,center.y},IM_COL32(195,184,213,complete?65:30),1.f*scale);
+        }
     }
-    const auto bar=pos+ImVec2(48,494)*scale; const auto barSize=ImVec2(468,13)*scale;
-    draw->AddRectFilled(bar,bar+barSize,IM_COL32(55,41,72,210),7.f*scale);
+    const auto bar=pos+ImVec2(50,479)*scale; const auto barSize=ImVec2(514,18)*scale;
+    Gradient(draw,bar,bar+barSize,9.f*scale,ImVec4(.18f,.17f,.24f,.75f),ImVec4(.35f,.32f,.43f,.5f));
+    draw->AddRect(bar,bar+barSize,IM_COL32(233,225,255,38),9.f*scale,0,1.f*scale);
     if(progress>0.f) {
         const auto end=bar+ImVec2(barSize.x*progress,barSize.y);
-        auto progressTint=c::accent; progressTint.w=.66f;
-        clay::Liquid(draw,bar,end,7.f*scale,progressTint,1.4f);
-        if(barSize.x*progress>14.f*scale) draw->AddLine(bar+ImVec2(7,2)*scale,end-ImVec2(7,11)*scale,IM_COL32(247,219,255,110),1.f*scale);
+        draw->AddRect(bar,end,Accent(.14f),9.f*scale,0,6.f*scale);
+        Gradient(draw,bar,end,9.f*scale,ImVec4(.83f,.65f,1.f,1.f),ImVec4(.59f,.36f,.85f,1.f));
+        if(barSize.x*progress>18.f*scale) draw->AddLine(bar+ImVec2(9,2)*scale,end-ImVec2(9,16)*scale,IM_COL32(250,234,255,145),1.f*scale);
     }
     char percentage[16]; std::snprintf(percentage,sizeof(percentage),"%d%%",static_cast<int>(progress*100.f+.5f));
-    Text(draw,Body(),16.f*scale,pos+ImVec2(532,488)*scale,IM_COL32(229,219,243,255),percentage);
-    const auto info=pos+ImVec2(45,528)*scale;
-    draw->AddRectFilled(info,info+ImVec2(530,48)*scale,IM_COL32(78,55,99,58),24.f*scale);
-    draw->AddRect(info,info+ImVec2(530,48)*scale,IM_COL32(221,191,255,36),24.f*scale,0,1.f*scale);
-    Icon(draw,ICON_FA_INFO_CIRCLE,info+ImVec2(24,24)*scale,18.f*scale,Accent(.85f));
-    Text(draw,Body(),13.f*scale,info+ImVec2(47,6)*scale,IM_COL32(232,221,245,255),"Please wait");
-    Text(draw,Body(),10.5f*scale,info+ImVec2(47,26)*scale,IM_COL32(173,158,190,255),"Preparing your interface. Keep the application open.");
+    Text(draw,Body(),20.f*scale,pos+ImVec2(600,477)*scale,IM_COL32(238,233,247,255),percentage);
+    const auto info=pos+ImVec2(34,519)*scale;
+    Gradient(draw,info,info+ImVec2(612,58)*scale,29.f*scale,ImVec4(.68f,.65f,.78f,.24f),ImVec4(.50f,.46f,.62f,.28f));
+    draw->AddRect(info,info+ImVec2(612,58)*scale,IM_COL32(229,222,248,68),29.f*scale,0,1.f*scale);
+    Icon(draw,ICON_FA_INFO_CIRCLE,info+ImVec2(40,29)*scale,23.f*scale,IM_COL32(225,219,241,245));
+    Text(draw,Body(),14.f*scale,info+ImVec2(66,9)*scale,IM_COL32(242,237,250,255),"Please wait");
+    Text(draw,Body(),12.f*scale,info+ImVec2(66,32)*scale,IM_COL32(193,185,207,255),"Preparing your interface. Keep the application open.");
 }
 }

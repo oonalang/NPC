@@ -1,6 +1,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "../src/main/jni/ImGui/imgui_internal.h"
 #include "../src/main/jni/ImGui/ClayGlass.h"
+#include "../src/main/jni/System/UI/StartupMedia.h"
 #include <EGL/eglext.h>
 #include "../src/main/jni/ImGui/imgui_impl_opengl3.h"
 #include <cassert>
@@ -102,6 +103,32 @@ int main() {
     assert(pixel[0]>=8 && pixel[0]<=16 && pixel[1]>=140 && pixel[1]<=150 && pixel[2]>=14 && pixel[2]<=24);
     glReadPixels(9,9,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
     assert(pixel[0]==0 && pixel[1]==255 && pixel[2]==0);
+    assert(glGetError()==GL_NO_ERROR);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER,pbo);
+    glPixelStorei(GL_UNPACK_ALIGNMENT,8);glPixelStorei(GL_UNPACK_ROW_LENGTH,33);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS,2);glPixelStorei(GL_UNPACK_SKIP_PIXELS,3);
+    const auto art=startup_ui::media::Ensure();
+    assert(art && startup_ui::media::uploads==1);
+    for(int i=0;i<90;++i) assert(startup_ui::media::Ensure()==art);
+    assert(startup_ui::media::uploads==1);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT,&actual);assert(actual==8);
+    glGetIntegerv(GL_UNPACK_ROW_LENGTH,&actual);assert(actual==33);
+    glGetIntegerv(GL_UNPACK_SKIP_ROWS,&actual);assert(actual==2);
+    glGetIntegerv(GL_UNPACK_SKIP_PIXELS,&actual);assert(actual==3);
+    glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING,&actual);assert(actual==static_cast<GLint>(pbo));
+    glGetIntegerv(GL_SAMPLER_BINDING,&actual);assert(actual==static_cast<GLint>(sampler));
+    int imageWidth,imageHeight,components;
+    auto* decoded=stbi_load_from_memory(startup_ui::media::artwork,sizeof(startup_ui::media::artwork),&imageWidth,&imageHeight,&components,4);
+    assert(decoded && imageWidth==768 && imageHeight==256);
+    GLuint artFramebuffer;glGenFramebuffers(1,&artFramebuffer);glBindFramebuffer(GL_READ_FRAMEBUFFER,artFramebuffer);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,art,0);
+    assert(glCheckFramebufferStatus(GL_READ_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE);
+    glReadPixels(320,128,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixel);
+    for(int i=0;i<4;++i) assert(pixel[i]==decoded[(128*768+320)*4+i]);
+    stbi_image_free(decoded);glDeleteFramebuffers(1,&artFramebuffer);
+    glPixelStorei(GL_UNPACK_ALIGNMENT,4);glPixelStorei(GL_UNPACK_ROW_LENGTH,0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS,0);glPixelStorei(GL_UNPACK_SKIP_PIXELS,0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER,0);
     assert(glGetError()==GL_NO_ERROR);
     glBindSampler(0,0); glDeleteSamplers(1,&sampler);
     ImGui_ImplOpenGL3_Shutdown();

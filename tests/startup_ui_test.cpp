@@ -10,7 +10,7 @@
 ImFont* F50=nullptr;
 ImFont* F107=nullptr;
 float menu[4]={.69f,.43f,.96f,1.f};
-namespace font { ImFont* inter_semibold=nullptr; }
+namespace font { ImFont* inter_semibold=nullptr; ImFont* inter_title=nullptr; }
 
 int main() {
     startup_ui::LoadingTimeline timeline;
@@ -34,6 +34,15 @@ int main() {
         assert(normalCount<=31 && movingCount<=21);
         assert(normalCount>=30 && movingCount>=16);
         moving.Reset(); assert(moving.Due(1.,true));
+    }
+    assert(startup_ui::TipAt(0.).index==0 && startup_ui::TipAt(3.).index==1 && startup_ui::TipAt(5.5).index==2);
+    assert(startup_ui::TipAt(7.6).index==0 && startup_ui::TipAt(-1.).index==0);
+    for(float aspect : {1.f,2.7f,3.2f,4.f}) for(int i=0;i<100;++i) {
+        const auto crop=startup_ui::media::BannerCrop(aspect,i*.1);
+        assert(crop.lo.x>=0.f && crop.lo.y>=0.f && crop.hi.x<=1.f && crop.hi.y<=1.f);
+        assert(crop.hi.x>crop.lo.x && crop.hi.y>crop.lo.y);
+        const auto tip=startup_ui::TipAt(i*.1);
+        assert(tip.index>=0 && tip.index<3 && tip.opacity>=0.f && tip.opacity<=1.f);
     }
     ImGui::CreateContext(); auto& io=ImGui::GetIO();
     io.IniFilename=nullptr;io.DisplaySize={1280,720};io.DeltaTime=1.f/60;

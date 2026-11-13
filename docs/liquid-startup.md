@@ -1,17 +1,37 @@
 # Liquid startup UI
 
-The login and loading views share a live glass material, a purple hexagonal
-wordmark, flowing edge ribbons, pill controls, and Inter body text. Authentication
+The login and loading views share a live glass material, a Waguri-inspired anime
+portrait inside a glass rim, a simple Inter SHAI ETHNIR title, a small EDITION
+badge, flowing edge ribbons, and pill controls. Authentication
 still submits a captured key through the existing worker, consumes its published
 result, saves the verified key, and then starts the loading animation. Paste and
 cached-key actions use their existing handlers. The primary action is disabled
 while a request is pending. The key field moves above the on-screen keyboard and
 the card returns to its prior position after the keyboard closes.
 
-The four loading stages, orbital animation, percentage and progress fill share a
-single progress value. Completion uses monotonic elapsed time rather than a
+The loading view follows the supplied window layout: a softly frosted charcoal
+shell with a silver rim, muted corner marks, a centered header and divider,
+wide illustrated banner, compact square stages, a lavender progress capsule and
+an information pill. Its clean rim replaces the login view's flowing ribbons.
+The banner has gentle camera drift and six floating
+petals. It uses an original generated illustration and animated texture coordinates.
+Three requested tips replace the system labels, switching every 2.5 seconds with
+a short fade. Tip timing resets with each loading sequence. The four compact
+loading stages, percentage and progress fill share a single progress value.
+Completion uses monotonic elapsed time rather than a
 frame counter, so the configured seven-second sequence does not stretch when
 frames are dropped. The standalone timeline keeps the original minimum duration.
+
+The portrait and banner share one embedded 768 by 256 JPEG (44,691 bytes),
+decoded and uploaded once per current EGL context. Its RGBA texture uses 0.75 MiB.
+There is no video decoder, network fetch, per-frame decoding or texture upload.
+Image upload preserves the caller's texture, unpack-buffer and pixel-store state.
+`StartupArtData.h` contains the optimized artwork. To replace it from an original
+3:1 illustration, install Pillow and run:
+
+```sh
+python3 tools/embed-startup-art.py /path/to/illustration.png
+```
 
 ## Rendering and drag cost
 
@@ -40,10 +60,13 @@ before authentication. Delta time follows the actual frame interval.
 
 Run the native input/timing checks with `sh tests/run-startup-tests.sh` and the
 existing dropdown checks with `sh tests/run-dropdown-tests.sh`.
+Startup checks also cover rotating-tip timing, opacity and banner crop bounds.
 
 The optional Mesa GLES test in `tests/clay_capture_test.cpp` verifies copied and
 blurred pixels, state restoration, capture cadence, shader-rendered output,
-rounded clipping and sampler restoration. With EGL/GLES3 headers in
+rounded clipping and sampler restoration. It also verifies the artwork's decoded
+pixels, a single upload across repeated calls, and unpack-state preservation.
+With EGL/GLES3 headers in
 `CLAY_GL_INCLUDE`, build it on Linux with:
 
 ```sh
@@ -51,7 +74,7 @@ c++ -std=c++17 -O0 -DWL_EGL_PLATFORM -DIMGUI_IMPL_OPENGL_ES3 \
   -I"$CLAY_GL_INCLUDE" -Isrc/main/jni tests/clay_capture_test.cpp \
   src/main/jni/ImGui/imgui.cpp src/main/jni/ImGui/imgui_draw.cpp \
   src/main/jni/ImGui/imgui_widgets.cpp src/main/jni/ImGui/imgui_tables.cpp \
-  src/main/jni/ImGui/imgui_impl_opengl3.cpp \
+  src/main/jni/ImGui/imgui_impl_opengl3.cpp src/main/jni/ImGui/stb_image.cpp \
   -Wl,-l:libEGL.so.1,-l:libGL.so.1 -o /tmp/clay-capture-test
 MESA_SHADER_CACHE_DISABLE=true /tmp/clay-capture-test
 ```
