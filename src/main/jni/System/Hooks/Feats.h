@@ -192,7 +192,7 @@ inline float get_FireInterval(void * instance) {
 inline float (*orig_get_DelaySprintFire)(void *) = nullptr;
 inline float get_DelaySprintFire(void * instance) {
     if (instance != NULL) {
-        if (Config.ExtraMenu.Fire) {
+        if (Config.ExtraMenu.NoSprintFire || Config.ExtraMenu.Fire) {
             return 0.00001f;
         }
     }

@@ -206,6 +206,7 @@ sColorsESPBOT sColorsESPBOT{0};
 		bool RedWallhack;
     	bool Spread;
     	bool Fire;
+        bool NoSprintFire;
     	bool Diving;
         bool Recoil;
         bool Reload;

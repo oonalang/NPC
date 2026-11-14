@@ -44,6 +44,7 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Flash"] = Config.ExtraMenu.Flash;
     config["ExtraMenu"]["Diving"] = Config.ExtraMenu.Diving;
     config["ExtraMenu"]["Fire"] = Config.ExtraMenu.Fire;
+    config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
     config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
@@ -124,6 +125,7 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Flash = config["ExtraMenu"]["Flash"].get<bool>();
             Config.ExtraMenu.Diving = config["ExtraMenu"]["Diving"].get<bool>();
             Config.ExtraMenu.Fire = config["ExtraMenu"]["Fire"].get<bool>();
+            Config.ExtraMenu.NoSprintFire = config["ExtraMenu"].value("NoSprintFire", false);
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
             Config.ExtraMenu.Rpd = config["ExtraMenu"]["Rpd"].get<bool>();
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
