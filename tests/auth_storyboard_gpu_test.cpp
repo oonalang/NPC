@@ -363,7 +363,10 @@ void CheckButtonClipping() {
             const float qy=std::abs(y+.5f-center.y);
             if(std::sqrt(qx*qx+qy*qy)-radius<=1.5f) continue;
             const auto* a=image.At(x,y);const auto* b=baseline.At(x,y);
-            for(int channel=0;channel<3;++channel) assert(std::abs(int(a[channel])-int(b[channel]))<=1);
+            for(int channel=0;channel<3;++channel) if(std::abs(int(a[channel])-int(b[channel]))>1) {
+                std::fprintf(stderr,"Capsule exterior t=%.3f (%d,%d) channel%d %d vs %d\n",time,x,y,channel,a[channel],b[channel]);
+                assert(false);
+            }
             ++testedPixels;
         }
     }
@@ -395,6 +398,31 @@ void CheckSuckContainment(const std::filesystem::path& output) {
         std::printf("Suck p=%.3f viewport edge pixels exceeding8-level background delta: %d\n",progress,clippedPixels);
         assert(clippedPixels==0);
     }
+}
+void CheckLiveBackdrop(const std::filesystem::path& output) {
+    const auto paint=[] {
+        glBindFramebuffer(GL_FRAMEBUFFER,0);auth_scene::RasterState(imageWidth,imageHeight);
+        glEnable(GL_SCISSOR_TEST);
+        for(int y=0;y<imageHeight;y+=43) for(int x=0;x<imageWidth;x+=47) {
+            const float tile=((x/47+y/43)%2)?1.f:.35f;
+            glScissor(x,y,47,43);glClearColor(.34f*tile,.52f*tile,.66f*tile,1.f);glClear(GL_COLOR_BUFFER_BIT);
+        }
+        glDisable(GL_SCISSOR_TEST);
+    };
+    paint();Image baseline;baseline.Read();
+    for(const auto center:{ImVec2(.15f,.31f),ImVec2(.79f,.67f)}) {
+        for(float progress:{.12f,.30f,.50f,.72f,1.f}) {
+            paint();assert(auth_scene::Begin(imageWidth,imageHeight,true));
+            assert(auth_scene::Render(nullptr,{auth_scene::Mode::Explosion,progress,center}));
+            Image frame;frame.Read();assert(glGetError()==GL_NO_ERROR);
+            if(progress==1.f) assert(frame.pixels==baseline.pixels);
+            else if(progress==.3f) frame.Save(output/(center.x<.5f?"live-left-edge.ppm":"live-right-edge.ppm"));
+        }
+    }
+    paint();assert(auth_scene::Begin(imageWidth,imageHeight,true));
+    assert(auth_scene::Render(nullptr,{auth_scene::Mode::Empty,0.f,{.5f,.5f}}));
+    Image empty;empty.Read();assert(empty.pixels==baseline.pixels);
+    std::puts("Live framebuffer capture, off-center edge propagation and exact final/empty backdrop restoration passed");
 }
 void RenderSequence(const std::filesystem::path& output) {
     using Timing=startup_ui::AuthTiming;
@@ -509,6 +537,7 @@ int main(int argc,char** argv) {
     CheckButtonClipping();
     if(argc<3||std::string(argv[2])!="--probes-only") RenderSequence(output);
     CheckLoadingScale();
+    CheckLiveBackdrop(output);
     CheckReducedMotion(output);
     CheckTipBoundaries(output);
     std::puts("Storyboard shader front irregularity, full decay and fixed checkerboard passed");

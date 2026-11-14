@@ -16,7 +16,7 @@ def fail(message):
 
 
 def main():
-    source = Path(__file__).resolve().parent.parent / "src/main/jni/Assets/adult-preview.png"
+    source = Path(__file__).resolve().parent.parent / "src/main/jni/Assets/wiz-preview.png"
     data = source.read_bytes()
     if data[:8] != SIGNATURE:
         fail(f"{source.name} has no PNG signature")

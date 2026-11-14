@@ -10,14 +10,14 @@
 
 namespace anime_preview {
 struct Rig {
-    ImVec2 contentMin{.17f,.005f},contentMax{.82f,.995f};
-    ImVec2 head{.493f,.107f},neck{.5f,.167f},chest{.5f,.245f},hip{.5f,.405f};
-    ImVec2 leftEye{.447f,.097f},rightEye{.521f,.088f};
-    std::array<ImVec2,2> shoulder{{{.393f,.185f},{.605f,.185f}}};
-    std::array<ImVec2,2> elbow{{{.315f,.355f},{.684f,.355f}}};
-    std::array<ImVec2,2> hand{{{.23f,.47f},{.77f,.47f}}};
-    std::array<ImVec2,2> knee{{{.43f,.69f},{.56f,.69f}}};
-    std::array<ImVec2,2> ankle{{{.39f,.96f},{.57f,.96f}}};
+    ImVec2 contentMin{.155f,.053f},contentMax{.845f,.96f};
+    ImVec2 head{.5f,.172f},neck{.5f,.236f},chest{.5f,.309f},hip{.5f,.50f};
+    ImVec2 leftEye{.478f,.168f},rightEye{.531f,.168f};
+    std::array<ImVec2,2> shoulder{{{.401f,.255f},{.599f,.255f}}};
+    std::array<ImVec2,2> elbow{{{.318f,.36f},{.682f,.36f}}};
+    std::array<ImVec2,2> hand{{{.213f,.52f},{.787f,.52f}}};
+    std::array<ImVec2,2> knee{{{.443f,.703f},{.557f,.703f}}};
+    std::array<ImVec2,2> ankle{{{.447f,.915f},{.553f,.915f}}};
 };
 struct Bounds {
     ImVec2 min,max,head,neck,chest,hip,knee,feet;

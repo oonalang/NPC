@@ -522,6 +522,7 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
     drawList->AddText(textFont, 12.5f, ImVec2(min.x + 16.0f, min.y + 14.0f), IM_COL32(240, 238, 248, 245), "ESP PREVIEW");
     drawList->AddCircleFilled(ImVec2(max.x - 18.0f, min.y + 20.0f), 3.0f, IM_COL32(88, 226, 148, 220), 12);
 
+    drawList->AddText(textFont,8.f,ImVec2(min.x+16.f,max.y-13.f),IM_COL32(185,177,203,180),"Wiz / Glayer3d");
     const ImVec2 viewMin(min.x + 12.0f, min.y + 40.0f);
     const ImVec2 viewMax(max.x - 12.0f, max.y - 12.0f);
     drawList->AddRectFilled(viewMin, viewMax, IM_COL32(11, 11, 15, 242), 14.0f);

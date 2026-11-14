@@ -66,7 +66,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE           := nets
 LOCAL_CFLAGS           := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w
 LOCAL_CFLAGS           += -fno-rtti -fno-exceptions -fpermissive
-LOCAL_ASFLAGS          += -DANIME_ARTWORK_FILE='"$(LOCAL_PATH)/Assets/adult-preview.png"'
+LOCAL_ASFLAGS          += -DANIME_ARTWORK_FILE='"$(LOCAL_PATH)/Assets/wiz-preview.png"'
 LOCAL_CPPFLAGS         := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w -Werror -s -std=c++17
 LOCAL_CPPFLAGS         += -Wno-error=c++11-narrowing -fms-extensions -fno-rtti -fno-exceptions -fpermissive
 

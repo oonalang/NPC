@@ -42,6 +42,12 @@ inline void ApplyWeaponSkin(const itemInfo& getitem) {
                 int skinID = getitem.WeaponConf[2];
                 int itemID = getitem.Item2Inventory[0];
                 int lootID = getitem.Item2Inventory[3];
+                void* selectedName=nullptr;
+                for(auto* conf:weaponConfInstance) {
+                    if(!conf) continue;
+                    const auto* fields=reinterpret_cast<const WeaponConfFields*>(static_cast<const unsigned char*>(conf)+0x20);
+                    if(fields->ID==static_cast<uint32_t>(skinID)) {selectedName=fields->LOCID_Name;break;}
+                }
                 ApplyMythicAttachments(
                     {baseID, extraID, skinID, itemID, lootID},
                     getitem.mythicAttach);
@@ -72,17 +78,7 @@ inline void ApplyWeaponSkin(const itemInfo& getitem) {
                         weaponconfFields->DefaultKillBrocast = getitem.WeaponConf[3];
                         weaponconfFields->ExternalUnVisible = true;
 
-                        for (auto skinConf : weaponConfInstance)
-                        {
-                            if (!skinConf)
-                                continue;
-                            WeaponConfFields *skinFields = (WeaponConfFields *)((uintptr_t)skinConf + 0x20);
-                            if (skinFields->ID == getitem.WeaponConf[2])
-                            {
-                                weaponconfFields->LOCID_Name = skinFields->LOCID_Name;
-                                break;
-                            }
-                        }
+                        if(selectedName) weaponconfFields->LOCID_Name=selectedName;
                         if (baseID == weaponconfFields->ID)
                         {
                             weaponconfFields->ColorID = getitem.WeaponConf[1];

@@ -217,7 +217,7 @@ inline void Draw(const HomeStats& stats,ImVec2 available) {
     ImGui::PushID("HomeDashboard");
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(1.f,1.f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,ImVec2(0,gap));
-    ImGui::BeginChild("##home_dashboard",available,false,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|
+    ImGui::BeginChild("##home_dashboard",available,false,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoScrollbar|
         ImGuiWindowFlags_AlwaysUseWindowPadding);
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x);
     Hero(stats,width,scale);
@@ -230,8 +230,7 @@ inline void Draw(const HomeStats& stats,ImVec2 available) {
         ImGui::SameLine(0,gap);
         Music({width-leftWidth-gap,panelHeight},scale);
     } else {
-        const float remaining=std::max(0.f,ImGui::GetContentRegionAvail().y);
-        const float musicHeight=std::min(std::max(200.f*scale,musicFitHeight),std::max(200.f*scale,remaining));
+        const float musicHeight=std::max(200.f*scale,musicFitHeight);
         Music({width,musicHeight},scale);
         Metrics(stats,width,scale);
         Performance({width,210.f*scale},scale);

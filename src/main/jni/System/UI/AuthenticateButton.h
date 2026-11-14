@@ -110,12 +110,29 @@ inline void DrawAuthenticateContents(ImDrawList* draw,ImVec2 lo,ImVec2 size,floa
     const auto center=lo+size*.5f;
     const float radius=size.y*.5f;
     const float collapse=button_art::Smooth(ImClamp(frame.iconMove,0.f,1.f));
-    const float restore=button_art::Smooth(ImClamp(frame.fall,0.f,1.f));
     const float textSize=17.f*scale;
     if(frame.stage==ButtonStage::Idle || frame.stage==ButtonStage::LabelFade) {
         const auto label=body->CalcTextSizeA(textSize,FLT_MAX,0.f,"Authenticate");
-        button_art::Text(draw,body,textSize,ImVec2(center.x-label.x*.5f,lo.y+(size.y-label.y)*.5f),
+        button_art::Text(draw,body,textSize,ImVec2(center.x-label.x*.5f+14.f*scale,lo.y+(size.y-label.y)*.5f),
             ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,ImClamp(frame.labelOpacity,0.f,1.f))),"Authenticate");
+    }
+    if(frame.stage<=ButtonStage::Spin && icons) {
+        const auto* glyph=icons->FindGlyphNoFallback(0xf090);
+        if(glyph && glyph->Visible) {
+            const float fontSize=19.f*scale*frame.iconScale;
+            const float ratio=fontSize/icons->FontSize;
+            const auto label=body->CalcTextSizeA(textSize,FLT_MAX,0.f,"Authenticate");
+            const auto iconCenter=ImLerp(ImVec2(center.x-label.x*.5f-12.f*scale,center.y),center,collapse);
+            const auto origin=iconCenter-ImVec2((glyph->X0+glyph->X1)*.5f,(glyph->Y0+glyph->Y1)*.5f)*ratio;
+            const int first=draw->VtxBuffer.Size;
+            draw->AddText(icons,fontSize,origin,ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,1.f)),ICON_FA_SIGN_IN);
+            const float sine=std::sin(frame.iconRotation),cosine=std::cos(frame.iconRotation);
+            for(int i=first;i<draw->VtxBuffer.Size;++i) {
+                auto& point=draw->VtxBuffer[i].pos;
+                const auto offset=point-iconCenter;
+                point=iconCenter+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
+            }
+        }
     }
     if(frame.stage>=ButtonStage::IconMove && frame.stage<=ButtonStage::Spin) {
         const float chip=radius*ImLerp(1.f,.62f,collapse);
@@ -126,6 +143,7 @@ inline void DrawAuthenticateContents(ImDrawList* draw,ImVec2 lo,ImVec2 size,floa
         }
     }
     if(frame.stage>=ButtonStage::Droplet && frame.stage<=ButtonStage::Check) {
+        draw->PushClipRect(lo,lo+size,true);
         if(frame.stage==ButtonStage::Droplet || frame.stage==ButtonStage::Hover || frame.stage==ButtonStage::Fall) {
             const float morph=frame.stage==ButtonStage::Droplet?button_art::Smooth(frame.dropletMorph):1.f;
             const float fall=frame.stage==ButtonStage::Fall?ImClamp(frame.fall,0.f,1.f):0.f;
@@ -134,11 +152,12 @@ inline void DrawAuthenticateContents(ImDrawList* draw,ImVec2 lo,ImVec2 size,floa
             draw->AddCircleFilled(ImVec2(center.x,y),height*.42f,
                 ImGui::GetColorU32(ImVec4(1,1,1,.09f*morph)),28);
             button_art::Droplet(draw,ImVec2(center.x,y),height/32.f,
-                ImGui::GetColorU32(ImVec4(1,1,1,ImLerp(.62f,1.f,morph))));
+                ImLerp(.62f,1.f,morph));
         }
         if(frame.stage==ButtonStage::Splash) button_art::Splash(draw,lo,size,scale,frame.splash);
         if(frame.stage==ButtonStage::Wave || frame.stage==ButtonStage::Check)
             button_art::Wave(draw,lo,size,scale,frame.stage==ButtonStage::Check?1.f:frame.wave);
+        draw->PopClipRect();
     }
     if(frame.stage==ButtonStage::Check) button_art::Check(draw,center,scale,frame.check);
 }

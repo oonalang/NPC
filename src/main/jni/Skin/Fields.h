@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 extern uintptr_t Item2InventoryAddress;
 extern uintptr_t WeaponConfAddress;
 extern uintptr_t WeaponConfExtraAddress;
@@ -342,15 +343,23 @@ struct WeaponConfFields
     uint BaseWeaponId;               // 0x34
     int DefWeaponSkinID;             // 0x38
     int DefaultKillBrocast;          // 0x3C
-    uint ID;                         // 0x28
-    int WinnerCircleWeaponMountType; // 0x48
-    void *EnableCamoBeta;            // 0x48
-    void *LOCID_Desc;                // 0x50
-    void *LOCID_Name;                // 0x58
-    void *ModelRotation;             // 0x60
-    void *UIProperty;                // 0x68
-    void *UIPropertyUnlockLevel;     // 0x70
+    uint ID;
+    int IsDouble;
+    int WinnerCircleWeaponMountType;
+    void* ChangeColorStr;
+    void* EnableCamoBeta;
+    void* LOCID_Desc;
+    void* LOCID_Name;
+    void* ModelRotation;
+    void* UIProperty;
+    void* UIPropertyUnlockLevel;
 };
+static_assert(offsetof(WeaponConfFields,ID)==0x40-0x20);
+static_assert(offsetof(WeaponConfFields,IsDouble)==0x44-0x20);
+static_assert(offsetof(WeaponConfFields,WinnerCircleWeaponMountType)==0x48-0x20);
+static_assert(offsetof(WeaponConfFields,EnableCamoBeta)==0x58-0x20);
+static_assert(offsetof(WeaponConfFields,LOCID_Name)==0x68-0x20);
+
 extern WeaponConfFields *weaponconfFields;
 
 struct WeaponCamosFields

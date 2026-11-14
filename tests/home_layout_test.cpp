@@ -43,7 +43,8 @@ Layout Frame(ImVec2 size) {
     Layout out;
     if(auto* dashboard=Window("##home_dashboard")) {
         out.present=true;
-        out.scrollable=(dashboard->Flags & ImGuiWindowFlags_NoScrollbar)==0;
+        out.scrollable=(dashboard->Flags & ImGuiWindowFlags_NoScrollWithMouse)==0;
+        assert((dashboard->Flags & ImGuiWindowFlags_NoScrollbar)!=0);
         out.scrollMax=dashboard->ScrollMax.y;
         out.viewport=dashboard->InnerRect.GetHeight();
         const float content=(dashboard->DC.CursorMaxPos.y-dashboard->Pos.y)+dashboard->WindowPadding.y;

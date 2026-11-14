@@ -139,7 +139,14 @@ uniform vec2 center;
 vec2 rotatePoint(vec2 p,float angle){
     float s=sin(angle),c=cos(angle);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);
 }
-vec3 scene(vec2 p){return texture(sceneSource,clamp(p,vec2(0),vec2(1))).rgb;}
+vec3 scene(vec2 p){return texture(sceneSource,clamp(p,.5/display,vec2(1)-.5/display)).rgb;}
+vec2 boundedShift(vec2 at,vec2 shift){
+    vec2 margin=min(at,vec2(1)-at)*display;
+    vec2 boundary=smoothstep(vec2(0),vec2(36.0),max(vec2(0),margin));
+    vec2 pixels=shift*display*boundary;
+    vec2 room=max(vec2(0),margin-vec2(.5));
+    return pixels*room/(room+abs(pixels)+vec2(.0001))/display;
+}
 float bell(float x){return exp(-x*x);}
 vec3 singularity(vec3 base,float radius,float phase){
     float unit=min(display.x,display.y);
@@ -160,9 +167,11 @@ void main(){
         vec2 sampleUV=uv;
         float opacity=1.0;
         if(mode==1){
-            float scale=max(.0001,1.0-pow(p,1.35));
+            float collapse=p*p*(3.0-2.0*p);
+            float scale=max(.0001,pow(1.0-p,2.4));
             vec2 delta=(uv-center)*display/scale;
-            float twist=p*p*(1.4+16.0*(.5-length(delta)/min(display.x,display.y)));
+            vec2 local=delta/min(display.x,display.y);
+            float twist=collapse*(2.2+2.8/(1.0+dot(local,local)*5.0));
             sampleUV=center+rotatePoint(delta,twist)/display;
             opacity=1.0-smoothstep(.84,1.0,p);
         }
@@ -189,7 +198,6 @@ void main(){
     float maximum=max(max(length(center*display/unit),length((vec2(1,0)-center)*display/unit)),
                       max(length((vec2(0,1)-center)*display/unit),length((vec2(1)-center)*display/unit)));
     float radius=mix(.022,maximum*1.18,pow(p,.78));
-    if(r>radius*1.28+.24){color=vec4(base,1);return;}
     float a=r>.00001?atan(q.y,q.x):0.0;
     float lumps=.105*sin(3.0*a+p*2.16)+.064*sin(5.0*a-p*2.88+.7)
                +.035*sin(8.0*a+p*3.78+1.9)+.021*sin(13.0*a-p*5.76)
@@ -200,7 +208,6 @@ void main(){
     float fine=.5+.5*sin(43.0*a+p*12.6+.5*sin(79.0*a-p*18.2));
     float thickness=(.013+.024*variation)*(.82+.18*fine);
     float distance=r-frontRadius;
-    if(distance>thickness*6.0){color=vec4(base,1);return;}
     float band=distance/thickness;
     float shock=exp(-.5*band*band);
     float front=exp(-band*band);
@@ -209,16 +216,16 @@ void main(){
     float bend=-.052*band*shock+.007*sin(band*3.0)*exp(-abs(band)*.4);
     vec2 swirl=tangent*.013*sin(r*12.0-a*2.0-p*5.04)
               +vec2(sin(q.y*14.0+p*3.6),cos(q.x*11.0-p*3.24))*.006;
-    vec2 shift=(normal*bend+swirl*inside)*energy;
-    vec2 sampleUV=uv+shift*unit/display;
+    float envelope=1.0-smoothstep(4.0,7.0,abs(band));
+    vec2 shift=(normal*bend*envelope+swirl*inside)*energy;
+    vec2 sampleUV=uv+boundedShift(uv,shift*unit/display);
     float split=(.004+.009*variation)*front*energy;
-    vec2 prism=normal*split*unit/display;
+    vec2 prism=boundedShift(sampleUV,normal*split*unit/display);
     vec3 refracted=scene(sampleUV);
     if(front>.001) refracted=vec3(scene(sampleUV+prism).r,refracted.g,scene(sampleUV-prism).b);
     refracted=mix(refracted,vec3(.42,.19,.08),inside*.025*energy);
     float centerFlash=exp(-r*r/.0012)*pow(1.0-p,12.0);
     refracted+=vec3(1.0,.90,.98)*centerFlash*1.2;
-    if(abs(band)>5.0){color=vec4(refracted,1);return;}
     float flicker=.5+.5*sin(31.0*a+p*8.7+.4*sin(13.0*a-p*5.6));
     float brightness=(.35+.85*variation)*(.75+.25*flicker)*(.72+.28*fine);
     float spectralWidth=thickness*(.32+.12*flicker);
@@ -268,7 +275,7 @@ inline bool Allocate(GLuint& texture,GLuint& target,int w,int h) {
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,texture,0);
     return glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER)==GL_FRAMEBUFFER_COMPLETE;
 }
-inline bool Begin(int w,int h) {
+inline bool Begin(int w,int h,bool liveBackdrop=false) {
     if(active) Abort();
     const auto current=eglGetCurrentContext();
     if(current==EGL_NO_CONTEXT || w<=0 || h<=0) return false;
@@ -288,7 +295,11 @@ inline bool Begin(int w,int h) {
     }
     glBindFramebuffer(GL_FRAMEBUFFER,baseFramebuffer);
     RasterState(w,h);
-    if(!baseReady) {
+    if(liveBackdrop) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER,saved->write);
+        glBlitFramebuffer(0,0,w,h,0,0,w,h,GL_COLOR_BUFFER_BIT,GL_NEAREST);
+        baseReady=false;
+    } else if(!baseReady) {
         glUseProgram(checkerProgram); glBindVertexArray(vao);
         glUniform2f(checkerDisplay,static_cast<float>(w),static_cast<float>(h));
         glDrawArrays(GL_TRIANGLES,0,3);
@@ -327,7 +338,7 @@ inline bool Active() { return false; }
 inline std::size_t TextureBytes() { return 0; }
 inline void Abort() {}
 inline void Release() {}
-inline bool Begin(int,int) { return false; }
+inline bool Begin(int,int,bool=false) { return false; }
 inline bool Render(ImDrawData*,const Frame& = {}) { return false; }
 #endif
 }

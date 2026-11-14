@@ -324,6 +324,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         previousStartupScene=startupScene;
     }
     clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed, GImGui->MovingWindow != nullptr);
+    if(startupScene) ZEL_Shutdown();
+    const bool authenticateScene=startupScene && auth_scene::Begin(g_GlWidth,g_GlHeight,true);
+    if(!startupScene) auth_scene::Release();
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
@@ -1077,6 +1080,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImGui::EndFrame();
     ImGui::Render();
     bool renderedOffscreen = false;
+    if(authenticateScene) {
+        ImVec2 center{.5f,.5f};
+        if(startup_ui::loginPosition.known) {
+            const auto cardCenter=startup_ui::loginPosition.resting+ImVec2(740,520)*startup_ui::Fit({720,500})*.5f;
+            center={cardCenter.x/screenWidth,cardCenter.y/screenHeight};
+        }
+        renderedOffscreen=auth_scene::Render(ImGui::GetDrawData(),startup_ui::SceneFrame(authFrame,center));
+    }
     if (!startupScene && hideRecordEnabled && old_eglSwapBuffers) {
         renderedOffscreen = ZEL_Render(ImGui::GetDrawData(), dpy, surface,
                                       eglGetCurrentContext(), old_eglSwapBuffers);

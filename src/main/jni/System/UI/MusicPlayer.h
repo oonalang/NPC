@@ -7,7 +7,7 @@
 #include "../../ImGui/ClayGlass.h"
 #include "../../ImGui/TouchScroll.h"
 #include "../../Fonts/Icon.h"
-#include "Keyboard.h"
+#include "MusicTextDialog.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -116,7 +116,21 @@ struct Snapshot {
     bool cloudMode=false,externalPlaying=false;
     CloudProvider provider=CloudProvider::Spotify;
 };
-enum class Action { Scan,Play,Toggle,Previous,Next,Seek,Stop,Mode,Provider,OpenCloud,CloudToggle,CloudPrevious,CloudNext };
+enum class Action { Scan,Play,Toggle,Previous,Next,Seek,Stop,Mode,Provider,OpenCloud,SearchCloud,CloudToggle,CloudPrevious,CloudNext };
+inline std::string EncodeQuery(const std::string& text) {
+    static constexpr char hex[]="0123456789ABCDEF";
+    std::string encoded;
+    for(unsigned char c:text) {
+        if((c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9') || c=='-' || c=='_' || c=='.' || c=='~') encoded+=static_cast<char>(c);
+        else {encoded+='%';encoded+=hex[c>>4];encoded+=hex[c&15];}
+    }
+    return encoded;
+}
+inline std::string SearchAddress(CloudProvider provider,const std::string& query,bool app=false) {
+    const auto encoded=EncodeQuery(query);
+    return provider==CloudProvider::Spotify?(app?"spotify:search:":"https://open.spotify.com/search/")+encoded:
+        "https://music.youtube.com/search?q="+encoded;
+}
 struct Command { Action action; int index=-1; float position=0.f; std::vector<std::string> folders; std::string path; };
 #ifdef __ANDROID__
 using PlatformVM=JavaVM;
@@ -210,8 +224,8 @@ public:
         }();
         Failed();env_->PopLocalFrame(nullptr);return result;
     }
-    bool CloudAction(int key,CloudProvider provider,bool launch,std::string& error) {
-        if(!env_ || env_->PushLocalFrame(32)<0) { if(env_) Failed();return false; }
+    bool CloudAction(int key,CloudProvider provider,bool launch,std::string& error,const std::string& query={}) {
+        if(!env_ || env_->PushLocalFrame(64)<0) { if(env_) Failed();return false; }
         const bool ok=[&] {
             auto activity=env_->FindClass("android/app/ActivityThread");if(Failed() || !activity) return false;
             auto current=env_->GetStaticMethodID(activity,"currentApplication","()Landroid/app/Application;");if(Failed() || !current) return false;
@@ -243,6 +257,10 @@ public:
                     env_->CallObjectMethod(intent,flags,0x10000000);if(Failed()) return false;
                     env_->CallVoidMethod(app,start,intent);return !Failed();
                 };
+                if(!query.empty()) {
+                    const auto appSearch=SearchAddress(provider,query,true),webSearch=SearchAddress(provider,query);
+                    return attempt(appSearch.c_str(),true,false) || attempt(webSearch.c_str(),false,false);
+                }
                 if(attempt(provider==CloudProvider::Spotify?"spotify:collection":"https://music.youtube.com/library",true,false)) return true;
                 if(attempt(nullptr,true,true)) return true;
                 return attempt(provider==CloudProvider::Spotify?"https://open.spotify.com/":"https://music.youtube.com/library",false,false);
@@ -284,7 +302,7 @@ public:
     bool Toggle(bool,bool) { return false; }
     bool Seek(float) { return false; }
     bool Poll(Snapshot&) { return false; }
-    bool CloudAction(int,CloudProvider,bool,std::string&) { return false; }
+    bool CloudAction(int,CloudProvider,bool,std::string&,const std::string& = {}) { return false; }
     std::string ExternalMusicFolder() { return AppFolder; }
 };
 #endif
@@ -350,11 +368,11 @@ class Service {
                 state.cloudMode=cloud;
             } else if(hasCommand && command.action==Action::Provider) {
                 state.provider=command.index==0?CloudProvider::Spotify:CloudProvider::YouTubeMusic;state.error.clear();
-            } else if(hasCommand && (command.action==Action::OpenCloud || command.action==Action::CloudToggle || command.action==Action::CloudPrevious || command.action==Action::CloudNext)) {
+            } else if(hasCommand && (command.action==Action::OpenCloud || command.action==Action::SearchCloud || command.action==Action::CloudToggle || command.action==Action::CloudPrevious || command.action==Action::CloudNext)) {
                 if(state.playing) {player.Toggle(true,false);player.Poll(state);}
                 state.cloudMode=true;state.error.clear();
                 const int key=command.action==Action::CloudPrevious?88:command.action==Action::CloudNext?87:85;
-                if(!state.available || !player.CloudAction(key,state.provider,command.action==Action::OpenCloud,state.error)) {
+                if(!state.available || !player.CloudAction(key,state.provider,(command.action==Action::OpenCloud || command.action==Action::SearchCloud),state.error,command.path)) {
                     if(state.error.empty()) state.error="Cloud controls are available in the Android app.";
                 } else if(command.action==Action::CloudToggle) state.externalPlaying=!state.externalPlaying;
                 else state.externalPlaying=true;
@@ -428,6 +446,8 @@ inline void Update() {}
 inline void SetCloudMode(bool cloud) { Engine().Queue({Action::Mode,cloud?1:0}); }
 inline void SetProvider(CloudProvider provider) { Engine().Queue({Action::Provider,provider==CloudProvider::Spotify?0:1}); }
 inline void OpenCloud() { Engine().Queue({Action::OpenCloud}); }
+inline void SearchCloud(const std::string& query) { if(!query.empty()) Engine().Queue({Action::SearchCloud,-1,0.f,{},query}); }
+inline music_ui::TextDialog sourceDialog,searchDialog;
 inline void CloudToggle() { Engine().Queue({Action::CloudToggle}); }
 inline void CloudPrevious() { Engine().Queue({Action::CloudPrevious}); }
 inline void CloudNext() { Engine().Queue({Action::CloudNext}); }
@@ -481,17 +501,24 @@ inline void Draw() {
         if(TextButton("##cloud_spotify","Spotify",{providerWidth,24.f*scale},state.provider==CloudProvider::Spotify)) SetProvider(CloudProvider::Spotify);
         ImGui::SameLine(0,6.f*scale);
         if(TextButton("##cloud_youtube","YouTube Music",{providerWidth,24.f*scale},state.provider==CloudProvider::YouTubeMusic)) SetProvider(CloudProvider::YouTubeMusic);
-        if(TextButton("##cloud_open_library","Open library",{width,28.f*scale},true)) OpenCloud();
+        if(TextButton("##cloud_search",searchDialog.text[0]?searchDialog.text:"Search songs, artists or albums",{width,34.f*scale})) {
+            searchDialog.Open(searchDialog.text);ImGui::OpenPopup("Search music");
+        }
+        if(music_ui::Dialog("Search music",searchDialog,"Search your music app","Search")==music_ui::DialogResult::Apply) SearchCloud(searchDialog.text);
+        if(TextButton("##cloud_open_library","Open music app / sign in",{width,28.f*scale},true)) OpenCloud();
         const float h=30.f*scale,gap=9.f*scale;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX()+ImMax(0.f,(width-h*3-gap*2)*.5f));
         if(IconButton("##cloud_previous",ICON_FA_STEP_BACKWARD,{h,h},false,!state.available)) CloudPrevious();
         ImGui::SameLine(0,gap);
-        if(IconButton("##cloud_toggle",state.externalPlaying?ICON_FA_PAUSE:ICON_FA_PLAY,{h,h},true,!state.available)) CloudToggle();
+        if(IconButton("##cloud_toggle",ICON_FA_PLAY,{h,h},true,!state.available)) CloudToggle();
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Play / pause the active music app");
         ImGui::SameLine(0,gap);
         if(IconButton("##cloud_next",ICON_FA_STEP_FORWARD,{h,h},false,!state.available)) CloudNext();
-        auto* noteDraw=ImGui::GetWindowDrawList();
-        noteDraw->AddText(ImGui::GetFont(),13.f*scale,ImGui::GetCursorScreenPos(),ImGui::GetColorU32(c::text::text_hov),"Controls the active music app");
-        ImGui::Dummy({0,15.f*scale});
+        const char* hint="Search opens the app. Sign in and play there. Controls use the active media session.";
+        const float hintSize=13.f*scale;
+        const auto hintArea=ImGui::GetFont()->CalcTextSizeA(hintSize,FLT_MAX,width,hint);
+        draw->AddText(ImGui::GetFont(),hintSize,ImGui::GetCursorScreenPos(),ImGui::GetColorU32(c::text::text_hov),hint,nullptr,width);
+        ImGui::Dummy({width,hintArea.y+2.f*scale});
         if(!state.error.empty()) {ImGui::PushTextWrapPos();ImGui::TextColored(ImVec4(.98f,.61f,.67f,1.f),"%s",state.error.c_str());ImGui::PopTextWrapPos();}
         ImGui::PopStyleVar();
         return;
@@ -551,8 +578,7 @@ inline void Draw() {
     if(IconButton("##music_toggle",state.playing?ICON_FA_PAUSE:ICON_FA_PLAY,{buttonHeight,buttonHeight},true,disabled)) Toggle();
     ImGui::SameLine(0,buttonGap);
     if(IconButton("##music_next",ICON_FA_STEP_FORWARD,{buttonHeight,buttonHeight},false,disabled)) Next();
-    static bool libraryOpen=false,keyboard=false;
-    static char source[512]{};
+    static bool libraryOpen=false;
     if(compact) ImGui::SameLine(0,10.f*scale);
     const auto row=ImGui::GetCursorScreenPos();
     const float refreshWidth=28.f*scale,sourceWidth=28.f*scale;
@@ -563,7 +589,7 @@ inline void Draw() {
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_source",ICON_FA_FOLDER_OPEN,{sourceWidth,30.f*scale})) {
         const auto path=state.folders.empty()?state.appFolder:state.folders.front();
-        std::snprintf(source,sizeof(source),"%s",path.c_str());keyboard=false;ImGui::OpenPopup("Music source");
+        sourceDialog.Open(path);ImGui::OpenPopup("Music source");
     }
     if(ImGui::IsItemHovered()) ImGui::SetTooltip("Music folder");
     ImGui::SameLine(0,6.f*scale);
@@ -591,28 +617,9 @@ inline void Draw() {
         ImGui::EndChild();
         if(state.truncated) ImGui::TextColored(c::text::text_hov,"Showing the first 256 tracks");
     }
-    const auto* viewport=ImGui::GetMainViewport();
-    const float dialogWidth=ImMin(560.f*scale,viewport->Size.x-28.f);
-    if(keyboard) ImGui::SetNextWindowPos({viewport->GetCenter().x,viewport->Pos.y+viewport->Size.y*.22f},ImGuiCond_Always,{.5f,.5f});
-    ImGui::SetNextWindowSize({dialogWidth,0},ImGuiCond_Always);
-    if(ImGui::BeginPopupModal("Music source",nullptr,ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoSavedSettings)) {
-        if(!keyboard) {
-            ImGui::TextColored(c::text::text,"Choose your music folder");
-            const bool presetsInline=ImGui::GetContentRegionAvail().x>310.f*scale;
-            if(TextButton("##music_app_folder","App folder",{130.f*scale,28.f*scale})) {std::snprintf(source,sizeof(source),"%s",state.appFolder.c_str());}
-            if(presetsInline) ImGui::SameLine();
-            if(TextButton("##music_phone_folder","Phone library",{170.f*scale,28.f*scale})) {ScanFolders({"/storage/emulated/0/Music","/storage/emulated/0/Download"});keyboard=false;ImGui::CloseCurrentPopup();}
-        }
-        ImGui::SetNextItemWidth(-1);
-        ImGui::InputText("##music_source",source,sizeof(source));
-        if(ImGui::GetIO().MouseSource==ImGuiMouseSource_TouchScreen && ImGui::IsItemHovered() &&
-            (custom::touch::Applies()?custom::touch::Tap():ImGui::IsItemClicked())) keyboard=true;
-        if(TextButton("##music_apply_folder","Use folder",{140.f*scale,30.f*scale},true)) {ScanFolders({source});keyboard=false;ImGui::CloseCurrentPopup();}
-        ImGui::SameLine();
-        if(TextButton("##music_cancel_folder","Cancel",{100.f*scale,30.f*scale})) {keyboard=false;ImGui::CloseCurrentPopup();}
-        ImGui::EndPopup();
-    }
-    if(keyboard) RenderVirtualKeyboard("##MusicFolderKeyboard",source,sizeof(source),&keyboard);
+    const auto sourceResult=music_ui::Dialog("Music source",sourceDialog,"Choose your music folder","Use folder","App folder",state.appFolder.c_str(),"Phone library");
+    if(sourceResult==music_ui::DialogResult::Apply) ScanFolders({sourceDialog.text});
+    else if(sourceResult==music_ui::DialogResult::Shortcut) ScanFolders({"/storage/emulated/0/Music","/storage/emulated/0/Download"});
     ImGui::PopStyleVar();
 }
 }

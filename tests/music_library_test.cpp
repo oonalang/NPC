@@ -14,7 +14,68 @@ ImFont* inter_title = nullptr;
 }
 
 static void File(const std::string& path) { std::ofstream(path).put('x'); }
+static void TextEditing() {
+    ImGui::CreateContext();auto& io=ImGui::GetIO();
+    io.IniFilename=nullptr;io.DisplaySize={960,540};io.DeltaTime=1.f/60.f;
+    io.Fonts->AddFontDefault();io.Fonts->Build();
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos({0,0});ImGui::SetNextWindowSize({600,300});
+    ImGui::Begin("input geometry",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoSavedSettings);
+    const auto inputAt=ImGui::GetCursorScreenPos();char example[32]="folder";
+    ImGui::SetNextItemWidth(420.f);ImGui::InputText("##full_width",example,sizeof(example));
+    assert(std::fabs(GImGui->LastItemData.Rect.Min.x-inputAt.x)<.1f);
+    assert(std::fabs(GImGui->LastItemData.Rect.GetWidth()-420.f)<.1f);
+    ImGui::End();ImGui::Render();
+    music_ui::TextDialog editor;editor.Open("/storage/emulated/0/Music");
+    bool open=true;
+    const auto frame=[&] {
+        ImGui::NewFrame();custom::touch::Update();
+        ImGui::SetNextWindowPos({0,0},ImGuiCond_Always);
+        ImGui::SetNextWindowSize(io.DisplaySize,ImGuiCond_Always);
+        ImGui::PushStyleColor(ImGuiCol_PopupBg,{0,0,0,0});
+        ImGui::Begin("host",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoSavedSettings);
+        if(open) {ImGui::OpenPopup("Music source");open=false;}
+        music_ui::Dialog("Music source",editor,"Choose your music folder","Use folder");
+        ImGui::End();ImGui::PopStyleColor();ImGui::Render();
+        assert(GImGui->StyleVarStack.Size==0 && GImGui->ColorStack.Size==0);
+    };
+    frame();frame();frame();
+    auto* modal=ImGui::FindWindowByName("Music source");assert(modal);
+    assert(modal->Flags&ImGuiWindowFlags_Modal);
+    assert(ImLengthSqr(modal->Pos+modal->Size*.5f-ImGui::GetMainViewport()->GetCenter())<3.f);
+    bool surface=false;
+    for(const auto& vertex:modal->DrawList->VtxBuffer) if((vertex.col>>IM_COL32_A_SHIFT)>245) surface=true;
+    assert(surface && modal->WindowPadding.x>=14.f);
+    editor.Replace("/storage/emulated/0/My songs");frame();frame();
+    assert(std::strcmp(editor.text,"/storage/emulated/0/My songs")==0);
+    io.AddInputCharactersUTF8("/a");frame();
+    assert(std::strcmp(editor.text,"/storage/emulated/0/My songs/a")==0);
+    editor.insert=".mp3";editor.focus=true;frame();frame();
+    assert(std::strcmp(editor.text,"/storage/emulated/0/My songs/a.mp3")==0);
+    editor.erase=true;editor.focus=true;frame();frame();
+    assert(std::strcmp(editor.text,"/storage/emulated/0/My songs/a.mp")==0);
+    editor.Replace("");frame();frame();assert(editor.text[0]==0);
+    editor.Replace("café");frame();frame();editor.erase=true;editor.focus=true;frame();frame();
+    assert(std::strcmp(editor.text,"caf")==0);
+    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+    const auto field=modal->Pos+modal->WindowPadding+ImVec2(12.f,ImGui::GetFontSize()+24.f);
+    io.AddMousePosEvent(field.x,field.y);frame();
+    io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);frame();frame();frame();
+    assert(editor.keyboard);
+    const float keyGap=4.f*ImClamp(c::scale,.8f,1.15f);
+    const float keyWidth=(modal->InnerRect.GetWidth()-modal->WindowPadding.x*2.f-keyGap*9.f)/10.f;
+    const auto row=modal->Pos+modal->WindowPadding+ImVec2(0,ImGui::GetFontSize()+9.f+ImGui::GetFontSize()+18.f+9.f+30.f+9.f);
+    const ImVec2 key=row+ImVec2(keyWidth*.5f,21.f);
+    io.AddMousePosEvent(key.x,key.y);frame();io.AddMouseButtonEvent(0,true);frame();
+    io.AddMouseButtonEvent(0,false);frame();frame();frame();
+    assert(std::strlen(editor.text)>3);
+    ImGui::DestroyContext();
+}
 int main() {
+    TextEditing();
+    assert(music_player::EncodeQuery("a b&c/🎵")=="a%20b%26c%2F%F0%9F%8E%B5");
+    assert(music_player::SearchAddress(music_player::CloudProvider::Spotify,"hello world",true)=="spotify:search:hello%20world");
+    assert(music_player::SearchAddress(music_player::CloudProvider::YouTubeMusic,"a&b")=="https://music.youtube.com/search?q=a%26b");
     char root[]="/tmp/npc-music-XXXXXX";
     assert(mkdtemp(root));
     const std::string a=std::string(root)+"/a",b=std::string(root)+"/b";
