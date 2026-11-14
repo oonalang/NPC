@@ -1130,7 +1130,6 @@ static void RequestTriggerInitialization()
             if (PhantomTrigger::InitializeNativeTrigger(base)) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
-        LOGI("Trigger initialization: %s", PhantomTrigger::GetRuntimeStatusText());
         running.store(false, std::memory_order_release);
     }).detach();
 }
@@ -1164,9 +1163,7 @@ void Init_Thread()
         LOGE("Authentication touch guard could not be installed");
     InitializeAllHooks();
     BlueprintEquipment::Install();
-    // The loader may expose the module's address before its metadata is ready.
-    // Keep transient verification retries off the render and input threads.
-    RequestTriggerInitialization();
+            RequestTriggerInitialization();
 MemoryPatch::createWithHex("libanogs.so", 0x202680, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x204218, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x35140C, "00 00 80 D2 C0 03 5F D6").Modify();

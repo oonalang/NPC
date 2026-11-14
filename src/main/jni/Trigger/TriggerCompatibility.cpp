@@ -22,8 +22,6 @@ constexpr Probe probes[] = {
     {"Shot acknowledgement", 0x54748B8, {0x00,0x98,0x41,0xb9,0xc0,0x03,0x5f,0xd6}, true},
     {"Body trace", 0x66F17EC, {0xff,0x43,0x02,0xd1,0xee,0x1b,0x00,0xfd}, true},
     {"Input update", 0xC913748, {0xe8,0x0f,0x1d,0xfc,0xfe,0x57,0x01,0xa9}, true},
-    // This is an encoded disk prefix; capture live bytes without comparing
-    // them to the loader's on-disk representation.
     {"Smoke query", 0x5E5FBE8, {0xf1,0x19,0x19,0xad,0x19,0x08,0x59,0xe0}, false}
 };
 static_assert(sizeof(probes) / sizeof(probes[0]) == 7, "report probe count");
@@ -57,8 +55,6 @@ int Capture(dl_phdr_info* info, std::size_t, void* destination) noexcept {
             probe.rva > std::numeric_limits<std::uintptr_t>::max() - info->dlpi_addr ||
             sample.bytes.size() > std::numeric_limits<std::uintptr_t>::max() - info->dlpi_addr - probe.rva)
             continue;
-        // The callback already owns a validated module mapping. Avoid nested
-        // loader enumeration and do not depend on /proc/self/mem permissions.
         std::memcpy(sample.bytes.data(), reinterpret_cast<const void*>(info->dlpi_addr + probe.rva),
                     sample.bytes.size());
         sample.readable = true;
@@ -88,12 +84,9 @@ int CopyReadableModule(dl_phdr_info* info, std::size_t, void* argument) noexcept
         request.mapped = true;
         if ((segment.p_flags & PF_R) != 0 &&
             request.size <= segment.p_memsz - (relative - segment.p_vaddr)) {
-            // The loader keeps this module mapped throughout the callback.
             std::memcpy(request.output, reinterpret_cast<const void*>(request.address), request.size);
             request.copied = true;
         }
-        // An unreadable or truncated module range must never use the /proc
-        // fallback to circumvent the segment's declared access permissions.
         return 1;
     }
     return 0;
@@ -108,8 +101,6 @@ bool CompatibilityDetail::ReadSelf(std::uintptr_t address, void* output,
     dl_iterate_phdr(CopyReadableModule, &request);
     if (request.mapped) return request.copied;
 
-    // Nonmodule memory retains the bounded diagnostic fallback. Module reads
-    // above work even when Android denies opening /proc/self/mem.
     if (address > static_cast<std::uintptr_t>(std::numeric_limits<off_t>::max())) return false;
     const int descriptor = open("/proc/self/mem", O_RDONLY | O_CLOEXEC);
     if (descriptor < 0) return false;

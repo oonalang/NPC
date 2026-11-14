@@ -20,9 +20,7 @@ enum class RuntimeStatus : std::uint8_t {
 };
 
 RuntimeStatus GetRuntimeStatus() noexcept;
-const char* GetRuntimeStatusText() noexcept;
 FireMode GetDetectedFireMode() noexcept;
-const char* GetDetectedFireModeText() noexcept;
 
 
 

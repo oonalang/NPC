@@ -90,29 +90,12 @@ RuntimeStatus GetRuntimeStatus() noexcept {
 #endif
 }
 
-const char* GetRuntimeStatusText() noexcept {
-#if defined(__ANDROID__) && !defined(STUDIO_STANDALONE_PREVIEW)
-    return NativeStatusText();
-#else
-    return "Unavailable: native adapter verification pending";
-#endif
-}
-
 FireMode GetDetectedFireMode() noexcept {
 #if defined(__ANDROID__) && !defined(STUDIO_STANDALONE_PREVIEW)
     return NativeDetectedMode();
 #else
     return FireMode::Unsupported;
 #endif
-}
-
-const char* GetDetectedFireModeText() noexcept {
-    switch (GetDetectedFireMode()) {
-        case FireMode::Automatic: return "Automatic";
-        case FireMode::Single: return "Semi-auto / single shot";
-        case FireMode::SingleRelease: return "Single shot (release)";
-        default: return "Unsupported or unavailable";
-    }
 }
 
 bool GetViewportCenter(float& normalizedX, float& normalizedY) noexcept {

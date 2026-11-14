@@ -16,7 +16,6 @@
 namespace PhantomTrigger {
 namespace {
 std::atomic<RuntimeStatus> status{RuntimeStatus::WaitingForBinaryVerification};
-std::atomic<const char*> reason{"Native profile verification pending"};
 std::atomic<FireMode> detected{FireMode::Unsupported};
 std::atomic<std::uint64_t> viewport{0};
 std::atomic<bool> viewportValid{false};
@@ -119,8 +118,6 @@ bool HardStateBlocked(std::uintptr_t weapon) noexcept {
 }
 
 bool PhysicalFire(std::uintptr_t param) noexcept {
-    // The native button update rebuilds these fields before our hook. Preserve
-    // release edges too, so synthetic input cannot replace a user's stop command.
     constexpr std::size_t fields[]{0x18,0x1a,0x1b,0x1c,0x1e,0x1f,0x20,0x24,0x25};
     for (auto offset : fields) if (Field<bool>(param, offset)) return true;
 
@@ -193,7 +190,6 @@ void DecidePreparedInput(void* owner, void* param) {
         local.controller.Reset();
         local.hasFrame = false;
         status.store(RuntimeStatus::Disabled,std::memory_order_release);
-        reason.store("Disabled",std::memory_order_release);
         detected.store(FireMode::Unsupported,std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         ViewRay ray;
@@ -209,7 +205,6 @@ void DecidePreparedInput(void* owner, void* param) {
         local.cancellation.Reset();
         detected.store(FireMode::Unsupported, std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext, std::memory_order_release);
-        reason.store("Waiting for local gameplay context", std::memory_order_release);
         viewportValid.store(false, std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         return;
@@ -231,7 +226,7 @@ void DecidePreparedInput(void* owner, void* param) {
             local.stopAfterUpdate = !revoke.passthrough && revoke.up;
         }
         local.controller.Reset();
-        NativeDriverFailure("Unsupported native input hotfix");
+        NativeDriverFailure();
         return;
     }
     const auto stateMachine = Field<std::uintptr_t>(weapon,0x170);
@@ -241,7 +236,6 @@ void DecidePreparedInput(void* owner, void* param) {
         observedComponent.store(0,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-        reason.store("Waiting for an initialized weapon",std::memory_order_release);
         return;
     }
     const auto component = At<ObjectGetter>(0x5472E48)(weapon, nullptr);
@@ -251,7 +245,6 @@ void DecidePreparedInput(void* owner, void* param) {
         observedComponent.store(0,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-        reason.store("Waiting for a weapon fire component",std::memory_order_release);
         return;
     }
     observedComponent.store(component,std::memory_order_release);
@@ -273,8 +266,6 @@ void DecidePreparedInput(void* owner, void* param) {
     const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
     const bool knownPrepare = IsSupportedPreparation(library, prepare) &&
         IsVerifiedExecutableAddress(prepare);
-    // Preserve subtype readiness checks through the same virtual dispatch used
-    // by the game. The verified module's executable ranges constrain the target.
     const auto readiness = QueryNativeReadiness(weapon, klass, IsVerifiedExecutableAddress);
     const bool knownReadiness = readiness.handlerVerified;
     frame.shotReady = readiness.shotReady;
@@ -307,35 +298,8 @@ void DecidePreparedInput(void* owner, void* param) {
         frame.targetValid = target == TargetResult::Eligible;
     }
     const auto intent = local.controller.Step(settings,frame);
-    const char* detail = "Ready";
-    if (!settings.enabled) detail = "Disabled";
-    else if (settings.mode == Mode::ADSOnly && !frame.aiming) detail = "Waiting for ADS";
-    else if (settings.mode == Mode::ADSOnly && !frame.fullyAimed) detail = "Waiting for full ADS";
-    else if (frame.manualActive) detail = "Manual fire active";
-    else if (!frame.ammoAvailable) detail = "Weapon cannot fire or out of ammo";
-    else if (!knownPrepare) detail = "Unsupported weapon input handler";
-    else if (!knownReadiness) detail = "Unsupported weapon readiness handler";
-    else if (burst) detail = "Burst mode unsupported";
-    else if (preparedRelease && !allowReleaseSequence) detail = "Unsupported release-fire weapon";
-    else if (allowReleaseSequence && (!frame.aiming || !frame.fullyAimed)) detail = "Waiting for full sniper ADS";
-    else if (frame.fireMode == FireMode::Unsupported) detail = "Unsupported weapon fire mode";
-    else if (frame.hardBlocked) detail = "Weapon state blocked";
-    else if (local.controller.HasPendingShot() && intent.passthrough)
-        detail = "Waiting for sniper shot acknowledgement";
-    else if (!needTarget) detail = "Waiting for weapon shot readiness";
-    else if (!rayReady) detail = "Camera ray unavailable";
-    else if (target == TargetResult::NoEligibleBody) detail = "No eligible target at crosshair";
-    else if (target == TargetResult::WorldBlocked) detail = "World obstruction";
-    else if (target == TargetResult::SmokeBlocked) detail = "Smoke obstruction";
-    else if (target == TargetResult::QueryUnavailable) detail = "Target query unavailable";
-    else if (target == TargetResult::InvalidHit) detail = "Invalid target intersection";
-    else if (target == TargetResult::InvalidRay) detail = "Invalid camera ray";
-    else if (intent.held || intent.down) detail = "Fire input active";
-    else if (intent.up) detail = intent.commitRelease ? "Releasing sniper shot" : "Rearming fire input";
-    reason.store(detail,std::memory_order_release);
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,
                                                      allowReleaseSequence);
-    if (decision.stopResult) reason.store("Cancelling synthetic fire input",std::memory_order_release);
     if (decision.resetController) local.controller.Reset();
     local.stopAfterUpdate = decision.stopResult;
     local.syntheticInput = !decision.input.passthrough;
@@ -385,7 +349,6 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         if (result && !Field<bool>(result,0x13)) {
             local.controller.RejectPendingShot();
             local.stopAfterUpdate = true;
-            reason.store("Sniper input rejected; rearming",std::memory_order_release);
         }
     }
 
@@ -422,7 +385,6 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         detected.store(FireMode::Unsupported,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-        reason.store("Waiting for the native local input path",std::memory_order_release);
     }
     --local.depth;
 }
@@ -463,14 +425,13 @@ bool InstallNativeDriver(std::uintptr_t base) noexcept {
             if (result == 0) DobbyDestroy(reinterpret_cast<void*>(base+hook.rva));
             while (installed) DobbyDestroy(reinterpret_cast<void*>(base+hooks[--installed].rva));
             installation.store(3,std::memory_order_release);
-            NativeDriverFailure("Native input hook installation failed");
+            NativeDriverFailure();
             return false;
         }
         ++installed;
     }
     installation.store(2,std::memory_order_release);
     status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-    reason.store("Waiting for local gameplay input",std::memory_order_release);
     return true;
 #else
     (void)base;
@@ -478,7 +439,6 @@ bool InstallNativeDriver(std::uintptr_t base) noexcept {
 #endif
 }
 RuntimeStatus NativeStatus() noexcept { return status.load(std::memory_order_acquire); }
-const char* NativeStatusText() noexcept { return reason.load(std::memory_order_acquire); }
 FireMode NativeDetectedMode() noexcept { return detected.load(std::memory_order_acquire); }
 bool NativeViewportCenter(float& x, float& y) noexcept {
     x = y = .5f;
@@ -489,18 +449,16 @@ bool NativeViewportCenter(float& x, float& y) noexcept {
     std::memcpy(&x,&xBits,sizeof(x)); std::memcpy(&y,&yBits,sizeof(y));
     return true;
 }
-void NativeDriverFailure(const char* message) noexcept {
+void NativeDriverFailure() noexcept {
 #if defined(__aarch64__)
     installation.store(3,std::memory_order_release);
 #endif
-    reason.store(message ? message : "Native compatibility verification failed",std::memory_order_release);
     status.store(RuntimeStatus::InvalidNativeState,std::memory_order_release);
     detected.store(FireMode::Unsupported,std::memory_order_release);
     viewportValid.store(false,std::memory_order_release);
     observedComponent.store(0,std::memory_order_release);
 }
-void NativeDriverPending(const char* message) noexcept {
-    reason.store(message ? message : "Waiting for the loaded game library",std::memory_order_release);
+void NativeDriverPending() noexcept {
     status.store(RuntimeStatus::WaitingForBinaryVerification,std::memory_order_release);
 }
 void NotifyNativeShot(std::uintptr_t component) noexcept {

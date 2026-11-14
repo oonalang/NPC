@@ -33,11 +33,6 @@ bool NativeProfileDetail::MatchesBuildIdNote(const unsigned char* data,
 
 namespace {
 const char* PendingDecodeReason(std::uintptr_t rva) noexcept {
-    // These eight prefixes in the supplied disk image contain encoded bodies,
-    // rather than executable ARM64 entry instructions. Their bytes can change
-    // when the game's loader prepares them. Keep their disk fingerprints for
-    // offline identity checks; require readable executable ranges and wait
-    // until the mapped entry differs from its known encoded representation.
     switch (rva) {
         case 0x530005C: return "Waiting for decoded Screen.get_width (0x530005C)";
         case 0x53000C0: return "Waiting for decoded Screen.get_height (0x53000C0)";
@@ -94,8 +89,6 @@ bool CacheRanges(std::uintptr_t base, const ElfW(Phdr)* segments,
         ranges[found++] = {base + segment.p_vaddr, base + segment.p_vaddr + segment.p_memsz};
     }
     if (found == 0) return false;
-    // Initialization is serialized and publishes exactly once. Readers never
-    // inspect the immutable ranges until this release store completes.
     verifiedRanges = ranges;
     verifiedRangeCount.store(found, std::memory_order_release);
     return true;
@@ -150,8 +143,6 @@ NativeProfileDetail::ValidationResult NativeProfileDetail::ValidateModule(
             note.p_vaddr > std::numeric_limits<std::uintptr_t>::max() - base ||
             note.p_filesz > std::numeric_limits<std::uintptr_t>::max() - base - note.p_vaddr ||
             !Range(segments, segmentCount, note.p_vaddr, note.p_filesz, PF_R)) continue;
-        // Read while dl_iterate_phdr holds the module mapping alive. Access to
-        // /proc/self/mem is not required on Android app sandboxes.
         const auto* bytes = reinterpret_cast<const unsigned char*>(base + note.p_vaddr);
         if (MatchesBuildIdNote(bytes, note.p_filesz)) identity = true;
     }
@@ -176,9 +167,6 @@ NativeProfileDetail::ValidationResult NativeProfileDetail::ValidateModule(
                 return ValidationResult::InvalidProfile;
             }
         } else if (matches && !waiting) {
-            // A mapped executable page can still hold the encoded disk body.
-            // Never call it merely because the segment is executable. Waiting
-            // preserves the game's own decode lifecycle without invoking it.
             waiting = PendingDecodeReason(check.rva);
         }
     }
@@ -207,8 +195,6 @@ bool NativeProfileDetail::ValidateEntrypoints(std::uintptr_t base,
 
 bool InitializeNativeTrigger(std::uintptr_t base) noexcept {
 #if defined(__ANDROID__) && defined(__aarch64__) && !defined(STUDIO_STANDALONE_PREVIEW)
-    // A missing loader entry is transient. Only an installed driver or a
-    // permanent compatibility decision completes initialization.
     static std::atomic<unsigned> initialization{0};
     if (!base) return false;
     unsigned expected = 0;
@@ -218,12 +204,12 @@ bool InitializeNativeTrigger(std::uintptr_t base) noexcept {
     validation.cacheRanges = true;
     dl_iterate_phdr(Validate, &validation);
     if (validation.result == ValidationResult::ModuleUnavailable) {
-        NativeDriverPending(validation.failure);
+        NativeDriverPending();
         initialization.store(0, std::memory_order_release);
         return false;
     }
     if (validation.result == ValidationResult::InvalidProfile)
-        NativeDriverFailure(validation.failure);
+        NativeDriverFailure();
     else
         InstallNativeDriver(base);
     initialization.store(2, std::memory_order_release);

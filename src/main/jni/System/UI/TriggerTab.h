@@ -25,9 +25,6 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.78f, .75f, .86f, 1.f));
         if (hideRecordUnavailable)
             ImGui::TextWrapped("Hide Record is unsupported on this device");
-        ImGui::Separator();
-        ImGui::TextWrapped("Status: %s", PhantomTrigger::GetRuntimeStatusText());
-        ImGui::TextWrapped("Weapon: %s", PhantomTrigger::GetDetectedFireModeText());
         if (retrySetup && PhantomTrigger::GetRuntimeStatus() ==
                 PhantomTrigger::RuntimeStatus::WaitingForBinaryVerification &&
             custom::Button("Retry trigger setup", ImVec2(0, 0)))

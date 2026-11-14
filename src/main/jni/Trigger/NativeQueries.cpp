@@ -12,10 +12,6 @@ using Address = std::uintptr_t;
 using Object = void*;
 using Method = const void*;
 
-// This build's generated static methods retain a dummy Object argument before
-// their C# parameters. Keep it when binding static methods: at 0x66F17EC the
-// native code reads traceFlag from w1 and impactInfo from x2; 0x6258AA0 reads
-// Recycle's info from x1. The C# dump alone does not describe this native ABI.
 
 template<class Function>
 Function Bind(Address base, Address rva) noexcept {
@@ -74,8 +70,6 @@ struct OwnedImpact {
 };
 
 bool BodyGroup(int group, bool avatar) noexcept {
-    // EHitGroup: Shield = 6, GunShield = 32; Default = 0 is only useful when
-    // the detailed trace positively identifies an avatar collider.
     return group != 6 && group != 32 &&
            ((group >= 1 && group <= 31) || (group == 0 && avatar));
 }

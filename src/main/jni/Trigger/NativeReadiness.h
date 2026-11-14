@@ -14,8 +14,6 @@ struct NativeReadiness {
 template<class VerifyExecutable>
 NativeReadiness QueryNativeReadiness(std::uintptr_t weapon, std::uintptr_t klass,
                                     VerifyExecutable verifyExecutable) noexcept {
-    // InventorySlot.StartFire uses slot 274: native code at 0xC0E66E0 loads
-    // the function at +0x11F0 and its MethodInfo at +0x11F8 before dispatch.
     constexpr std::uintptr_t EntryOffset = 0x11F0;
     constexpr std::uintptr_t MetadataOffset = 0x11F8;
     if (!weapon || !klass ||
