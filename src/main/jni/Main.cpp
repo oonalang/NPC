@@ -39,6 +39,9 @@
 #include "Trigger/TriggerOverlay.h"
 #include "CaptureOverlay/HideRecord.h"
 #include "System/UI/TriggerTab.h"
+#include "System/UI/AuthenticateFlow.h"
+#include "System/UI/ReducedMotion.h"
+#include "System/UI/AuthenticateInput.h"
 
 static void RequestTriggerInitialization();
 
@@ -179,6 +182,9 @@ static std::atomic<bool> g_LoginFinished{false};
 static bool g_LoginPending = false;
 static std::string g_LoginResult;
 static std::string g_SubmittedKey;
+static ImVec2 g_AuthCenter(.5f,.5f);
+static int (*g_AuthOriginalTouchCount)()=nullptr;
+static int AuthTouchCount() { return auth_input::TouchCount(g_AuthOriginalTouchCount); }
 
 std::vector<sRegion> trapRegions;
 uintptr_t address = 0;
@@ -300,10 +306,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
     custom::UpdateTouchScroll();
-    clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed, GImGui->MovingWindow != nullptr);
-
-    ImDrawList *draw = ImGui::GetBackgroundDrawList();
-
     if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
         isLogin = false;
         err = "License expired";
@@ -311,10 +313,25 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         settings.enabled = false;
         PhantomTrigger::SetSettings(settings);
     }
+    auto authFrame=startup_ui::loginTransition.At(startup_ui::Now());
+    const bool startupScene=!isLogin && isMenuVisible && !windowCollapsed;
+    static bool previousStartupScene=false;
+    if(startupScene!=previousStartupScene) {
+        clay::captureSchedule.Reset();
+        clay::sceneValid=clay::materialValid=false;
+        previousStartupScene=startupScene;
+    }
+    const bool authSceneActive=startupScene && auth_scene::Begin(g_GlWidth,g_GlHeight);
+    clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed, GImGui->MovingWindow != nullptr);
+
+    ImDrawList *draw = ImGui::GetBackgroundDrawList();
+
     if (isLogin)
         DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
-    PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
-    floating_info::Render(draw, screenWidth, screenHeight);
+    if(isLogin) {
+        PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
+        floating_info::Render(draw, screenWidth, screenHeight);
+    }
       
 
 
@@ -451,13 +468,19 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 startup_ui::loginTransition.Resolve(startup_ui::Now(),false);
             }
         }
-        if (!isLogin && !ui_loading::IsActive())
+        authFrame=startup_ui::loginTransition.At(startup_ui::Now());
+        if (!isLogin && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
+        if (!isLogin && !ui_loading::IsActive() && authFrame.loginVisible)
         {
             const auto actions = startup_ui::RenderLogin(s, sizeof(s), g_LoginPending, err.c_str(),
                 g_LoginTextLoaded, showKeyboard,
                 [](const char* label, char* buffer, size_t capacity, const ImVec2& size) {
                     ImGui::AstralInput(label, buffer, capacity, size, false);
-                });
+                },&authFrame);
+            if(const auto* login=ImGui::FindWindowByName("Login Menu")) {
+                const auto center=login->Pos+login->Size*.5f-ImGui::GetMainViewport()->Pos;
+                g_AuthCenter={center.x/displaySize.x,center.y/displaySize.y};
+            }
             if (actions.load) {
                 if (LoadTextFromFile() && logintext[0] != '\0') {
                     strncpy(s, logintext, sizeof(s) - 1);
@@ -480,7 +503,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     err.clear();
                     showKeyboard = false;
                     ImGui::ClearActiveID();
-                    startup_ui::loginTransition.Start(startup_ui::Now());
+                    startup_ui::loginTransition.Start(startup_ui::Now(),startup_ui::ReducedMotionEnabled(VM));
+                    auth_input::SetBlocked(true);
                     std::thread([](std::string key) {
                         g_LoginResult = Login(key.c_str());
                         g_LoginFinished.store(true, std::memory_order_release);
@@ -489,19 +513,17 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             }
             if (showKeyboard)
                 RenderVirtualKeyboard("##VirtualKeyboardLogin", s, sizeof(s), &showKeyboard);
-            if (startup_ui::loginTransition.At(startup_ui::Now()).ready) {
-                startup_ui::loginTransition.Reset();
-                ui_loading::Start(7.0f);
-            }
         }
         else if (!isLogin && ui_loading::IsActive())
         {
-            if (ui_loading::RenderWindow())
+            const startup_ui::LoadingReveal reveal{authFrame.loadingVisible?authFrame.loadingReveal:1.f};
+            if (ui_loading::RenderWindow(nullptr,&reveal))
             {
                 isLogin = true;
             }
+            if(authFrame.ready) startup_ui::loginTransition.Reset();
         }
-        else
+        else if(isLogin)
         {
             uncollapseOpenAnim = ImClamp(uncollapseOpenAnim + ImGui::GetIO().DeltaTime * 5.0f, 0.0f, 1.0f);
             float openEase = uncollapseOpenAnim * uncollapseOpenAnim * (3.0f - 2.0f * uncollapseOpenAnim);
@@ -990,7 +1012,20 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     }
 
     auto Input_get_touchCount = (int (*)())(Class_Input_get_touchCount);
-    if (Input_get_touchCount() > 0)
+    const bool authInputBlocked=authFrame.inputBlocked || (startup_ui::loginTransition.active && !authFrame.ready);
+    if(authInputBlocked) auth_input::SetBlocked(true);
+    if(authInputBlocked) {
+        ImGui::SetNextFrameWantCaptureMouse(true);
+        ImGui::SetNextFrameWantCaptureKeyboard(true);
+        ImGui::ClearActiveID();
+        GImGui->MovingWindow=nullptr;
+        custom::CancelTouchScroll();
+        io->MouseDown[0]=false;
+        io->MouseWheel=io->MouseWheelH=0.f;
+        io->MousePos=ImVec2(-FLT_MAX,-FLT_MAX);
+        g_clearMousePos=false;
+    }
+    else if (Input_get_touchCount() > 0)
     {
         auto Input_GetTouch = (Touch(*)(uintptr_t, int))(Class_Input_GetTouch);
         auto Input_get_mousePosition = (Vector3(*)(uintptr_t))(Class_Input_get_mousePosition);
@@ -1060,8 +1095,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     }
     ImGui::EndFrame();
     ImGui::Render();
-    bool renderedOffscreen = false;
-    if (hideRecordEnabled && old_eglSwapBuffers) {
+    bool renderedOffscreen = authSceneActive && auth_scene::Render(ImGui::GetDrawData(),startup_ui::SceneFrame(authFrame,g_AuthCenter));
+    if (!startupScene && hideRecordEnabled && old_eglSwapBuffers) {
         renderedOffscreen = ZEL_Render(ImGui::GetDrawData(), dpy, surface,
                                       eglGetCurrentContext(), old_eglSwapBuffers);
         if (!renderedOffscreen) {
@@ -1075,9 +1110,15 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         ZEL_Shutdown();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
+    if(isLogin && startupScene) auth_scene::Release();
     feedback::PumpAfterRender();
-    
-    return old_eglSwapBuffers(dpy, surface);
+    const EGLBoolean presented=old_eglSwapBuffers(dpy,surface);
+    if(presented && g_GlWidth>0 && g_GlHeight>0) {
+        if(const auto* data=ImGui::GetDrawData(); data && data->Valid && data->TotalVtxCount>0)
+            startup_ui::loginTransition.Presented(authFrame);
+        if(!authInputBlocked) auth_input::SetBlocked(false);
+    }
+    return presented;
 }
 size_t hook_strlen(const char *thread)
 {
@@ -1130,6 +1171,9 @@ void Init_Thread()
     DobbyHook((void *)getAbsoluteAddress("libunity.so", 0xD53DA64), (void *)&WeaponFireComponent_Instant_CreateBulletProjectile, (void **)&oWeaponFireComponent_Instant_CreateBulletProjectile);
     InstallBRClassEspConfigHook();
 
+    if(!g_AuthOriginalTouchCount && DobbyHook(reinterpret_cast<void*>(Class_Input_get_touchCount),
+        reinterpret_cast<void*>(&AuthTouchCount),reinterpret_cast<void**>(&g_AuthOriginalTouchCount))!=0)
+        LOGE("Authentication touch guard could not be installed");
     InitializeAllHooks();
     BlueprintEquipment::Install();
     // The loader may expose the module's address before its metadata is ready.
