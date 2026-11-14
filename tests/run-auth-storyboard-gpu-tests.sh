@@ -73,6 +73,29 @@ with (output / 'sequence.rgb').open('rb') as stream:
 delays = [round((i + 1) * 100 / config['fps']) * 10 - round(i * 100 / config['fps']) * 10 for i in range(config['frames'])]
 movie_frames[0].save(output / 'authenticate-flow.gif', save_all=True, append_images=movie_frames[1:], duration=delays, loop=0, disposal=2, optimize=False)
 (output / 'sequence.rgb').unlink()
+button_config = json.loads((output / 'button.json').read_text())
+button_frames = []
+button_bytes = button_config['width'] * button_config['height'] * 3
+with (output / 'button.rgb').open('rb') as stream:
+    for index in range(button_config['frames']):
+        data = stream.read(button_bytes)
+        if len(data) != button_bytes:
+            raise RuntimeError('Incomplete button frame stream')
+        button_frames.append(Image.frombytes('RGB', (button_config['width'], button_config['height']), data))
+button_delays = [round((i + 1) * 100 / button_config['fps']) * 10 - round(i * 100 / button_config['fps']) * 10 for i in range(len(button_frames))]
+button_frames[0].save(output / 'authenticate-button.gif', save_all=True, append_images=button_frames[1:], duration=button_delays, loop=0, disposal=2, optimize=False)
+(output / 'button.rgb').unlink()
+button_rows = [row for row in rows if float(row['actual_ms']) < 5250]
+button_tile_width, button_tile_height = button_config['width'] // 2, button_config['height'] // 2 + 26
+button_sheet = Image.new('RGB', (button_tile_width * 3, ((len(button_rows) + 2) // 3) * button_tile_height), '#101018')
+button_draw = ImageDraw.Draw(button_sheet)
+for index, row in enumerate(button_rows):
+    x, y = index % 3 * button_tile_width, index // 3 * button_tile_height
+    button_draw.text((x + 5, y + 5), f"{row['actual_ms']} ms | {row['stage']}", fill='#eee5ff')
+    crop = (button_config['x'], button_config['y'], button_config['x'] + button_config['width'], button_config['y'] + button_config['height'])
+    frame = Image.open(output / row['file']).crop(crop).resize((button_tile_width, button_config['height'] // 2), Image.Resampling.LANCZOS)
+    button_sheet.paste(frame, (x, y + 26))
+button_sheet.save(output / 'button-captures.png')
 explosion = Image.open(output / 'explosion-220.png')
 baseline = Image.open(output / 'E5-calm-baseline.png')
 explosion.save(output / 'E1-irregular-front.png')

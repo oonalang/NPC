@@ -93,13 +93,24 @@ inline void Brand(ImDrawList* draw, ImVec2 pos, float width, float scale) {
     const auto label=Body()->CalcTextSizeA(10.5f*scale,FLT_MAX,0.f,"EDITION");
     Text(draw,Body(),10.5f*scale,badge+(badgeSize-label)*.5f,IM_COL32(210,194,231,255),"EDITION");
 }
-inline void PillMaterial(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,bool primary,bool held,bool hovered) {
+inline void PillMaterial(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,bool primary,bool held,bool hovered,float opacity=1.f) {
+    if(opacity<=0.f) return;
+    const int first=draw->VtxBuffer.Size;
+#ifndef CLAY_CPU_PREVIEW
+    const unsigned firstMaterial=clay::materialCount;
+#endif
     auto tint=primary ? ImVec4(c::accent.x*.32f,c::accent.y*.32f,c::accent.z*.32f,1.f) : ImVec4(.10f,.075f,.15f,1.f);
     tint.w=primary ? (held?.80f:hovered?.74f:.70f) : .70f;
     clay::Liquid(draw,lo,lo+size,size.y*.5f,tint,primary?1.35f:1.f);
     draw->AddRect(lo,lo+size,ImGui::GetColorU32(ImVec4(1.f,.93f,1.f,primary?.32f:.19f)),size.y*.5f,0,1.f*scale);
     if(primary) draw->AddRect(lo+ImVec2(0,2.f*scale),lo+size,
         Accent(.10f),size.y*.5f,0,4.f*scale);
+    if(opacity<1.f) {
+        button_art::Fade(draw,first,opacity);
+#ifndef CLAY_CPU_PREVIEW
+        for(unsigned i=firstMaterial;i<clay::materialCount;++i) clay::materialDraws[i].alpha*=opacity;
+#endif
+    }
 }
 inline bool Pill(const char* id, const char* label, const char* icon, ImVec2 lo, ImVec2 size, float scale,
                  bool primary=false, bool disabled=false) {
@@ -186,8 +197,9 @@ inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,co
     ImGui::EndDisabled();
     auto* draw=ImGui::GetWindowDrawList();
     const auto& button=frame.button;
-    PillMaterial(draw,lo,size,scale,true,held,hovered);
-    DrawAuthenticateContents(draw,lo,size,scale,button,Body(),Icons());
+    const auto surface=button_art::SurfaceAt(lo,size,button);
+    PillMaterial(draw,surface.lo,surface.size,scale,true,held,hovered,surface.opacity);
+    DrawAuthenticateContents(draw,lo,size,scale,button,Body());
     return pressed;
 }
 struct LoginActions { bool paste=false, load=false, submit=false; };

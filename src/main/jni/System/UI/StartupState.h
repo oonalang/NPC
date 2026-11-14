@@ -41,7 +41,7 @@ struct LoadingTimeline {
     }
 };
 struct AuthTiming {
-    static constexpr double labelFadeMs=150., iconMoveMs=300., spinMs=2000.;
+    static constexpr double labelFadeMs=150., buttonCollapseMs=300., spinMs=2000.;
     static constexpr double dropletMorphMs=250., dropletHoverMs=100., fallMs=350.;
     static constexpr double splashMs=450., waveMs=800., checkDrawMs=350., checkHoldMs=500.;
     static constexpr double suckMs=700., singularityMs=150., flashMs=150., explosionMs=1800.;
@@ -49,8 +49,8 @@ struct AuthTiming {
     static constexpr double revealStaggerMs=55., revealGroupMs=230.;
     static constexpr double spinTurns=1.;
     static constexpr double labelEndMs=labelFadeMs;
-    static constexpr double iconEndMs=labelEndMs+iconMoveMs;
-    static constexpr double spinEndMs=iconEndMs+spinMs;
+    static constexpr double collapseEndMs=labelEndMs+buttonCollapseMs;
+    static constexpr double spinEndMs=collapseEndMs+spinMs;
     static constexpr double morphEndMs=spinEndMs+dropletMorphMs;
     static constexpr double hoverEndMs=morphEndMs+dropletHoverMs;
     static constexpr double fallEndMs=hoverEndMs+fallMs;
@@ -66,13 +66,13 @@ struct AuthTiming {
     static constexpr double revealEndMs=revealStartMs+revealMs;
     static constexpr double reviewEndMs=revealEndMs+settledReviewMs;
 };
-enum class ButtonStage { Idle,LabelFade,IconMove,Spin,Droplet,Hover,Fall,Splash,Wave,Check };
+enum class ButtonStage { Idle,LabelFade,Collapse,Spin,Droplet,Hover,Fall,Splash,Wave,Check };
 struct ButtonFrame {
     ButtonStage stage=ButtonStage::Idle;
-    float labelOpacity=1.f, iconMove=0.f, iconScale=1.f, iconRotation=0.f;
+    float labelOpacity=1.f, collapse=0.f, spinnerRotation=0.f;
     float dropletMorph=0.f, fall=0.f, splash=0.f, wave=0.f, check=0.f;
 };
-enum class AuthStage { Idle,LabelFade,IconMove,Spin,Droplet,Hover,Fall,Splash,Wave,Check,
+enum class AuthStage { Idle,LabelFade,Collapse,Spin,Droplet,Hover,Fall,Splash,Wave,Check,
                        Suck,Singularity,Flash,Explosion,Calm,Reveal,Loading };
 inline float Unit(double value) { return static_cast<float>(std::clamp(value,0.,1.)); }
 inline float Smooth(float value) { return value*value*(3.f-2.f*value); }
@@ -117,7 +117,7 @@ struct LoginTransition {
         frame.inputBlocked=true;
         double t=std::max(0.,(now-started)*1000.);
         if(reducedMotion) {
-            frame.button={ButtonStage::Spin,0.f,1.f,1.6f,0.f};
+            frame.button.stage=ButtonStage::Spin;frame.button.labelOpacity=0.f;frame.button.collapse=1.f;
             frame.stage=AuthStage::Spin;
             if(!succeeded) return frame;
             frame.granted=true;
@@ -135,13 +135,12 @@ struct LoginTransition {
         const auto phase=[&](double start,double duration) { return Unit((t-start)/duration); };
         auto& b=frame.button;
         b.labelOpacity=1.f-phase(0.,AuthTiming::labelFadeMs);
-        b.iconMove=phase(AuthTiming::labelEndMs,AuthTiming::iconMoveMs);
-        b.iconScale=1.f+.6f*Smooth(b.iconMove);
+        b.collapse=phase(AuthTiming::labelEndMs,AuthTiming::buttonCollapseMs);
         if(t<AuthTiming::labelEndMs) { frame.stage=AuthStage::LabelFade; b.stage=ButtonStage::LabelFade; }
-        else if(t<AuthTiming::iconEndMs) { frame.stage=AuthStage::IconMove; b.stage=ButtonStage::IconMove; }
+        else if(t<AuthTiming::collapseEndMs) { frame.stage=AuthStage::Collapse; b.stage=ButtonStage::Collapse; }
         else if(t<AuthTiming::spinEndMs || waiting) {
             frame.stage=AuthStage::Spin; b.stage=ButtonStage::Spin;
-            b.iconRotation=static_cast<float>(6.283185307179586*AuthTiming::spinTurns*Smooth(phase(AuthTiming::iconEndMs,AuthTiming::spinMs)));
+            b.spinnerRotation=static_cast<float>(6.283185307179586*AuthTiming::spinTurns*Smooth(phase(AuthTiming::collapseEndMs,AuthTiming::spinMs)));
         } else if(t<AuthTiming::morphEndMs) { frame.stage=AuthStage::Droplet; b.stage=ButtonStage::Droplet; }
         else if(t<AuthTiming::hoverEndMs) { frame.stage=AuthStage::Hover; b.stage=ButtonStage::Hover; }
         else if(t<AuthTiming::fallEndMs) { frame.stage=AuthStage::Fall; b.stage=ButtonStage::Fall; }
@@ -172,7 +171,7 @@ struct LoginTransition {
         b.wave=phase(AuthTiming::splashEndMs,AuthTiming::waveMs);
         b.check=phase(AuthTiming::waveEndMs,AuthTiming::checkDrawMs);
         frame.granted=succeeded && t>=AuthTiming::waveEndMs;
-        frame.morph=b.iconMove; frame.rotation=b.iconRotation; frame.fill=b.wave; frame.check=b.check;
+        frame.morph=b.collapse; frame.rotation=b.spinnerRotation; frame.fill=b.wave; frame.check=b.check;
         return frame;
     }
 };

@@ -71,7 +71,7 @@ void CheckLoadingTipClipping() {
 
 void CheckLoginTransition() {
     using namespace startup_ui;
-    static_assert(AuthTiming::labelEndMs==150. && AuthTiming::iconEndMs==450.);
+    static_assert(AuthTiming::labelEndMs==150. && AuthTiming::collapseEndMs==450.);
     static_assert(AuthTiming::spinMs==2000. && AuthTiming::spinEndMs==2450.);
     static_assert(AuthTiming::morphEndMs==2700. && AuthTiming::hoverEndMs==2800.);
     static_assert(AuthTiming::fallEndMs==3150. && AuthTiming::splashEndMs==3600.);
@@ -83,7 +83,7 @@ void CheckLoginTransition() {
     static_assert(AuthTiming::revealMs==450. && AuthTiming::revealEndMs==8850.);
     struct Phase { AuthStage stage; double first,last; };
     const std::array<Phase,17> phases{{
-        {AuthStage::LabelFade,0.,150.}, {AuthStage::IconMove,150.,450.},
+        {AuthStage::LabelFade,0.,150.}, {AuthStage::Collapse,150.,450.},
         {AuthStage::Spin,450.,2450.}, {AuthStage::Droplet,2450.,2700.},
         {AuthStage::Hover,2700.,2800.}, {AuthStage::Fall,2800.,3150.},
         {AuthStage::Splash,3150.,3600.}, {AuthStage::Wave,3600.,4400.},
@@ -115,19 +115,36 @@ void CheckLoginTransition() {
         assert(sample(phase.last-1.).stage==phase.stage);
     }
     const auto initial=sample(0.);
-    assert(initial.button.labelOpacity==1.f && initial.button.iconMove==0.f && initial.button.iconScale==1.f);
-    assert(sample(75.).button.labelOpacity==.5f && sample(149.).button.iconMove==0.f);
+    assert(initial.button.labelOpacity==1.f && initial.button.collapse==0.f);
+    assert(sample(75.).button.labelOpacity==.5f && sample(149.).button.collapse==0.f);
     assert(sample(150.).button.labelOpacity==0.f);
     const auto moving=sample(300.).button;
-    assert(moving.iconMove==.5f && std::fabs(moving.iconScale-1.3f)<.00001f && moving.iconRotation==0.f);
-    assert(sample(450.).button.iconMove==1.f && sample(450.).button.iconScale==1.6f);
-    assert(sample(450.).button.iconRotation==0.f);
+    assert(moving.collapse==.5f && moving.spinnerRotation==0.f);
+    const ImVec2 origin(80,90),fullSize(600,66),center=origin+fullSize*.5f;
+    const auto idleSurface=button_art::SurfaceAt(origin,fullSize,initial.button);
+    const auto spinSurface=button_art::SurfaceAt(origin,fullSize,sample(450.).button);
+    assert(idleSurface.lo.x==origin.x && idleSurface.size.x==fullSize.x);
+    assert(spinSurface.size.x==spinSurface.size.y && spinSurface.size.x<fullSize.y);
+    assert(ImLengthSqr(spinSurface.lo+spinSurface.size*.5f-center)<.0001f);
+    assert(button_art::SurfaceAt(origin,fullSize,sample(2750.).button).opacity==0.f);
+    const auto restored=button_art::SurfaceAt(origin,fullSize,sample(3150.).button);
+    assert(restored.size.x==fullSize.x && restored.opacity==1.f);
+    for(double time=0.;time<=4400.;time+=1000./60.) {
+        const auto surface=button_art::SurfaceAt(origin,fullSize,sample(time).button);
+        assert(surface.opacity>=0.f && surface.opacity<=1.f);
+        assert(surface.lo.x>=origin.x && surface.lo.y>=origin.y);
+        assert(surface.lo.x+surface.size.x<=origin.x+fullSize.x+.001f);
+        assert(surface.lo.y+surface.size.y<=origin.y+fullSize.y+.001f);
+        assert(ImLengthSqr(surface.lo+surface.size*.5f-center)<.0001f);
+    }
+    assert(sample(450.).button.collapse==1.f);
+    assert(sample(450.).button.spinnerRotation==0.f);
     const float fullTurn=static_cast<float>(6.283185307179586*AuthTiming::spinTurns);
-    assert(sample(500.).button.iconRotation<fullTurn*.01f);
-    assert(std::fabs(sample(1450.).button.iconRotation-fullTurn*.5f)<.00001f);
-    assert(sample(2400.).button.iconRotation>fullTurn*.99f);
-    assert(std::fabs(std::sin(sample(2450.).button.iconRotation))<.00001f);
-    assert(std::fabs(std::cos(sample(2450.).button.iconRotation)-1.f)<.00001f);
+    assert(sample(500.).button.spinnerRotation<fullTurn*.01f);
+    assert(std::fabs(sample(1450.).button.spinnerRotation-fullTurn*.5f)<.00001f);
+    assert(sample(2400.).button.spinnerRotation>fullTurn*.99f);
+    assert(std::fabs(std::sin(sample(2450.).button.spinnerRotation))<.00001f);
+    assert(std::fabs(std::cos(sample(2450.).button.spinnerRotation)-1.f)<.00001f);
     assert(sample(2575.).button.dropletMorph==.5f);
     const auto hover=sample(2750.).button;
     assert(hover.stage==ButtonStage::Hover && hover.dropletMorph==1.f && hover.fall==0.f);
@@ -166,8 +183,8 @@ void CheckLoginTransition() {
         assert(waiting.stage==AuthStage::Spin && waiting.inputBlocked && waiting.loginVisible);
         assert(!waiting.ready && !waiting.granted && !waiting.loadingVisible);
         assert(waiting.button.dropletMorph==0.f && waiting.button.wave==0.f && waiting.button.check==0.f);
-        assert(std::fabs(std::sin(waiting.button.iconRotation))<.00001f);
-        assert(std::fabs(std::cos(waiting.button.iconRotation)-1.f)<.00001f);
+        assert(std::fabs(std::sin(waiting.button.spinnerRotation))<.00001f);
+        assert(std::fabs(std::cos(waiting.button.spinnerRotation)-1.f)<.00001f);
     }
     transition.Resolve(310.,true);
     assert(std::fabs(transition.delayMs-7550.)<.00001);
@@ -189,17 +206,16 @@ void CheckLoginTransition() {
             const auto frame=transition.At(now);
             const auto stage=static_cast<int>(frame.stage);
             if(first[stage]<0.) first[stage]=now*1000.;
-            assert(frame.button.iconMove>=previousMove && frame.button.wave>=previousWave && frame.button.check>=previousCheck);
-            assert(frame.button.iconMove<=1.f && frame.button.wave<=1.f && frame.button.check<=1.f);
-            assert(frame.button.iconScale>=1.f && frame.button.iconScale<=1.6f);
-            assert(frame.button.iconRotation>=0.f && frame.button.iconRotation<=fullTurn+.00001f);
+            assert(frame.button.collapse>=previousMove && frame.button.wave>=previousWave && frame.button.check>=previousCheck);
+            assert(frame.button.collapse<=1.f && frame.button.wave<=1.f && frame.button.check<=1.f);
+            assert(frame.button.spinnerRotation>=0.f && frame.button.spinnerRotation<=fullTurn+.00001f);
             if(now*1000.<4400.-.000001) assert(!frame.granted && frame.button.check==0.f);
             if(now*1000.<8400.-.000001) assert(!frame.loadingVisible);
             if(now*1000.<8850.-.000001) assert(frame.inputBlocked && !frame.ready);
             if(frame.loadingVisible && firstLoading<0.) firstLoading=now;
             if(frame.ready && firstReady<0.) firstReady=now;
             if(frame.ready) assert(!frame.inputBlocked && frame.loadingReveal==1.f);
-            previousMove=frame.button.iconMove;previousWave=frame.button.wave;previousCheck=frame.button.check;
+            previousMove=frame.button.collapse;previousWave=frame.button.wave;previousCheck=frame.button.check;
         }
         for(size_t i=0;i<phases.size()-1;++i) {
             const auto& phase=phases[i];

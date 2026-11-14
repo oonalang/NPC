@@ -91,10 +91,6 @@ struct NativeContext {
         F50=io.Fonts->AddFontFromMemoryTTF((void*)F50_data,F50_size,30,&displayFont,io.Fonts->GetGlyphRangesDefault());
         io.FontDefault=font::inter_semibold;
         unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
-        assert(F107->FindGlyphNoFallback(0xf090)&&F107->FindGlyphNoFallback(0xf090)->Visible);
-        const auto* signIn=F107->FindGlyphNoFallback(0xf090);
-        std::printf("Production font order: title28 body20 page18+Awesome25 F5030; F107size %.1f, glyph bounds [%.1f %.1f %.1f %.1f], advance %.1f\n",
-            F107->FontSize,signIn->X0,signIn->Y0,signIn->X1,signIn->Y1,signIn->AdvanceX);
         c::ApplyTheme();c::scale=1.f;
         assert(ImGui_ImplOpenGL3_Init("#version 300 es"));
     }
@@ -289,7 +285,7 @@ const char* StageName(startup_ui::AuthStage stage) {
     switch(stage) {
         case Stage::Idle:return "A1-idle";
         case Stage::LabelFade:return "A2-label-fade";
-        case Stage::IconMove:return "A3-icon-move";
+        case Stage::Collapse:return "A3-button-collapse";
         case Stage::Spin:return "A4-spin";
         case Stage::Droplet:return "A5-morph";
         case Stage::Hover:return "A5-hover";
@@ -344,20 +340,44 @@ Image RenderFlow(startup_ui::LoginTransition& transition,startup_ui::LoadingTime
     assert(!auth_scene::Active()&&glGetError()==GL_NO_ERROR);
     Image image;image.Read();return image;
 }
+Image RenderButton(const startup_ui::ButtonFrame& frame,ImVec2 lo={180,378},ImVec2 size={600,66}) {
+    glBindFramebuffer(GL_FRAMEBUFFER,0);auth_scene::RasterState(imageWidth,imageHeight);
+    glClearColor(.035f,.025f,.055f,1.f);glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_NewFrame();ImGui::NewFrame();
+    startup_ui::DrawAuthenticateContents(ImGui::GetForegroundDrawList(),lo,size,size.y/66.f,frame,startup_ui::Body());
+    ImGui::Render();ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    Image image;image.Read();return image;
+}
+void CheckButtonContinuity() {
+    startup_ui::LoginTransition transition;assert(transition.Start(0.));transition.Resolve(.1,true);
+    for(double boundary:{150.,450.,2450.,2700.,2800.,3150.,3600.,4400.}) {
+        const auto before=RenderButton(transition.At((boundary-.001)/1000.).button);
+        const auto after=RenderButton(transition.At(boundary/1000.).button);
+        const double difference=before.Difference(after);
+        std::printf("Button boundary %.0fms pixel delta %.6f\n",boundary,difference);
+        assert(difference<.001);
+    }
+    const auto idle=RenderButton(transition.At(0.).button);
+    const auto label=startup_ui::Body()->CalcTextSizeA(17.f,FLT_MAX,0.f,"Authenticate");
+    int checked=0;
+    for(int y=389;y<431;++y) for(int x=184;x<776;++x) {
+        if(x>=480-label.x*.5f-3.f && x<=480+label.x*.5f+3.f) continue;
+        assert(idle.Light(x,y)<40.);++checked;
+    }
+    assert(checked>10000);
+    std::puts("Button has centered plain text, no icon, and continuous collapse/spinner/drop/impact/fill handoffs");
+}
 void CheckButtonClipping() {
-    startup_ui::LoginTransition transition;startup_ui::LoadingTimeline loading;
+    startup_ui::LoginTransition transition;
     assert(transition.Start(0.));transition.Resolve(.1,true);
-    RenderFlow(transition,loading,3.60);
-    const auto baseline=RenderFlow(transition,loading,3.60);
-    const auto scale=startup_ui::Fit({720,500});
-    const auto windowSize=ImVec2(740,520)*scale;
-    const auto lo=ImGui::GetMainViewport()->GetCenter()-windowSize*.5f+ImVec2(70,368)*scale;
-    const auto hi=lo+ImVec2(600,66)*scale;
+    const auto baseline=RenderButton(transition.At(3.60).button);
+    const ImVec2 lo(180,378);
+    const auto hi=lo+ImVec2(600,66);
     const auto center=(lo+hi)*.5f;
     const float radius=(hi.y-lo.y)*.5f;
     int testedPixels=0;
     for(double time : {2.75,2.80,3.0,3.15,3.35,3.60,3.80,4.0,4.39}) {
-        const auto image=RenderFlow(transition,loading,time);
+        const auto image=RenderButton(transition.At(time).button);
         for(int y=int(lo.y)-4;y<=int(hi.y)+4;++y) for(int x=int(lo.x)-4;x<=int(hi.x)+4;++x) {
             const float qx=std::max(0.f,std::abs(x+.5f-center.x)-(hi.x-lo.x)*.5f+radius);
             const float qy=std::abs(y+.5f-center.y);
@@ -372,12 +392,51 @@ void CheckButtonClipping() {
     }
     std::printf("Fluid capsule clipping: %d exterior pixel comparisons unchanged through droplet, fall, splash and wave\n",testedPixels);
 }
-void CaptureGlyphCalibration(const std::filesystem::path& output) {
+void CheckWaveCoverage(const std::filesystem::path& output) {
+    int compared=0;
+    for(const auto size:{ImVec2(600,66),ImVec2(360,44),ImVec2(180,28)}) {
+        const ImVec2 lo(110,190),hi=lo+size,center=(lo+hi)*.5f;
+        const float radius=size.y*.5f;
+        for(int frame=1;frame<=48;++frame) {
+            const float progress=frame/48.f;
+            glBindFramebuffer(GL_FRAMEBUFFER,0);auth_scene::RasterState(imageWidth,imageHeight);
+            glClearColor(.035f,.025f,.055f,1.f);glClear(GL_COLOR_BUFFER_BIT);
+            ImGui_ImplOpenGL3_NewFrame();ImGui::NewFrame();
+            auto* draw=ImGui::GetForegroundDrawList();draw->PushClipRect(lo,hi,true);
+            startup_ui::button_art::Wave(draw,lo,size,size.y/66.f,progress);
+            draw->PopClipRect();ImGui::Render();ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            Image image;image.Read();
+            if(size.x==600.f && (frame==14 || frame==24 || frame==36 || frame==46 || frame==48)) {
+                char name[80];std::snprintf(name,sizeof(name),"wave-%.0fx%.0f-%03d.ppm",size.x,size.y,frame);
+                image.Save(output/name);
+            }
+            const float deepestSurface=lo.y+size.y*(1.f-progress)+size.y*.19f*std::sin(IM_PI*progress)*1.28f;
+            for(int y=static_cast<int>(std::ceil(deepestSurface+2.5f));y<hi.y-2.f;++y)
+                for(int x=static_cast<int>(lo.x);x<hi.x;++x) {
+                    if(x>lo.x+radius+3.f && x<hi.x-radius-3.f) continue;
+                    const float qx=std::max(0.f,std::abs(x+.5f-center.x)-(size.x*.5f-radius));
+                    const float qy=std::abs(y+.5f-center.y);
+                    if(std::sqrt(qx*qx+qy*qy)>radius-2.5f) continue;
+                    const auto* pixel=image.At(x,y);
+                    if(std::min({pixel[0],pixel[1],pixel[2]})<240) {
+                        char name[80];std::snprintf(name,sizeof(name),"wave-gap-%.0fx%.0f-%03d.ppm",size.x,size.y,frame);
+                        image.Save(output/name);
+                        std::fprintf(stderr,"Unfilled liquid interior: %.0fx%.0f, p=%.5f, (%d,%d) rgb=%d,%d,%d\n",size.x,size.y,progress,x,y,pixel[0],pixel[1],pixel[2]);
+                        assert(false);
+                    }
+                    ++compared;
+                }
+        }
+    }
+    assert(compared>10000);
+    std::printf("White fill: %d rounded-end interior pixels stay filled across 144 frames and three button sizes\n",compared);
+}
+void CaptureButtonPhases(const std::filesystem::path& output) {
     startup_ui::LoginTransition transition;startup_ui::LoadingTimeline loading;
     assert(transition.Start(0.));transition.Resolve(.1,true);
-    RenderFlow(transition,loading,0.).Save(output/"production-font-idle.ppm");
-    RenderFlow(transition,loading,.45).Save(output/"production-font-spin-start.ppm");
-    RenderFlow(transition,loading,.90).Save(output/"production-font-spin-diagonal.ppm");
+    RenderFlow(transition,loading,0.).Save(output/"button-idle.ppm");
+    RenderFlow(transition,loading,.45).Save(output/"button-spinner-start.ppm");
+    RenderFlow(transition,loading,.90).Save(output/"button-spinner-motion.ppm");
 }
 void CheckSuckContainment(const std::filesystem::path& output) {
     startup_ui::LoginTransition transition;startup_ui::LoadingTimeline loading;
@@ -435,8 +494,13 @@ void RenderSequence(const std::filesystem::path& output) {
         8400.,8450.,8500.,8600.,8750.,8833.333,8850.,9600.};
     std::ofstream metadata(output/"frames.csv");metadata<<"requested_ms,actual_ms,stage,file\n";
     std::ofstream movie(output/"sequence.rgb",std::ios::binary);
+    std::ofstream buttonMovie(output/"button.rgb",std::ios::binary);
     std::ofstream counts(output/"sequence.json");
-    int movieFrames=0,calmFrames=0,loadingFrames=0;
+    const float buttonScale=startup_ui::Fit({720,500});
+    const auto buttonLo=ImVec2(imageWidth,imageHeight)*.5f-ImVec2(740,520)*(buttonScale*.5f)+ImVec2(70,368)*buttonScale;
+    const int buttonX=static_cast<int>(std::floor(buttonLo.x))-12,buttonY=static_cast<int>(std::floor(buttonLo.y))-12;
+    const int buttonWidth=static_cast<int>(std::ceil(600.f*buttonScale))+24,buttonHeight=static_cast<int>(std::ceil(66.f*buttonScale))+24;
+    int movieFrames=0,buttonFrames=0,calmFrames=0,loadingFrames=0;
     double firstLoading=-1.,firstSettled=-1.;
     const auto wallStarted=std::chrono::steady_clock::now();
     for(int index=0;index<=std::lround(Timing::reviewEndMs*.06);++index) {
@@ -463,10 +527,18 @@ void RenderSequence(const std::filesystem::path& output) {
             for(int y=0;y<imageHeight/2;++y) for(int x=0;x<imageWidth/2;++x)
                 movie.write(reinterpret_cast<const char*>(image.At(x*2,y*2)),3);
             ++movieFrames;
+            if(elapsed*1000.<Timing::suckStartMs) {
+                for(int y=0;y<buttonHeight;++y) for(int x=0;x<buttonWidth;++x)
+                    buttonMovie.write(reinterpret_cast<const char*>(image.At(buttonX+x,buttonY+y)),3);
+                ++buttonFrames;
+            }
         }
     }
     const auto wallSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-wallStarted).count();
     counts<<"{\"width\":"<<imageWidth/2<<",\"height\":"<<imageHeight/2<<",\"fps\":30,\"frames\":"<<movieFrames<<"}\n";
+    std::ofstream buttonCounts(output/"button.json");
+    buttonCounts<<"{\"width\":"<<buttonWidth<<",\"height\":"<<buttonHeight<<",\"fps\":30,\"frames\":"<<buttonFrames
+        <<",\"x\":"<<buttonX<<",\"y\":"<<buttonY<<"}\n";
     assert(calmFrames==std::lround(Timing::calmMs*.06));
     assert(std::abs(firstLoading-Timing::revealStartMs/1000.)<1./60.+.0001);
     assert(std::abs(firstSettled-Timing::revealEndMs/1000.)<1./60.+.0001);
@@ -529,12 +601,14 @@ int main(int argc,char** argv) {
     const std::filesystem::path output=argc>1?argv[1]:"/tmp/npc-auth-storyboard";
     std::filesystem::create_directories(output);
     NativeContext context;
+    CheckWaveCoverage(output);
     CheckShader(output);
     CheckGraphicsState();
     CheckTransmissionAndRefraction(output);
-    CaptureGlyphCalibration(output);
+    CaptureButtonPhases(output);
     CheckSuckContainment(output);
     CheckButtonClipping();
+    CheckButtonContinuity();
     if(argc<3||std::string(argv[2])!="--probes-only") RenderSequence(output);
     CheckLoadingScale();
     CheckLiveBackdrop(output);
