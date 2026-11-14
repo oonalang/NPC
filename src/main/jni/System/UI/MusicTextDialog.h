@@ -12,10 +12,10 @@ namespace music_ui {
 struct TextDialog {
     char text[512]{};
     std::string insert;
-    bool replace=false,erase=false,focus=false,keyboard=false,shift=false;
-    void Open(const std::string& value) {
+    bool replace=false,erase=false,focus=false,keyboard=false,shift=false,allowEmpty=false;
+    void Open(const std::string& value,bool empty=false) {
         std::snprintf(text,sizeof(text),"%s",value.c_str());
-        insert.clear();replace=erase=keyboard=shift=false;focus=true;
+        insert.clear();replace=erase=shift=false;keyboard=focus=true;allowEmpty=empty;
     }
     void Replace(std::string value) { insert=std::move(value);replace=true;focus=true; }
     static int Edit(ImGuiInputTextCallbackData* data) {
@@ -79,13 +79,16 @@ inline DialogResult Dialog(const char* name,TextDialog& state,const char* title,
         if(state.focus) {ImGui::SetKeyboardFocusHere();state.focus=false;}
         ImGui::SetNextItemWidth(-1.f);
         ImGui::InputText("##entry",state.text,sizeof(state.text),ImGuiInputTextFlags_CallbackAlways,TextDialog::Edit,&state);
-        if(ImGui::GetIO().MouseSource==ImGuiMouseSource_TouchScreen && ImGui::IsItemActive()) state.keyboard=true;
+        if(ImGui::IsItemClicked()) state.keyboard=true;
         const float half=(ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ItemSpacing.x)*.5f;
         if(Button("Paste",{half,30.f*scale})) {
             if(const char* value=ImGui::GetClipboardText()) state.Replace(value);
         }
         ImGui::SameLine();
         if(Button("Clear",{half,30.f*scale})) state.Replace("");
+        if(Button(apply,{half,34.f*scale},true) && (state.text[0]||state.allowEmpty)) {result=DialogResult::Apply;state.keyboard=false;ImGui::CloseCurrentPopup();}
+        ImGui::SameLine();
+        if(Button("Cancel",{half,34.f*scale})) {state.keyboard=false;ImGui::CloseCurrentPopup();}
         if(state.keyboard) {
             const float available=ImGui::GetContentRegionAvail().x;
             const float keyGap=4.f*scale,keyWidth=(available-keyGap*9.f)/10.f;
@@ -109,9 +112,6 @@ inline DialogResult Dialog(const char* name,TextDialog& state,const char* title,
             if(Button("Done",{utility,keyHeight})) state.keyboard=false;
             ImGui::PopID();ImGui::PopStyleVar();
         }
-        if(Button(apply,{half,34.f*scale},true) && state.text[0]) {result=DialogResult::Apply;state.keyboard=false;ImGui::CloseCurrentPopup();}
-        ImGui::SameLine();
-        if(Button("Cancel",{half,34.f*scale})) {state.keyboard=false;ImGui::CloseCurrentPopup();}
         ImGui::EndPopup();
     }
     ImGui::PopStyleColor(5);ImGui::PopStyleVar(5);

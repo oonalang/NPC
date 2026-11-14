@@ -27,6 +27,7 @@ static void TextEditing() {
     assert(std::fabs(GImGui->LastItemData.Rect.GetWidth()-420.f)<.1f);
     ImGui::End();ImGui::Render();
     music_ui::TextDialog editor;editor.Open("/storage/emulated/0/Music");
+    assert(editor.keyboard);
     bool open=true;
     const auto frame=[&] {
         ImGui::NewFrame();custom::touch::Update();
@@ -64,7 +65,7 @@ static void TextEditing() {
     assert(editor.keyboard);
     const float keyGap=4.f*ImClamp(c::scale,.8f,1.15f);
     const float keyWidth=(modal->InnerRect.GetWidth()-modal->WindowPadding.x*2.f-keyGap*9.f)/10.f;
-    const auto row=modal->Pos+modal->WindowPadding+ImVec2(0,ImGui::GetFontSize()+9.f+ImGui::GetFontSize()+18.f+9.f+30.f+9.f);
+    const auto row=modal->Pos+modal->WindowPadding+ImVec2(0,ImGui::GetFontSize()+9.f+ImGui::GetFontSize()+18.f+9.f+30.f+9.f+34.f+9.f);
     const ImVec2 key=row+ImVec2(keyWidth*.5f,21.f);
     io.AddMousePosEvent(key.x,key.y);frame();io.AddMouseButtonEvent(0,true);frame();
     io.AddMouseButtonEvent(0,false);frame();frame();frame();

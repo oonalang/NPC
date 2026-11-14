@@ -310,6 +310,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImGui::NewFrame();
     custom::UpdateTouchScroll();
     music_player::Init(VM);
+    frame_rate::Publish(frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
     if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
         isLogin = false;
         err = "License expired";

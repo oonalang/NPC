@@ -69,6 +69,12 @@ int main(int argc,char** argv) {
         sampler.insert(sampler.end(),ui_sounds::sampleRate/4,0);
     }
     assert(ui_sounds::Synthesize(ui_sounds::Cue::Count).empty());
+    bool enabled=false;float gain=0;
+    assert(ui_sounds::defaultGain==1.f);
+    assert(ui_sounds::DecodeSettings("UIA1 1 0.2800",enabled,gain)&&enabled&&gain==1.f);
+    assert(ui_sounds::DecodeSettings("UIA1 0 0.4000",enabled,gain)&&!enabled&&std::fabs(gain-.4f)<.0001f);
+    assert(ui_sounds::DecodeSettings("UIA2 1 0.2800",enabled,gain)&&enabled&&std::fabs(gain-.28f)<.0001f);
+    assert(!ui_sounds::DecodeSettings("UIA2 1 nan",enabled,gain));
     startup_ui::SoundObserver observer;startup_ui::LoginTransitionFrame frame;
     const auto observe=[&](startup_ui::AuthStage stage,ui_sounds::Cue expected) {frame.stage=stage;assert(observer.Update(frame)==expected);assert(!observer.Update(frame));};
     observe(startup_ui::AuthStage::Splash,ui_sounds::Cue::Drop);observe(startup_ui::AuthStage::Check,ui_sounds::Cue::Success);

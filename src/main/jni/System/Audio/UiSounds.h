@@ -6,8 +6,9 @@
 namespace ui_sounds {
 enum class Cue { Click,ToggleOn,ToggleOff,Slider,Open,Drop,Success,Error,Whoosh,Count };
 inline constexpr unsigned sampleRate=48000;
-inline constexpr float defaultGain=.28f;
+inline constexpr float defaultGain=1.f;
 std::vector<std::int16_t> Synthesize(Cue cue);
+bool DecodeSettings(const char* text,bool& enabled,float& gain);
 #ifdef __ANDROID__
 void Play(Cue cue);
 void Configure(const std::string& folder);

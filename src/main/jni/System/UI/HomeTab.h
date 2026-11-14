@@ -70,31 +70,6 @@ inline void Card(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale) {
     draw->AddLine(lo+ImVec2(19,1)*scale,lo+ImVec2(size.x-19.f*scale,scale),
         IM_COL32(236,224,255,20),scale);
 }
-inline void Hero(const HomeStats& stats,float width,float scale) {
-    auto* draw=ImGui::GetWindowDrawList();
-    const auto lo=ImGui::GetCursorScreenPos();
-    const float height=50.f*scale;
-    clay::Liquid(draw,lo,lo+ImVec2(width,height),20.f*scale,ImVec4(.12f,.085f,.18f,.70f),1.f);
-    draw->AddRect(lo,lo+ImVec2(width,height),IM_COL32(220,198,255,40),20.f*scale,0,scale);
-    const auto title=lo+ImVec2(16,6)*scale;
-    Text(draw,title,24.f*scale,Color(c::text::text_active),"Home",Title());
-    Text(draw,lo+ImVec2(16,34)*scale,10.5f*scale,Color(c::text::text_hov),"Your session, performance and music.");
-    const char* badge="LIVE SESSION";
-    const float badgeFont=10.f*scale;
-    const auto badgeText=Body()->CalcTextSizeA(badgeFont,FLT_MAX,0.f,badge);
-    const float badgeWidth=badgeText.x+31.f*scale;
-    const auto badgeLo=lo+ImVec2(width-badgeWidth-18.f*scale,6.f*scale);
-    draw->AddRectFilled(badgeLo,badgeLo+ImVec2(badgeWidth,23.f*scale),IM_COL32(116,216,176,17),11.5f*scale);
-    draw->AddCircleFilled(badgeLo+ImVec2(11,11.5f)*scale,2.5f*scale,IM_COL32(117,227,177,240),10);
-    Text(draw,badgeLo+ImVec2(20,6)*scale,badgeFont,IM_COL32(173,226,201,255),badge);
-    if(width>420.f*scale) {
-        char surface[64];
-        std::snprintf(surface,sizeof(surface),"%d \xC3\x97 %d  \xC2\xB7  %s",stats.width,stats.height,stats.keySaved?"Key saved":"Session active");
-        const auto measured=Body()->CalcTextSizeA(10.f*scale,FLT_MAX,0.f,surface);
-        Text(draw,lo+ImVec2(width-18.f*scale-measured.x,34.f*scale),10.f*scale,Color(c::text::text_hov,.85f),surface);
-    }
-    ImGui::Dummy(ImVec2(width,height));
-}
 inline void Metric(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,const char* label,const char* value,int kind) {
     Card(draw,lo,size,scale);
     const auto accent=Color(c::accent);
@@ -123,22 +98,15 @@ inline void Metric(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,const char
     }
 }
 inline void Metrics(const HomeStats& stats,float width,float scale) {
-    char rate[32],frame[32],session[32],enabled[32];
+    char rate[32],session[32];
     std::snprintf(rate,sizeof(rate),"%.0f FPS",std::isfinite(stats.fps)?std::max(0.f,stats.fps):0.f);
-    std::snprintf(frame,sizeof(frame),"%.1f ms",std::isfinite(stats.frameMs)?std::max(0.f,stats.frameMs):0.f);
     Uptime(session,sizeof(session),stats.uptime);
-    std::snprintf(enabled,sizeof(enabled),"%d",std::max(0,stats.activeFeatures));
-    const char* labels[]{"FRAME RATE","FRAME TIME","SESSION","ENABLED OPTIONS"};
-    const char* values[]{rate,frame,session,enabled};
-    const int columns=width>=620.f*scale?4:2;
-    const float gap=8.f*scale,height=56.f*scale;
-    const float cardWidth=(width-gap*(columns-1))/columns;
+    const float gap=8.f*scale,height=56.f*scale,cardWidth=(width-gap)*.5f;
     const auto origin=ImGui::GetCursorScreenPos();
     auto* draw=ImGui::GetWindowDrawList();
-    for(int i=0;i<4;++i)
-        Metric(draw,origin+ImVec2((i%columns)*(cardWidth+gap),(i/columns)*(height+gap)),
-            ImVec2(cardWidth,height),scale,labels[i],values[i],i);
-    ImGui::Dummy(ImVec2(width,(4/columns)*height+(4/columns-1)*gap));
+    Metric(draw,origin,{cardWidth,height},scale,"FRAME RATE",rate,0);
+    Metric(draw,origin+ImVec2(cardWidth+gap,0),{cardWidth,height},scale,"SESSION",session,2);
+    ImGui::Dummy({width,height});
 }
 inline void Performance(ImVec2 size,float scale) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(14,12)*scale);
@@ -196,18 +164,15 @@ inline void Performance(ImVec2 size,float scale) {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 }
-inline float musicFitHeight=0.f;
 inline void Music(ImVec2 size,float scale) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(14,12)*scale);
     ImGui::BeginChild("##home_music",size,false,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|
         ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_AlwaysUseWindowPadding);
-    auto* window=ImGui::GetCurrentWindow();
     Card(ImGui::GetWindowDrawList(),ImGui::GetWindowPos(),size,scale);
     ImGui::TextColored(c::text::text_hov,"YOUR MUSIC");
     ImGui::Dummy(ImVec2(0,3.f*scale));
     music_player::Draw();
     ImGui::EndChild();
-    musicFitHeight=window->DC.CursorMaxPos.y-window->DC.CursorStartPos.y+window->WindowPadding.y*2.f;
     ImGui::PopStyleVar();
 }
 inline void Draw(const HomeStats& stats,ImVec2 available) {
@@ -220,20 +185,21 @@ inline void Draw(const HomeStats& stats,ImVec2 available) {
     ImGui::BeginChild("##home_dashboard",available,false,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoScrollbar|
         ImGuiWindowFlags_AlwaysUseWindowPadding);
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x);
-    Hero(stats,width,scale);
-    const bool columns=width>=680.f*scale;
+    const float height=ImGui::GetContentRegionAvail().y;
+    const bool columns=width>=620.f*scale;
     if(columns) {
-        Metrics(stats,width,scale);
-        const float leftWidth=(width-gap)*.46f;
-        const float panelHeight=std::max({200.f*scale,ImGui::GetContentRegionAvail().y,musicFitHeight});
-        Performance({leftWidth,panelHeight},scale);
+        const float leftWidth=ImClamp(width*.32f,200.f*scale,280.f*scale);
+        const float panelHeight=std::max(320.f*scale,height);
+        ImGui::BeginGroup();
+        Metrics(stats,leftWidth,scale);
+        Performance({leftWidth,std::max(160.f*scale,panelHeight-64.f*scale)},scale);
+        ImGui::EndGroup();
         ImGui::SameLine(0,gap);
         Music({width-leftWidth-gap,panelHeight},scale);
     } else {
-        const float musicHeight=std::max(200.f*scale,musicFitHeight);
-        Music({width,musicHeight},scale);
         Metrics(stats,width,scale);
-        Performance({width,210.f*scale},scale);
+        Music({width,std::max(320.f*scale,ImGui::GetContentRegionAvail().y)},scale);
+        Performance({width,190.f*scale},scale);
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);

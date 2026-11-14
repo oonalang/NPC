@@ -2,8 +2,18 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 
 namespace ui_sounds {
+bool DecodeSettings(const char* text,bool& enabled,float& gain) {
+    char version[5]{};int value=1;float volume=defaultGain;
+    if(!text||std::sscanf(text,"%4s %d %f",version,&value,&volume)!=3||
+       (std::strcmp(version,"UIA1")&&std::strcmp(version,"UIA2"))||!std::isfinite(volume)) return false;
+    enabled=value!=0;
+    gain=std::strcmp(version,"UIA1")==0&&std::fabs(volume-.28f)<.0001f?defaultGain:std::clamp(volume,0.f,1.f);
+    return true;
+}
 std::vector<std::int16_t> Synthesize(Cue cue) {
     constexpr double pi=3.14159265358979323846;
     const double durations[]={.085,.125,.125,.055,.135,.23,.34,.2,.38};
@@ -143,10 +153,11 @@ class Engine {
             }
             if(load&&!root.empty()) {
                 auto* file=std::fopen((root+"/.ui-audio").c_str(),"rb");
-                int enabled=1;float gain=defaultGain;
+                bool enabled=true;float gain=defaultGain;
                 if(file) {
-                    if(std::fscanf(file,"UIA1 %d %f",&enabled,&gain)==2&&!touched.load()&&std::isfinite(gain)) {
-                        enabledState=enabled!=0;gainState=std::clamp(gain,0.f,1.f);
+                    char text[80]{};
+                    if(std::fgets(text,sizeof(text),file)&&DecodeSettings(text,enabled,gain)&&!touched.load()) {
+                        enabledState=enabled;gainState=gain;
                     }
                     std::fclose(file);
                 }
@@ -154,7 +165,7 @@ class Engine {
             if(settings&&!root.empty()) {
                 const auto path=root+"/.ui-audio",temporary=path+".part";
                 auto* file=std::fopen(temporary.c_str(),"wb");
-                if(file) {std::fprintf(file,"UIA1 %d %.4f\n",Enabled()?1:0,Gain());if(std::fclose(file)==0) std::rename(temporary.c_str(),path.c_str());}
+                if(file) {std::fprintf(file,"UIA2 %d %.4f\n",Enabled()?1:0,Gain());if(std::fclose(file)==0) std::rename(temporary.c_str(),path.c_str());}
             }
             if(!Enabled()||Gain()<=0) output.Stop();
             else if(ready&&have&&Clock::now()-event.time<std::chrono::milliseconds(180)) output.Play(samples[static_cast<unsigned>(event.cue)],Gain());

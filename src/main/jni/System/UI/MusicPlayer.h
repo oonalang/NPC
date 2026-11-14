@@ -453,15 +453,7 @@ inline void Draw() {
     if(modeButton("##music_local_mode","Local",!state.driveMode)) SetDriveMode(false);
     ImGui::SameLine(0,8.f*scale);
     if(modeButton("##music_drive_mode","Drive",state.driveMode)) SetDriveMode(true);
-    if(state.driveMode) {
-        if(TextButton("##drive_connect",state.driveLink.empty()?"Connect a Google Drive folder":"Change Drive folder",{width,30.f*scale},true)) {
-            driveDialog.Open(state.driveLink);ImGui::OpenPopup("Drive source");
-        }
-        if(state.driveLink.empty()) {
-            ImGui::PushTextWrapPos();ImGui::TextColored(c::text::text_hov,"Share your music folder: Anyone with the link / Viewer. Then paste its link here.");ImGui::PopTextWrapPos();
-        }
-        if(music_ui::Dialog("Drive source",driveDialog,"Paste your shared Drive link","Connect")==music_ui::DialogResult::Apply) ConnectDrive(driveDialog.text);
-    }
+    if(music_ui::Dialog("Drive source",driveDialog,"Paste your shared Drive link","Connect")==music_ui::DialogResult::Apply) ConnectDrive(driveDialog.text);
     const auto origin=ImGui::GetCursorScreenPos();
     const float artSize=36.f*scale;
     draw->AddRectFilled(origin,origin+ImVec2(artSize,artSize),ImGui::GetColorU32(ImVec4(c::accent.x,c::accent.y,c::accent.z,.19f)),12.f*scale);
@@ -520,13 +512,12 @@ inline void Draw() {
     }
     ImGui::SameLine(0,buttonGap);
     if(IconButton("##music_next",ICON_FA_STEP_FORWARD,{buttonHeight,buttonHeight},false,disabled)) Next();
-    static bool libraryOpen=false;
     if(compact) ImGui::SameLine(0,10.f*scale);
     const auto row=ImGui::GetCursorScreenPos();
     const float refreshWidth=28.f*scale,sourceWidth=28.f*scale;
     const float libraryWidth=ImMax(40.f,ImGui::GetContentRegionAvail().x-sourceWidth-refreshWidth-14.f*scale);
-    if(TapButton("##music_library_toggle",{libraryWidth,30.f*scale})) libraryOpen=!libraryOpen;
-    char libraryLabel[64];std::snprintf(libraryLabel,sizeof(libraryLabel),"%s Library %zu",libraryOpen?"-":"+",state.tracks.size());
+    ImGui::Dummy({libraryWidth,30.f*scale});
+    char libraryLabel[64];std::snprintf(libraryLabel,sizeof(libraryLabel),"Library %zu",state.tracks.size());
     draw->AddText(ImGui::GetFont(),13.f*scale,row+ImVec2(0,7.f*scale),ImGui::GetColorU32(c::text::text),libraryLabel);
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_source",ICON_FA_FOLDER_OPEN,{sourceWidth,30.f*scale})) {
@@ -537,10 +528,11 @@ inline void Draw() {
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_refresh",ICON_FA_SYNC,{refreshWidth,30.f*scale},false,state.scanning)) Scan();
     if(!state.error.empty()) {ImGui::PushTextWrapPos();ImGui::TextColored(ImVec4(.98f,.61f,.67f,1.f),"%s",state.error.c_str());ImGui::PopTextWrapPos();}
-    if(libraryOpen) {
-        if(TextButton("##music_search",searchDialog.text[0]?searchDialog.text:"Search your songs",{width,28.f*scale})) {searchDialog.Open(searchDialog.text);ImGui::OpenPopup("Find a song");}
+    {
+        if(TextButton("##music_search",searchDialog.text[0]?searchDialog.text:"Search your songs",{width,28.f*scale})) {searchDialog.Open(searchDialog.text,true);ImGui::OpenPopup("Find a song");}
         music_ui::Dialog("Find a song",searchDialog,"Search this library","Search");
-        const float listHeight=ImClamp(ImGui::GetContentRegionAvail().y,80.f*scale,220.f*scale);
+        const float footer=state.truncated?ImGui::GetTextLineHeightWithSpacing():0.f;
+        const float listHeight=ImMax(80.f*scale,ImGui::GetContentRegionAvail().y-footer-4.f*scale);
         ImGui::BeginChild("##music_library",{0,listHeight},false,ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoMove);
         if(state.tracks.empty()) {
             ImGui::TextColored(c::text::text,"No songs here yet");
@@ -558,7 +550,7 @@ inline void Draw() {
             listDraw->PushClipRect(item+ImVec2(10,0),item+itemSize-ImVec2(8,0),true);
             listDraw->AddText(item+ImVec2(10,8)*scale,ImGui::GetColorU32(static_cast<int>(i)==state.current?c::accent:c::text::text),state.tracks[i].title.c_str());
             listDraw->PopClipRect();
-            if(tapped && !state.loading) Play(static_cast<int>(i));
+            if(tapped&&!state.loading) Play(static_cast<int>(i));
             ImGui::PopID();
         }
         if(!found&&!state.tracks.empty()) ImGui::TextColored(c::text::text_hov,"No matching songs");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "FrameRate.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -864,36 +865,7 @@ inline bool CheckExecution_ObstacleAround(void *ins) {
     }
     return o_CheckExecution_ObstacleAround(ins);
 }
-/*
-//ADJUSTABLE HOOK FOR FRAMES
- int (*original_Fpslevel)(void*) = nullptr;
- int hooked_Fpslevel(void* ins) {
-    return (ins && Config.ExtraMenu.EnhanceFPS) ? 7 : original_Fpslevel(ins);
-}
 
- int (*original_Fpslevel1)(void*) = nullptr;
- int hooked_Fpslevel1(void* ins) {
-    return (ins && Config.ExtraMenu.EnhanceFPS) ? 7 : original_Fpslevel1(ins);
-}
-
- int (*orig_GetFrameRateValue)(void*, int, int) = nullptr;
- int GetFrameRateValue(void* ins, int f, int m) {
-    if (ins) {
-        return 360;
-    }
-    return orig_GetFrameRateValue(ins, f, m);
-}
-
- int (*orig_GetUltraFrameRateFinalFPS)(void*) = nullptr;
- int GetUltraFrameRateFinalFPS(void* g) {
-    return (g && Config.ExtraMenu.EnhanceFPS) ? 360 : orig_GetUltraFrameRateFinalFPS(g);
-}
-
-inline bool (*original_Extremequality)(void*) = nullptr;
-inline bool hooked_Extremequality(void* ins) {
-    return (ins && Config.ExtraMenu.EnhanceFPS) ? true : original_Extremequality(ins);
-}
-*/
 /// Walk Under Water
 inline bool (*oPawn_GetCurrentDistToWaterSurface)(void *instance);
 inline bool Pawn_GetCurrentDistToWaterSurface(void *instance) {
@@ -1023,6 +995,7 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
+    frame_rate::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
 
             //--MP VIEW
     HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);
@@ -1136,14 +1109,6 @@ inline void InitializeAllHooks() {
     HOOK_LIB("libunity.so", "0x6AA9634", CheckTargetIsValid_ManualParameter_Hook, orig_CheckTargetIsValid_ManualParameter);
 
 
-    //-- Optimize Fps Lock
-    HOOK_LIB("libunity.so", "0xAFAC73C", GetFrameRateValue, orig_GetFrameRateValue);
-    HOOK_LIB("libunity.so", "0xAFAC128", GetUltraFrameRateFinalFPS, orig_GetUltraFrameRateFinalFPS);
-    HOOK_LIB("libunity.so", "0xAFAC1C4", hooked_Fpslevel, original_Fpslevel);
-    HOOK_LIB("libunity.so", "0xAFAC1C4", hooked_Fpslevel1, original_Fpslevel1);
-    HOOK_LIB("libunity.so", "0xAFB0AE4", hooked_Extremequality, original_Extremequality);
-	
-    HOOK_LIB("libunity.so", "0xAFAB394", hooked_SetUltraFrameRateDeviceInfo, orig_SetUltraFrameRateDeviceInfo);
 */
     //-- No smoke
     UnityObject_get_name = reinterpret_cast<String *(*)(void *)>(

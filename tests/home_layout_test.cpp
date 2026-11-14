@@ -15,6 +15,7 @@ float menu[4]={.69f,.43f,.96f,1.f};
 namespace font { ImFont* inter_semibold=nullptr; ImFont* inter_title=nullptr; }
 
 namespace {
+int acceptedSounds=0;
 struct Layout {
     bool present=false,scrollable=false,musicScrollable=false;
     float musicContent=0.f,musicHeight=0.f,musicBottom=0.f,viewport=0.f,overflow=0.f;
@@ -30,7 +31,7 @@ ImGuiWindow* Window(const char* token) {
 Layout Frame(ImVec2 size) {
     auto& io=ImGui::GetIO();
     io.DisplaySize=size;
-    ImGui::NewFrame();
+    ImGui::NewFrame();custom::UpdateTouchScroll();
     ImGui::SetNextWindowPos({0,0},ImGuiCond_Always);
     ImGui::SetNextWindowSize(size,ImGuiCond_Always);
     ImGui::Begin("##home_host",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoSavedSettings|
@@ -52,7 +53,7 @@ Layout Frame(ImVec2 size) {
         if(auto* music=Window("##home_music")) {
             out.musicContent=(music->DC.CursorMaxPos.y-music->Pos.y)+music->WindowPadding.y;
             out.musicHeight=music->Size.y;
-            out.musicScrollable=(music->Flags & ImGuiWindowFlags_NoScrollbar)==0;
+            out.musicScrollable=(music->Flags & ImGuiWindowFlags_NoScrollWithMouse)==0;
             out.musicScrollMax=music->ScrollMax.y;
             out.musicBottom=(music->Pos.y-dashboard->Pos.y)+music->Size.y;
         }
@@ -121,11 +122,12 @@ int main() {
     const std::string folder=root;
     std::ofstream(folder+"/Alpha.mp3").put('x');
     std::ofstream(folder+"/Beta.flac").put('x');
+    for(int i=0;i<48;++i) std::ofstream(folder+"/Song-"+std::to_string(i)+".mp3").put('x');
     const std::string missing=folder+"/missing";
 
     music_player::ScanFolders({folder});
     assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) {
-        return state.scanned && !state.scanning && state.tracks.size()==2 && state.error.empty();
+        return state.scanned && !state.scanning && state.tracks.size()==50 && state.error.empty();
     }));
 
     const ImVec2 sizes[]={ImVec2(900,520),ImVec2(700,420),ImVec2(620,300),ImVec2(1000,300),
@@ -153,10 +155,29 @@ int main() {
     }
 
     music_player::ScanFolders({folder});
+    assert(WaitFor({900,420},[](const auto& state){return state.tracks.size()==50&&state.error.empty();}));
+    c::scale=1.f;Pump({900,420},4);
+    auto* library=Window("##music_library");auto* music=Window("##home_music");assert(library&&music);
+    assert(library->ScrollMax.y>500.f&&!library->ScrollbarY);
+    assert(library->InnerRect.GetHeight()>=80.f);
+    const auto start=library->InnerRect.GetCenter();
+    const auto sourceError=music_player::GetSnapshot()->error;
+    ui_sounds::observer=[](ui_sounds::Cue){++acceptedSounds;};
+    const int soundsBefore=acceptedSounds;
+    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);io.AddMousePosEvent(start.x,start.y+25);Frame({900,420});
+    io.AddMouseButtonEvent(0,true);Frame({900,420});
+    io.AddMousePosEvent(start.x+2,start.y-80);Frame({900,420});
+    io.AddMouseButtonEvent(0,false);Frame({900,420});Frame({900,420});
+    assert(library->Scroll.y>60.f&&music_player::GetSnapshot()->error==sourceError&&acceptedSounds==soundsBefore);
+    library->Scroll.y=library->ScrollMax.y;library->ScrollTarget.y=FLT_MAX;Frame({900,420});Frame({900,420});
+    assert(library->Scroll.y==library->ScrollMax.y);
+    io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);Frame({900,420});
+    music_player::ScanFolders({folder});
     WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) { return state.error.empty(); });
     ImGui::DestroyContext();
     unlink((folder+"/Alpha.mp3").c_str());
     unlink((folder+"/Beta.flac").c_str());
+    for(int i=0;i<48;++i) unlink((folder+"/Song-"+std::to_string(i)+".mp3").c_str());
     rmdir(folder.c_str());
-    std::puts("Home dashboard keeps the music card and its Local and Drive controls fully visible at wide, landscape, portrait and narrow sizes, and overflowing panels stay scrollable");
+    std::puts("Compact Home layouts keep the always-open music library reachable; a 50-song list scrolls by touch without selecting tracks");
 }
