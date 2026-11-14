@@ -469,7 +469,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         }
         authFrame=startup_ui::loginTransition.At(startup_ui::Now());
         if (!isLogin && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
-        if (!isLogin && !ui_loading::IsActive() && authFrame.loginVisible)
+        if (!isLogin && !ui_loading::IsActive() && (authFrame.loginVisible || startup_ui::loginTransition.active))
         {
             const auto actions = startup_ui::RenderLogin(s, sizeof(s), g_LoginPending, err.c_str(),
                 g_LoginTextLoaded, showKeyboard,
@@ -658,7 +658,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     clay::Backdrop(runtimeDrawList, hostMin, hostMax, 22.f, .93f);
 
                     ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
-                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
+                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
                     {
                         const bool pushedContentFont = (font::inter_semibold != nullptr);
                         if (pushedContentFont) {

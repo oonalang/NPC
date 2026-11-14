@@ -678,7 +678,7 @@ namespace custom
         ImGuiContext& g = *GImGui;
         ImGuiWindow* parent_window = g.CurrentWindow;
 
-        flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove;
+        flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoMove;
         flags |= (parent_window->Flags & ImGuiWindowFlags_NoMove);
 
         const ImVec2 content_avail = GetContentRegionAvail();

@@ -190,17 +190,27 @@ inline void AuthOverlay(ImDrawList* draw,ImVec2 center,const LoginTransitionFram
         points[i]=center+ImVec2(std::cos(angle)*r,std::sin(angle)*r);
     }
     const auto shade=static_cast<ImU32>(ImClamp(alpha,0.f,1.f)*255.f);
+    draw->PathLineTo(points[0]);
+    for(int i=1;i<56;++i) draw->PathLineTo(points[i]);
+    draw->PathFillConvex(IM_COL32(124,74,224,(shade*22)/255));
+    const float core=ImMax(0.f,1.f-progress*2.6f);
+    if(core>0.f) {
+        draw->AddCircleFilled(center,radius*.20f,ImGui::GetColorU32(ImVec4(1.f,.95f,1.f,.30f*core)),40);
+        draw->AddCircleFilled(center,radius*.09f,ImGui::GetColorU32(ImVec4(1.f,1.f,1.f,.55f*core)),28);
+    }
     const auto scaled=[&](float factor) {
         for(int i=0;i<56;++i) ring[i]=center+(points[i]-center)*factor;
     };
     scaled(1.f);
-    draw->AddPolyline(ring,56,IM_COL32(150,120,255,(shade*24)/255),ImDrawFlags_Closed,radius*.15f);
-    scaled(.9f);
-    draw->AddPolyline(ring,56,IM_COL32(255,150,66,(shade*110)/255),ImDrawFlags_Closed,4.5f*scale);
-    scaled(1.012f);
-    draw->AddPolyline(ring,56,IM_COL32(120,160,255,(shade*70)/255),ImDrawFlags_Closed,2.f*scale);
+    draw->AddPolyline(ring,56,IM_COL32(150,120,255,(shade*30)/255),ImDrawFlags_Closed,radius*.15f);
+    scaled(.88f);
+    draw->AddPolyline(ring,56,IM_COL32(255,146,58,(shade*150)/255),ImDrawFlags_Closed,radius*.055f);
+    scaled(1.014f);
+    draw->AddPolyline(ring,56,IM_COL32(96,236,255,(shade*110)/255),ImDrawFlags_Closed,3.4f*scale);
+    scaled(.99f);
+    draw->AddPolyline(ring,56,IM_COL32(255,86,128,(shade*110)/255),ImDrawFlags_Closed,3.4f*scale);
     scaled(1.f);
-    draw->AddPolyline(ring,56,IM_COL32(228,234,255,shade),ImDrawFlags_Closed,2.2f*scale);
+    draw->AddPolyline(ring,56,IM_COL32(238,242,255,shade),ImDrawFlags_Closed,3.2f*scale);
 }
 inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,const LoginTransitionFrame& frame) {
     ImGui::SetCursorScreenPos(lo);
