@@ -6,10 +6,16 @@ badge, a clean glass rim with muted corner marks, and pill controls. Login adds
 an Access key label, sentence-case actions and an inset status footer. The
 primary action remains visually distinct, with its purple rim. Authentication
 still submits a captured key through the existing worker, consumes its published
-result and saves the verified key. Its sign-in icon enlarges and moves to the
-center while the label fades, then rotates for two seconds. A successful result
-allows a white fill to expand across the button, followed by a black check,
-a short hold and a complete card fade before loading begins. Slow verification
+result and saves the verified key. Its label fades, the sign-in icon moves to the
+center and grows, then spins one eased turn every two seconds until the result
+arrives. A successful result morphs the icon into a droplet, holds it, lets it
+fall, splashes along the button floor and raises a white liquid whose top
+settles flat, all clipped to the pill. A black check is drawn on and held.
+The card's elements then spiral into the center while the glass shell shrinks,
+a glowing ring contracts to a singularity, a white-hot flash builds, an
+irregular lumpy shockwave with an RGB-split fringe propagates and dissipates,
+and a calm pause beat precedes the loading screen, which fades in from 0.9
+scale with a top-down stagger. Slow verification
 keeps rotating until the result arrives. Failure restores the editable form;
 it never displays a success check or starts loading. Input, paste, cached-key
 and submit actions are disabled throughout the transition. The sequence uses

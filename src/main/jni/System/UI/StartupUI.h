@@ -132,6 +132,136 @@ inline void FadeLogin(ImDrawList* draw,int first,float opacity) {
             static_cast<clay::MaterialDraw*>(command.UserCallbackData)->alpha*=opacity;
 #endif
 }
+inline void Spinner(ImDrawList* draw,const char* icon,ImVec2 center,float size,ImU32 color,float angle) {
+    const int first=draw->VtxBuffer.Size;
+    Icon(draw,icon,center,size,color);
+    const float sine=std::sin(angle),cosine=std::cos(angle);
+    for(int i=first;i<draw->VtxBuffer.Size;++i) {
+        auto& point=draw->VtxBuffer[i].pos;
+        const auto offset=point-center;
+        point=center+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
+    }
+}
+inline void Droplet(ImDrawList* draw,ImVec2 center,float radius,ImU32 color) {
+    draw->PathLineTo(ImVec2(center.x+std::cos(-.55f)*radius,center.y+std::sin(-.55f)*radius));
+    draw->PathArcTo(center,radius,-.55f,3.14159265f+.55f,24);
+    draw->PathLineTo(ImVec2(center.x,center.y-radius*1.85f));
+    draw->PathFillConvex(color);
+}
+inline void LiquidFill(ImDrawList* draw,ImVec2 lo,ImVec2 size,float level,float time) {
+    const ImVec2 hi=lo+size;
+    const float radius=size.y*.5f,cy=lo.y+size.y-radius;
+    const float top=ImLerp(hi.y,lo.y,ImClamp(level,0.f,1.f));
+    const float amplitude=6.f*(1.f-level)*(size.y/66.f);
+    draw->PathLineTo(ImVec2(lo.x,top));
+    for(int i=1;i<=36;++i) {
+        const float t=i/36.f;
+        draw->PathLineTo(ImVec2(lo.x+size.x*t,top+std::sin(t*9.4f+time*8.f)*amplitude*std::sin(t*3.14159265f)));
+    }
+    draw->PathLineTo(ImVec2(hi.x,cy));
+    draw->PathArcTo(ImVec2(hi.x-radius,cy),radius,0.f,1.5707963f,10);
+    draw->PathLineTo(ImVec2(lo.x+radius,hi.y));
+    draw->PathArcTo(ImVec2(lo.x+radius,cy),radius,1.5707963f,3.14159265f,10);
+    draw->PathFillConvex(IM_COL32(255,255,255,255));
+}
+inline void Splash(ImDrawList* draw,ImVec2 lo,ImVec2 size,float amount,float scale) {
+    const float bottom=lo.y+size.y-2.f*scale;
+    const auto alpha=static_cast<ImU32>((1.f-amount)*(1.f-amount)*255.f);
+    draw->AddLine(ImVec2(lo.x+22.f*scale,bottom),ImVec2(lo.x+size.x-22.f*scale,bottom),
+        IM_COL32(255,255,255,alpha),1.6f*scale);
+    for(int i=0;i<8;++i) {
+        const float direction=(i%2?1.f:-1.f);
+        const float spread=(16.f+i*11.f)*scale;
+        const float rise=std::sin(3.14159265f*ImMin(1.f,amount*1.15f))*(10.f+(i%3)*8.f)*scale;
+        const float fall=(1.f-amount)*8.f*scale;
+        draw->AddCircleFilled(ImVec2(lo.x+size.x*.5f+direction*spread,bottom-rise+fall),
+            (2.8f-(i%2)*1.1f)*scale*(1.f-amount*.45f),IM_COL32(255,255,255,alpha));
+    }
+}
+inline void CollapseLogin(ImDrawList* draw,int first,ImVec2 center,float amount) {
+    if(amount<=0.f) return;
+    const float shrink=1.f-.84f*amount;
+    const float angle=2.7f*amount;
+    const float sine=std::sin(angle),cosine=std::cos(angle);
+    const float fade=1.f-amount;
+    for(int i=first;i<draw->VtxBuffer.Size;++i) {
+        auto& vertex=draw->VtxBuffer[i];
+        const auto offset=(vertex.pos-center)*shrink;
+        vertex.pos=center+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
+        const auto alpha=static_cast<ImU32>(((vertex.col>>IM_COL32_A_SHIFT)&255)*fade);
+        vertex.col=(vertex.col&~IM_COL32_A_MASK)|(alpha<<IM_COL32_A_SHIFT);
+    }
+#ifndef CLAY_CPU_PREVIEW
+    for(const auto& command : draw->CmdBuffer)
+        if(command.UserCallback==clay::DrawMaterial)
+            static_cast<clay::MaterialDraw*>(command.UserCallbackData)->alpha*=fade;
+#endif
+}
+inline void RevealDraw(ImDrawList* draw,int first,float reveal,ImVec2 lo,ImVec2 hi) {
+    if(reveal>=1.f) return;
+    for(int i=first;i<draw->VtxBuffer.Size;++i) {
+        auto& vertex=draw->VtxBuffer[i];
+        const float depth=ImClamp((vertex.pos.y-lo.y)/ImMax(1.f,hi.y-lo.y),0.f,1.f);
+        const float amount=ImClamp(reveal*1.7f-depth*.7f,0.f,1.f);
+        const auto alpha=static_cast<ImU32>(((vertex.col>>IM_COL32_A_SHIFT)&255)*amount);
+        vertex.col=(vertex.col&~IM_COL32_A_MASK)|(alpha<<IM_COL32_A_SHIFT);
+    }
+#ifndef CLAY_CPU_PREVIEW
+    for(const auto& command : draw->CmdBuffer)
+        if(command.UserCallback==clay::DrawMaterial)
+            static_cast<clay::MaterialDraw*>(command.UserCallbackData)->alpha*=reveal;
+#endif
+}
+inline float Lumpy(float angle,float time) {
+    return 1.f+.11f*std::sin(angle*5.f+time*2.1f)+.065f*std::sin(angle*9.f-time*1.4f)
+        +.035f*std::sin(angle*17.f+time*3.3f);
+}
+inline void Shockwave(ImDrawList* draw,ImVec2 center,float radius,float alpha,float scale) {
+    const float time=static_cast<float>(ImGui::GetTime());
+    ImVec2 points[72],ring[72];
+    for(int i=0;i<72;++i) {
+        const float angle=i*6.283185307179586f/72.f;
+        const float r=radius*Lumpy(angle,time);
+        points[i]=center+ImVec2(std::cos(angle)*r,std::sin(angle)*r);
+    }
+    const auto a=static_cast<ImU32>(ImClamp(alpha,0.f,1.f)*255.f);
+    draw->AddPolyline(points,72,IM_COL32(150,120,255,(a*26)/255),ImDrawFlags_Closed,radius*.16f);
+    const auto scaled=[&](float factor) {
+        for(int i=0;i<72;++i) ring[i]=center+(points[i]-center)*factor;
+    };
+    scaled(1.02f); draw->AddPolyline(ring,72,IM_COL32(255,72,96,(a*70)/255),ImDrawFlags_Closed,3.f*scale);
+    scaled(.982f); draw->AddPolyline(ring,72,IM_COL32(84,255,206,(a*70)/255),ImDrawFlags_Closed,3.f*scale);
+    scaled(1.f); draw->AddPolyline(ring,72,IM_COL32(118,132,255,(a*96)/255),ImDrawFlags_Closed,2.f*scale);
+    scaled(.9f); draw->AddPolyline(ring,72,IM_COL32(255,150,66,(a*120)/255),ImDrawFlags_Closed,5.f*scale);
+    scaled(1.f); draw->AddPolyline(ring,72,IM_COL32(226,232,255,a),ImDrawFlags_Closed,2.2f*scale);
+}
+inline void BlackHole(ImDrawList* draw,ImVec2 center,const LoginTransitionFrame& frame,float scale) {
+    if(frame.hole>0.f && frame.flash<=0.f) {
+        const float amount=Ease(frame.hole);
+        draw->AddCircleFilled(center,ImLerp(3.f,23.f,amount)*scale,IM_COL32(4,3,9,235),32);
+        const float ring=ImLerp(52.f,9.f,amount)*scale;
+        draw->AddCircle(center,ring,IM_COL32(214,184,255,215),48,2.6f*scale);
+        for(int i=1;i<=3;++i)
+            draw->AddCircle(center,ring+(i*2.4f)*scale,IM_COL32(176,118,255,static_cast<ImU32>(72-i*15)),48,1.4f*scale);
+        draw->AddCircleFilled(center,ImMax(1.f,ring*.34f),IM_COL32(255,252,255,240),24);
+    }
+    if(frame.flash>0.f && frame.shock<=0.f) {
+        const float amount=Ease(frame.flash);
+        for(int i=8;i>=1;--i)
+            draw->AddCircleFilled(center,(5.f+i*6.5f)*scale*(1.f+amount*.75f),
+                ImGui::GetColorU32(ImVec4(1.f,.97f,1.f,.10f*(1.f-i/10.f))),40);
+        draw->AddCircleFilled(center,ImLerp(5.f,22.f,amount)*scale,IM_COL32(255,255,255,255),32);
+        const float arm=ImLerp(12.f,62.f,amount)*scale;
+        draw->AddLine(center-ImVec2(arm,0),center+ImVec2(arm,0),IM_COL32(255,250,255,205),1.8f*scale);
+        draw->AddLine(center-ImVec2(0,arm),center+ImVec2(0,arm),IM_COL32(255,250,255,205),1.8f*scale);
+    }
+    if(frame.shock>0.f) {
+        const float far=ImMin(ImGui::GetIO().DisplaySize.x,ImGui::GetIO().DisplaySize.y)*.72f;
+        const float radius=ImLerp(26.f*scale,ImMax(far,40.f*scale),1.f-(1.f-frame.shock)*(1.f-frame.shock));
+        const float alpha=frame.shock<.08f?frame.shock/.08f:ImMax(0.f,1.f-(frame.shock-.08f)/.92f);
+        Shockwave(draw,center,radius,alpha,scale);
+    }
+}
 inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,const LoginTransitionFrame& frame) {
     if(!loginTransition.active)
         return Pill("##login_auth","Authenticate",ICON_FA_SIGN_IN,lo,size,scale,true,pending);
@@ -140,30 +270,31 @@ inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,co
     ImGui::InvisibleButton("##login_auth",size);
     ImGui::EndDisabled();
     auto* draw=ImGui::GetWindowDrawList();
+    const float time=static_cast<float>(ImGui::GetTime());
     PillMaterial(draw,lo,size,scale,true,false,false);
-    const float morph=Ease(frame.morph),textSize=17.f*scale;
-    const auto labelSize=Body()->CalcTextSizeA(textSize,FLT_MAX,0,"Authenticate");
     const auto center=lo+size*.5f;
+    const auto paint=ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,1.f));
+    const float textSize=17.f*scale;
+    const auto labelSize=Body()->CalcTextSizeA(textSize,FLT_MAX,0,"Authenticate");
     const float startX=lo.x+(size.x-labelSize.x-35.f*scale)*.5f+9.5f*scale;
-    const auto iconCenter=ImLerp(ImVec2(startX,center.y),center,morph);
-    const float iconSize=ImLerp(19.f,32.f,morph)*scale;
-    if(frame.fill<1.f) {
-        const int first=draw->VtxBuffer.Size;
-        Icon(draw,ICON_FA_SIGN_IN,iconCenter,iconSize,ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,1.f)));
-        const float sine=std::sin(frame.rotation),cosine=std::cos(frame.rotation);
-        for(int i=first;i<draw->VtxBuffer.Size;++i) {
-            auto& point=draw->VtxBuffer[i].pos;
-            const auto offset=point-iconCenter;
-            point=iconCenter+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
-        }
+    const auto iconCenter=ImLerp(ImVec2(startX,center.y),center,Ease(frame.morph));
+    const float iconSize=ImLerp(19.f,32.f,Ease(frame.morph))*scale;
+    if(frame.wave>0.f) {
+        if(frame.wave>=.995f) draw->AddRectFilled(lo,lo+size,IM_COL32(255,255,255,255),size.y*.5f);
+        else LiquidFill(draw,lo,size,Ease(frame.wave),time);
     }
-    if(morph<1.f) Text(draw,Body(),textSize,
-        {startX+25.5f*scale,lo.y+(size.y-labelSize.y)*.5f},
-        ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,1.f-morph)),"Authenticate");
-    if(frame.fill>0.f) {
-        const auto half=size*(.5f*Ease(frame.fill));
-        draw->AddRectFilled(center-half,center+half,ImGui::GetColorU32(ImVec4(1,1,1,1)),half.y);
+    if(frame.splash>0.f) Splash(draw,lo,size,Ease(frame.splash),scale);
+    if(frame.wave<=0.f && frame.splash<=0.f) {
+        const auto dropCenter=ImVec2(iconCenter.x,ImLerp(iconCenter.y,lo.y+size.y-15.f*scale,Ease(frame.fall)));
+        if(frame.droplet<1.f)
+            Spinner(draw,ICON_FA_SIGN_IN,dropCenter,iconSize*ImLerp(1.f,.78f,Ease(frame.droplet)),paint,frame.rotation);
+        if(frame.droplet>0.f)
+            Droplet(draw,dropCenter,ImLerp(19.f,7.4f,Ease(frame.droplet))*scale,
+                ImGui::GetColorU32(ImVec4(1,1,1,Ease(frame.droplet))));
     }
+    if(frame.label>0.f) Text(draw,Body(),textSize,
+        ImVec2(startX+25.5f*scale,lo.y+(size.y-labelSize.y)*.5f),
+        ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,frame.label)),"Authenticate");
     if(frame.check>0.f) {
         const float checkSize=26.f*scale*ImLerp(.75f,1.f,Ease(frame.check));
         ImGui::RenderCheckMark(draw,center-ImVec2(checkSize*.5f,checkSize*.55f),
@@ -240,7 +371,7 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         result.load=Pill("##login_load","Load saved",ICON_FA_FOLDER_OPEN,utility+ImVec2(312,0)*scale,ImVec2(288,52)*scale,scale,false,busy);
         result.submit=AuthenticateButton(pos+ImVec2(60,358)*scale,ImVec2(600,66)*scale,scale,pending,animation);
         const bool failed=error && *error && std::strcmp(error,"OK")!=0;
-        const char* status=failed?error:loginTransition.succeeded?"Access granted":busy?"Checking access...":cached?"Saved key available":"Enter your access key to continue";
+        const char* status=failed?error:loginTransition.succeeded?(animation.fall>0.f?"Access granted":"Checking access..."):busy?"Checking access...":cached?"Saved key available":"Enter your access key to continue";
         const auto statusCard=pos+ImVec2(60,444)*scale;
         clay::Liquid(draw,statusCard,statusCard+ImVec2(600,42)*scale,21.f*scale,
             ImVec4(.075f,.06f,.125f,.68f),1.2f);
@@ -252,7 +383,8 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         Text(draw,Body(),13.f*scale,statusMin+ImVec2(32,0)*scale,
             failed?IM_COL32(255,170,183,255):IM_COL32(220,212,233,255),status,statusMax.x-statusMin.x-32.f*scale);
         draw->PopClipRect();
-        FadeLogin(draw,first,animation.opacity);
+        CollapseLogin(draw,first,pos+size*.5f,Ease(animation.suck));
+        if(animation.hole>0.f) BlackHole(ImGui::GetForegroundDrawList(),pos+size*.5f,animation,scale);
     }
     ImGui::End(); ImGui::PopStyleVar();
     return result;
