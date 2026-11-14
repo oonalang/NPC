@@ -5,6 +5,14 @@
 #include <fstream>
 #include <unistd.h>
 
+ImFont* F50 = nullptr;
+ImFont* F107 = nullptr;
+float menu[4] = {.69f, .43f, .96f, 1.f};
+namespace font {
+ImFont* inter_semibold = nullptr;
+ImFont* inter_title = nullptr;
+}
+
 static void File(const std::string& path) { std::ofstream(path).put('x'); }
 int main() {
     char root[]="/tmp/npc-music-XXXXXX";

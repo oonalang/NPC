@@ -196,15 +196,18 @@ inline void Performance(ImVec2 size,float scale) {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 }
+inline float musicFitHeight=0.f;
 inline void Music(ImVec2 size,float scale) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(14,12)*scale);
     ImGui::BeginChild("##home_music",size,false,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|
         ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_AlwaysUseWindowPadding);
+    auto* window=ImGui::GetCurrentWindow();
     Card(ImGui::GetWindowDrawList(),ImGui::GetWindowPos(),size,scale);
     ImGui::TextColored(c::text::text_hov,"YOUR MUSIC");
     ImGui::Dummy(ImVec2(0,3.f*scale));
     music_player::Draw();
     ImGui::EndChild();
+    musicFitHeight=window->DC.CursorMaxPos.y-window->DC.CursorStartPos.y+window->WindowPadding.y*2.f;
     ImGui::PopStyleVar();
 }
 inline void Draw(const HomeStats& stats,ImVec2 available) {
@@ -215,19 +218,20 @@ inline void Draw(const HomeStats& stats,ImVec2 available) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(1.f,1.f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,ImVec2(0,gap));
     ImGui::BeginChild("##home_dashboard",available,false,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|
-        ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_AlwaysUseWindowPadding);
+        ImGuiWindowFlags_AlwaysUseWindowPadding);
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x);
     Hero(stats,width,scale);
     const bool columns=width>=680.f*scale;
     if(columns) {
         Metrics(stats,width,scale);
-        const float panelHeight=std::max(195.f,ImGui::GetContentRegionAvail().y);
         const float leftWidth=(width-gap)*.46f;
+        const float panelHeight=std::max({200.f*scale,ImGui::GetContentRegionAvail().y,musicFitHeight});
         Performance({leftWidth,panelHeight},scale);
         ImGui::SameLine(0,gap);
         Music({width-leftWidth-gap,panelHeight},scale);
     } else {
-        const float musicHeight=std::clamp(ImGui::GetContentRegionAvail().y,200.f*scale,250.f*scale);
+        const float remaining=std::max(0.f,ImGui::GetContentRegionAvail().y);
+        const float musicHeight=std::min(std::max(200.f*scale,musicFitHeight),std::max(200.f*scale,remaining));
         Music({width,musicHeight},scale);
         Metrics(stats,width,scale);
         Performance({width,210.f*scale},scale);

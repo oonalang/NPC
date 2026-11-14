@@ -303,7 +303,7 @@ class Service {
     void Run() {
         Snapshot state;
         NativePlayer player;
-        bool sourceConfigured=false,defaultResolved=false;
+        bool sourceConfigured=false,defaultResolved=false,openAttempted=false;
         for(;;) {
             Command command{Action::Stop};bool hasCommand=false;
             PlatformVM* vm=nullptr;
@@ -315,7 +315,7 @@ class Service {
                 if(!commands_.empty()) {command=std::move(commands_.front());commands_.pop_front();hasCommand=true;}
             }
             const bool wasAvailable=state.available;
-            if(!state.available && vm) state.available=player.Open(vm);
+            if(!state.available && vm && !openAttempted) {openAttempted=true;state.available=player.Open(vm);}
             if(state.available && !defaultResolved) {
                 const auto folder=player.ExternalMusicFolder();
                 if(!folder.empty()) {
@@ -341,7 +341,7 @@ class Service {
                 for(std::size_t i=0;i<state.tracks.size();++i) if(state.tracks[i].path==selected) state.current=static_cast<int>(i);
                 if(!selected.empty() && state.current<0) {player.Stop();state.playing=false;state.position=state.length=0.f;}
                 state.scanning=false;state.scanned=true;state.truncated=library.truncated;
-                if(!library.readable) state.error="Can't read this folder. Choose a folder this app can access.";
+                if(!library.readable && !folders.empty()) state.error="Can't read this folder. Choose a folder this app can access.";
             } else if(hasCommand && command.action==Action::Mode) {
                 const bool cloud=command.index!=0;
                 state.error.clear();
@@ -356,7 +356,8 @@ class Service {
                 const int key=command.action==Action::CloudPrevious?88:command.action==Action::CloudNext?87:85;
                 if(!state.available || !player.CloudAction(key,state.provider,command.action==Action::OpenCloud,state.error)) {
                     if(state.error.empty()) state.error="Cloud controls are available in the Android app.";
-                }
+                } else if(command.action==Action::CloudToggle) state.externalPlaying=!state.externalPlaying;
+                else state.externalPlaying=true;
             } else if(hasCommand) {
                 if(command.action==Action::Stop) {player.Stop();state.current=-1;state.playing=false;state.position=state.length=0.f;}
                 else if(!state.available) state.error="Audio playback is available in the Android app.";
@@ -386,8 +387,7 @@ class Service {
                 }
             }
             if(state.current>=0 && !player.Poll(state)) {player.Stop();state.playing=false;state.current=-1;state.position=state.length=0;state.error="Playback stopped. Choose a track to try again.";}
-            if(state.cloudMode && state.available) {std::string ignored;state.externalPlaying=player.CloudAction(-1,state.provider,false,ignored);}
-            if(hasCommand || state.current>=0 || state.cloudMode || wasAvailable!=state.available) Publish(state);
+            if(hasCommand || state.current>=0 || wasAvailable!=state.available) Publish(state);
         }
     }
 public:
@@ -556,7 +556,7 @@ inline void Draw() {
     if(compact) ImGui::SameLine(0,10.f*scale);
     const auto row=ImGui::GetCursorScreenPos();
     const float refreshWidth=28.f*scale,sourceWidth=28.f*scale;
-    const float libraryWidth=ImMax(40.f,width-(compact?controlsWidth+10.f*scale:0.f)-sourceWidth-refreshWidth-12.f*scale);
+    const float libraryWidth=ImMax(40.f,ImGui::GetContentRegionAvail().x-sourceWidth-refreshWidth-14.f*scale);
     if(TapButton("##music_library_toggle",{libraryWidth,30.f*scale})) libraryOpen=!libraryOpen;
     char libraryLabel[64];std::snprintf(libraryLabel,sizeof(libraryLabel),"%s Library %zu",libraryOpen?"-":"+",state.tracks.size());
     draw->AddText(ImGui::GetFont(),13.f*scale,row+ImVec2(0,7.f*scale),ImGui::GetColorU32(c::text::text),libraryLabel);
