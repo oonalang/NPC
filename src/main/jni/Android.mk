@@ -66,6 +66,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE           := nets
 LOCAL_CFLAGS           := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w
 LOCAL_CFLAGS           += -fno-rtti -fno-exceptions -fpermissive
+LOCAL_ASFLAGS          += -DANIME_ARTWORK_FILE='"$(LOCAL_PATH)/Assets/adult-preview.png"'
 LOCAL_CPPFLAGS         := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w -Werror -s -std=c++17
 LOCAL_CPPFLAGS         += -Wno-error=c++11-narrowing -fms-extensions -fno-rtti -fno-exceptions -fpermissive
 
@@ -92,7 +93,8 @@ LOCAL_SRC_FILES        := $(FILE_LIST:$(LOCAL_PATH)/%=%) \
                               Substrate/SubstrateHook.cpp \
                               Substrate/SubstratePosixMemory.cpp \
                               Substrate/And64InlineHook.cpp \
-                              AstralPrtctn/md5.cpp
+                              AstralPrtctn/md5.cpp \
+                              Assets/AnimeArtwork.S
                               
 LOCAL_LDLIBS := -llog -landroid
 FILE_LIST := $(wildcard $(LOCAL_PATH)/libzip/*.c)

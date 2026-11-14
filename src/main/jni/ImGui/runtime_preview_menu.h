@@ -3,6 +3,8 @@
 #include "Call_ImGui.h"
 #include "ClayGlass.h"
 #include "TouchScroll.h"
+#include "AnimePreview.h"
+#include "AnimeArtwork.h"
 #include "imgui_settings.h"
 #include "../System/Core/SaveConfig.h"
 #include "../System/UI/TextureLoader.h"
@@ -539,237 +541,14 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
     drawList->AddRectFilled(ImVec2(viewMin.x, floorY), ImVec2(viewMax.x, viewMax.y), IM_COL32(15, 15, 21, 245), 0.0f);
     drawList->AddLine(ImVec2(viewMin.x + 6.0f, floorY), ImVec2(viewMax.x - 6.0f, floorY), IM_COL32(150, 145, 175, 40), 1.0f);
 
-    const float cx = (viewMin.x + viewMax.x) * 0.5f;
-    const float modelH = ImMin(viewH * 0.62f, 250.0f);
-    const float feetY = floorY;
-    const float headTop = feetY - modelH;
-    const float headR = modelH * 0.072f;
-    const float shoulderY = headTop + headR * 2.7f;
-    const float hipY = headTop + modelH * 0.54f;
-    const float kneeY = headTop + modelH * 0.79f;
-    const float torsoTop = modelH * 0.115f;
-    const float torsoBottom = modelH * 0.082f;
-    const float legHalf = modelH * 0.045f;
-
-    const float H = modelH;
-    const float t = static_cast<float>(ImGui::GetTime());
-    const float jumpCycle = fmodf(t, 5.5f);
-    const float jumpPhase = jumpCycle < 0.95f ? jumpCycle / 0.95f : -1.0f;
-    const float jump = jumpPhase >= 0.0f ? -std::sin(IM_PI * jumpPhase) * H * 0.10f : 0.0f;
-    const float landing = jumpPhase > 0.8f ? std::sin(IM_PI * (jumpPhase - 0.8f) / 0.2f) : 0.0f;
-    const float breathe = std::sin(t * 1.8f);
-    const float bob = breathe * H * 0.004f + jump;
-    const float squash = 1.0f + (jumpPhase >= 0.0f ? 0.03f * std::sin(IM_PI * jumpPhase) : 0.0f) - landing * 0.05f;
-    const float stretch = 1.0f / squash;
-    const float sway = std::sin(t * 0.9f) * H * 0.004f;
-    const float chest = std::sin(t * 3.3f) * H * 0.006f + breathe * H * 0.004f;
-    const bool blinking = fmodf(t, 3.4f) > 3.26f;
-    const bool excited = jumpPhase >= 0.0f;
-    const float feet = feetY + bob;
-
-    auto P = [&](float x, float h) {
-        return ImVec2(cx + x * stretch + sway * (h / H), feet - h * squash);
-    };
-    auto R = [&](float x0, float h0, float x1, float h1, ImU32 col, float round) {
-        const ImVec2 a = P(x0, h1);
-        const ImVec2 b = P(x1, h0);
-        drawList->AddRectFilled(
-            ImVec2(ImMin(a.x, b.x), ImMin(a.y, b.y)),
-            ImVec2(ImMax(a.x, b.x), ImMax(a.y, b.y)),
-            col,
-            round
-        );
-    };
-
-    const ImU32 skin = IM_COL32(255, 226, 214, 255);
-    const ImU32 skinShade = IM_COL32(236, 198, 190, 255);
-    const ImU32 hairCol = IM_COL32(200, 180, 244, 255);
-    const ImU32 hairShade = IM_COL32(150, 128, 208, 255);
-    const ImU32 dress = IM_COL32(116, 90, 176, 255);
-    const ImU32 dressLight = IM_COL32(152, 122, 214, 255);
-    const ImU32 boot = IM_COL32(58, 48, 82, 255);
-    const ImU32 accent = IM_COL32(177, 110, 245, 255);
-    const ImU32 eyeCol = IM_COL32(84, 52, 138, 255);
-    const ImU32 blush = IM_COL32(255, 130, 170, 90);
-
-    for (int side = -1; side <= 1; side += 2) {
-        const float legX = side * H * 0.048f;
-        R(legX - H * 0.034f, H * 0.045f, legX + H * 0.034f, H * 0.345f, skin, H * 0.030f);
-        R(legX - H * 0.038f, H * 0.000f, legX + H * 0.038f, H * 0.085f, boot, H * 0.028f);
-        R(legX - H * 0.036f, H * 0.074f, legX + H * 0.036f, H * 0.102f, accent, H * 0.011f);
-    }
-
-    {
-        const ImVec2 skirt[] = {
-            P(-H * 0.072f, H * 0.600f),
-            P(H * 0.072f, H * 0.600f),
-            P(H * 0.152f, H * 0.345f),
-            P(-H * 0.152f, H * 0.345f)
-        };
-        drawList->AddConvexPolyFilled(skirt, 4, dress);
-        drawList->AddLine(P(-H * 0.150f, H * 0.353f), P(H * 0.150f, H * 0.353f), dressLight, H * 0.010f);
-    }
-
-    {
-        const ImVec2 torso[] = {
-            P(-H * 0.078f, H * 0.625f),
-            P(H * 0.078f, H * 0.625f),
-            P(H * 0.070f, H * 0.440f),
-            P(-H * 0.070f, H * 0.440f)
-        };
-        drawList->AddConvexPolyFilled(torso, 4, dressLight);
-        R(-H * 0.078f, H * 0.600f, H * 0.078f, H * 0.618f, dress, H * 0.008f);
-        const float bust = H * 0.040f;
-        for (int side = -1; side <= 1; side += 2) {
-            drawList->AddCircleFilled(P(side * H * 0.034f, H * 0.560f + chest), bust, dressLight, 18);
-        }
-        drawList->AddCircleFilled(P(0.0f, H * 0.585f + chest * 0.5f), bust * 0.86f, dress, 18);
-        drawList->AddCircleFilled(P(0.0f, H * 0.600f + chest * 0.3f), H * 0.012f, accent, 12);
-    }
-
-    {
-        const float lift = excited ? std::sin(IM_PI * jumpPhase) * H * 0.075f : 0.0f;
-        const float idleLift = std::sin(t * 1.8f + 0.6f) * H * 0.006f;
-        for (int side = -1; side <= 1; side += 2) {
-            drawList->AddCircleFilled(P(side * H * 0.088f, H * 0.602f), H * 0.036f, dress, 16);
-            const ImVec2 shoulder = P(side * H * 0.082f, H * 0.610f);
-            const ImVec2 elbow = P(side * (H * 0.114f + lift * 0.25f), H * 0.525f + lift * 1.1f + idleLift);
-            const ImVec2 hand = P(side * (H * 0.122f + lift * 0.45f), H * 0.452f + lift * 2.1f + idleLift * 1.7f);
-            drawList->AddLine(shoulder, elbow, skin, H * 0.026f);
-            drawList->AddLine(elbow, hand, skin, H * 0.024f);
-            drawList->AddCircleFilled(hand, H * 0.020f, skin, 12);
-        }
-        R(-H * 0.020f, H * 0.615f, H * 0.020f, H * 0.655f, skinShade, H * 0.010f);
-    }
-
-    const ImVec2 headC = P(0.0f, H * 0.790f);
-    const float headRadius = H * 0.118f;
-
-    drawList->AddCircleFilled(headC + ImVec2(0.0f, H * 0.014f), headRadius * 1.14f, hairShade, 28);
-    for (int side = -1; side <= 1; side += 2) {
-        const float tailSway = std::sin(t * 1.6f + side * 0.8f) * H * 0.018f;
-        const ImVec2 root = headC + ImVec2(side * headRadius * 0.92f, headRadius * 0.24f);
-        const ImVec2 tail = root + ImVec2(side * H * 0.050f, H * 0.255f + tailSway * 1.6f);
-        drawList->AddBezierCubic(
-            root,
-            root + ImVec2(side * H * 0.080f, H * 0.060f + tailSway),
-            root + ImVec2(side * H * 0.088f, H * 0.190f + tailSway * 1.3f),
-            tail,
-            hairCol,
-            H * 0.042f,
-            18
-        );
-        drawList->AddCircleFilled(tail, H * 0.026f, hairCol, 14);
-        drawList->AddCircleFilled(tail + ImVec2(side * H * 0.004f, -H * 0.004f), H * 0.013f, hairShade, 12);
-    }
-
-    drawList->AddCircleFilled(headC + ImVec2(0.0f, -headRadius * 0.06f), headRadius * 1.06f, hairCol, 30);
-    drawList->AddCircleFilled(headC + ImVec2(0.0f, headRadius * 0.12f), headRadius * 0.92f, skin, 30);
-    for (int i = -2; i <= 2; ++i) {
-        drawList->AddCircleFilled(
-            headC + ImVec2(i * headRadius * 0.34f, -headRadius * 0.40f + std::fabs(static_cast<float>(i)) * headRadius * 0.08f),
-            headRadius * (0.40f - std::fabs(static_cast<float>(i)) * 0.02f),
-            hairCol,
-            18
-        );
-    }
-    for (int side = -1; side <= 1; side += 2) {
-        drawList->AddCircleFilled(headC + ImVec2(side * headRadius * 0.94f, headRadius * 0.18f), headRadius * 0.28f, hairCol, 14);
-        drawList->AddLine(
-            headC + ImVec2(side * headRadius * 0.40f, -headRadius * 0.66f),
-            headC + ImVec2(side * headRadius * 0.60f, -headRadius * 0.22f),
-            ImGui::GetColorU32(ImVec4(1.f, 1.f, 1.f, 0.28f)),
-            ImMax(1.2f, H * 0.005f)
-        );
-    }
-
-    {
-        const float eyeX = headRadius * 0.40f;
-        const float eyeY = headC.y + headRadius * 0.14f;
-        const float eyeW = headRadius * 0.19f;
-        const float eyeH = headRadius * 0.28f;
-        for (int side = -1; side <= 1; side += 2) {
-            const float ex = headC.x + side * eyeX;
-            if (blinking) {
-                drawList->AddLine(
-                    ImVec2(ex - eyeW, eyeY + eyeH * 0.35f),
-                    ImVec2(ex + eyeW, eyeY + eyeH * 0.35f),
-                    eyeCol,
-                    ImMax(1.0f, H * 0.006f)
-                );
-            } else if (excited) {
-                drawList->PathLineTo(ImVec2(ex - eyeW, eyeY + eyeH * 0.45f));
-                drawList->PathLineTo(ImVec2(ex, eyeY - eyeH * 0.45f));
-                drawList->PathLineTo(ImVec2(ex + eyeW, eyeY + eyeH * 0.45f));
-                drawList->PathStroke(eyeCol, 0, ImMax(1.4f, H * 0.008f));
-            } else {
-                drawList->AddRectFilled(
-                    ImVec2(ex - eyeW, eyeY - eyeH * 0.5f),
-                    ImVec2(ex + eyeW, eyeY + eyeH * 0.5f),
-                    eyeCol,
-                    eyeW
-                );
-                drawList->AddCircleFilled(
-                    ImVec2(ex - eyeW * 0.35f, eyeY - eyeH * 0.28f),
-                    eyeW * 0.46f,
-                    ImGui::GetColorU32(ImVec4(1, 1, 1, 0.94f)),
-                    10
-                );
-                drawList->AddCircleFilled(
-                    ImVec2(ex + eyeW * 0.40f, eyeY + eyeH * 0.26f),
-                    eyeW * 0.24f,
-                    ImGui::GetColorU32(ImVec4(1, 1, 1, 0.7f)),
-                    8
-                );
-            }
-            drawList->AddCircleFilled(
-                ImVec2(headC.x + side * headRadius * 0.62f, eyeY + headRadius * 0.22f),
-                headRadius * 0.14f,
-                blush,
-                12
-            );
-        }
-        const float mouthY = eyeY + eyeH * 0.95f;
-        if (excited) {
-            drawList->AddCircleFilled(ImVec2(headC.x, mouthY), headRadius * 0.09f, eyeCol, 12);
-        } else {
-            drawList->PathArcTo(ImVec2(headC.x, mouthY), headRadius * 0.13f, 0.35f, IM_PI - 0.35f, 10);
-            drawList->PathStroke(eyeCol, 0, ImMax(1.2f, H * 0.006f));
-        }
-    }
-
-    {
-        const ImVec2 bow = headC + ImVec2(-headRadius * 0.86f, -headRadius * 0.92f);
-        drawList->AddTriangleFilled(
-            bow,
-            bow + ImVec2(-H * 0.030f, -H * 0.020f),
-            bow + ImVec2(-H * 0.030f, H * 0.020f),
-            accent
-        );
-        drawList->AddTriangleFilled(
-            bow,
-            bow + ImVec2(H * 0.026f, -H * 0.018f),
-            bow + ImVec2(H * 0.026f, H * 0.018f),
-            accent
-        );
-        drawList->AddCircleFilled(bow, H * 0.009f, ImGui::GetColorU32(ImVec4(1, 1, 1, 0.92f)), 10);
-    }
-
-    if (excited) {
-        const float sparkle = std::sin(IM_PI * jumpPhase);
-        const auto spark = ImGui::GetColorU32(ImVec4(1.f, 0.95f, 1.f, sparkle * 0.85f));
-        for (int i = 0; i < 4; ++i) {
-            const float a = t * 2.2f + i * 1.57f;
-            const ImVec2 c = headC + ImVec2(std::cos(a) * headRadius * 1.75f, std::sin(a) * headRadius * 1.45f - H * 0.02f);
-            const float s = H * 0.014f * sparkle;
-            drawList->AddLine(c - ImVec2(s, 0.0f), c + ImVec2(s, 0.0f), spark, 1.7f);
-            drawList->AddLine(c - ImVec2(0.0f, s), c + ImVec2(0.0f, s), spark, 1.7f);
-        }
-    }
-
-    const float boxHalf = modelH * 0.185f;
-    const ImVec2 bMin(cx - boxHalf, headTop - 6.0f);
-    const ImVec2 bMax(cx + boxHalf, feetY + 4.0f);
+    anime_preview::SetArtwork(anime_artwork::Ensure(),anime_artwork::width,anime_artwork::height);
+    const auto model=anime_preview::Draw(drawList,viewMin+ImVec2(4,12),viewMax-ImVec2(4,12),
+        ImGui::GetTime(),ImGui::GetIO().DeltaTime);
+    const float cx=(model.min.x+model.max.x)*.5f;
+    const float modelH=model.height;
+    const float feetY=model.feet.y;
+    const float boxHalf=(model.max.x-model.min.x)*.5f;
+    const ImVec2 bMin=model.min-ImVec2(3,4),bMax=model.max+ImVec2(3,4);
     const ImU32 enemy = IM_COL32(255, 72, 72, 255);
     const ImU32 healthGreen = IM_COL32(84, 224, 140, 255);
 
@@ -828,19 +607,16 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
     }
 
     if (state.skeleton) {
-        const ImU32 bone = IM_COL32(255, 190, 190, 170);
-        const ImVec2 neck = P(0.0f, H * 0.660f);
-        const ImVec2 head = P(0.0f, H * 0.790f);
-        const ImVec2 hip = P(0.0f, H * 0.450f);
-        drawList->AddLine(head, neck, bone, 1.4f);
-        drawList->AddLine(P(-H * 0.082f, H * 0.612f), P(H * 0.082f, H * 0.612f), bone, 1.4f);
-        drawList->AddLine(P(-H * 0.082f, H * 0.612f), P(-H * 0.114f, H * 0.470f), bone, 1.4f);
-        drawList->AddLine(P(H * 0.082f, H * 0.612f), P(H * 0.114f, H * 0.470f), bone, 1.4f);
-        drawList->AddLine(neck, hip, bone, 1.4f);
-        drawList->AddLine(hip, P(-H * 0.048f, H * 0.200f), bone, 1.4f);
-        drawList->AddLine(hip, P(H * 0.048f, H * 0.200f), bone, 1.4f);
-        drawList->AddLine(P(-H * 0.048f, H * 0.200f), P(-H * 0.048f, H * 0.050f), bone, 1.4f);
-        drawList->AddLine(P(H * 0.048f, H * 0.200f), P(H * 0.048f, H * 0.050f), bone, 1.4f);
+        const ImU32 bone=IM_COL32(255,190,190,170);
+        drawList->AddLine(model.head,model.neck,bone,1.4f);
+        drawList->AddLine(model.neck,model.hip,bone,1.4f);
+        drawList->AddLine(model.shoulder[0],model.shoulder[1],bone,1.4f);
+        for(int side=0;side<2;++side) {
+            drawList->AddLine(model.shoulder[side],model.elbow[side],bone,1.4f);
+            drawList->AddLine(model.elbow[side],model.hand[side],bone,1.4f);
+            drawList->AddLine(model.hip,model.knees[side],bone,1.4f);
+            drawList->AddLine(model.knees[side],model.ankle[side],bone,1.4f);
+        }
     }
 
     if (state.health) {

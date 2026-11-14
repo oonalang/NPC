@@ -302,7 +302,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     io->DisplaySize = ImVec2((float)g_GlWidth, (float)g_GlHeight);
     const auto frameTime = std::chrono::steady_clock::now();
     static auto previousFrameTime = frameTime;
-    io->DeltaTime = ImClamp(std::chrono::duration<float>(frameTime - previousFrameTime).count(), .0001f, .05f);
+    const float measuredFrameSeconds=std::chrono::duration<float>(frameTime-previousFrameTime).count();
+    io->DeltaTime = ImClamp(measuredFrameSeconds, .0001f, .05f);
     previousFrameTime = frameTime;
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
@@ -621,16 +622,16 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     clay::Backdrop(runtimeDrawList, railMin, railMax, 22.f, .88f);
 
                     static const char *sidebarIcons[] = {
+                        ICON_FA_HOME,
                         ICON_FA_EYE,
                         ICON_FA_CROSSHAIRS,
                         ICON_FA_BULLSEYE,
                         ICON_FA_MICROCHIP,
                         ICON_FA_MAGIC,
-                        ICON_FA_HOME,
                         ICON_FA_COG
                     };
                     static const char *sidebarLabels[] = {
-                        "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Home", "Settings"
+                        "Home", "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Settings"
                     };
                     const int sidebarButtonCount = IM_ARRAYSIZE(sidebarIcons);
                     const float sidebarButtonGap = 6.0f;
@@ -659,7 +660,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     clay::Backdrop(runtimeDrawList, hostMin, hostMax, 22.f, .93f);
 
                     ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
-                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
+                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
                     {
                         const bool pushedContentFont = (font::inter_semibold != nullptr);
                         if (pushedContentFont) {
@@ -672,7 +673,40 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         const float childHeight = ImMax(0.0f, contentRegion.y);
                         const float childWidth = ImMax(0.0f, (contentRegion.x - columnGap) * 0.5f);
 
+                        home_tab::HomeStats homeStats;
+                        homeStats.fps = ImGui::GetIO().Framerate;
+                        homeStats.frameMs = ImMax(0.f,measuredFrameSeconds*1000.f);
+                        homeStats.uptime = ImGui::GetTime();
+                        homeStats.width = static_cast<int>(displaySize.x);
+                        homeStats.height = static_cast<int>(displaySize.y);
+                        homeStats.keySaved = g_LoginTextLoaded;
+                        const bool enabledOptions[]{
+                            Config.ESPMenu.isPlayerLine, Config.ESPMenu.Box, Config.ESPMenu.Skeleton,
+                            Config.ESPMenu.Health, Config.ESPMenu.Name, Config.ESPMenu.Distance,
+                            Config.ESPMenu.Count, Config.ESPMenu.Alert, Config.ESPMenu.BRClass,
+                            Config.ESPMenu.Aimline, Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
+                            Config.Aim.Aimbot360, Config.Aim.AimSilent, Config.ESPMenu.ShowFov,
+                            Config.ExtraMenu.Blueprints, Config.ExtraMenu.AutoJumpFire, Config.ExtraMenu.FastArmorPlate,
+                            Config.ExtraMenu.CameraPov, Config.ExtraMenu.SmartReload, Config.ExtraMenu.NoSmoke,
+                            Config.ExtraMenu.ClearTerrain, Config.ExtraMenu.UnlimitedFly, Config.ExtraMenu.Hit,
+                            Config.ExtraMenu.Recoil, Config.ExtraMenu.Spread, Config.ExtraMenu.Shake,
+                            Config.ExtraMenu.Rpd, Config.ExtraMenu.Parachute, Config.ExtraMenu.NoCrouch,
+                            Config.ExtraMenu.Flash, Config.ExtraMenu.Fire, Config.ExtraMenu.NoSprintFire,
+                            Config.ExtraMenu.Diving, Config.ExtraMenu.Reload, Config.ExtraMenu.Scope,
+                            Config.ExtraMenu.Switch, Config.ExtraMenu.Kinetic,
+                            PhantomTrigger::GetSettings().enabled,PhantomTrigger::GetSettings().showDot
+                        };
+                        homeStats.activeFeatures=static_cast<int>(std::count(std::begin(enabledOptions),std::end(enabledOptions),true));
+
+                        home_tab::Observe(homeStats,ImGui::GetTime());
+                        anime_artwork::Prepare();
                         if (runtimeState.activeTab == 1)
+                        {
+                            music_player::Init(VM);
+                            home_tab::Draw(homeStats,contentRegion);
+                        }
+
+                        if (runtimeState.activeTab == 2)
                         {
                             // ESP page redesigned to match the supplied reference. All existing
                             // feature/config pointers remain unchanged; this block only changes presentation.
@@ -758,7 +792,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             ImGui::Dummy(ImVec2(espPreviewW, childHeight));
                         }
 
-                        if (runtimeState.activeTab == 2)
+                        if (runtimeState.activeTab == 3)
                         {
                             const float aimHeight = childHeight;
                             custom::BeginGroup();
@@ -790,14 +824,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             custom::EndGroup();
                         }
 
-                        if (runtimeState.activeTab == 3)
+                        if (runtimeState.activeTab == 4)
                         {
                             RenderTriggerCustomizationTab(childWidth, childHeight, columnGap,
                                                           hideRecordEnabled, hideRecordUnavailable,
                                                           &RequestTriggerInitialization);
                         }
 
-                        if (runtimeState.activeTab == 4)
+                        if (runtimeState.activeTab == 5)
                         {
                             custom::BeginGroup();
                             {
@@ -879,53 +913,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             custom::EndGroup();
                         }
 
-                        if (runtimeState.activeTab == 5)
+                        if (runtimeState.activeTab == 6)
                         {
                             const ChildFrame skinChild = BeginContentChild("SKINS", ImVec2(contentRegion.x, childHeight));
                             RenderSkinCategoryContent(skinSubTab, true);
                             EndContentChild(skinChild);
-                        }
-
-                        if (runtimeState.activeTab == 6)
-                        {
-                            const ChildFrame home = BeginContentChild("HOME", ImVec2(contentRegion.x, childHeight));
-
-                            home_tab::HomeStats homeStats;
-                            homeStats.fps = ImGui::GetIO().Framerate;
-                            homeStats.frameMs = homeStats.fps > 0.0f ? 1000.0f / homeStats.fps : 0.0f;
-                            homeStats.uptime = ImGui::GetTime();
-                            homeStats.width = static_cast<int>(displaySize.x);
-                            homeStats.height = static_cast<int>(displaySize.y);
-                            homeStats.keySaved = g_LoginTextLoaded;
-                            homeStats.activeFeatures =
-                                (Config.ESPMenu.Box ? 1 : 0) + (Config.ESPMenu.Name ? 1 : 0) +
-                                (Config.ESPMenu.Skeleton ? 1 : 0) + (Config.ESPMenu.Health ? 1 : 0) +
-                                (Config.ESPMenu.Distance ? 1 : 0) + (Config.ESPMenu.Count ? 1 : 0) +
-                                (Config.ESPMenu.Alert ? 1 : 0) + (Config.Aim.Aimbot360 ? 1 : 0) +
-                                (Config.Aim.AimSilent ? 1 : 0) + (Config.ExtraMenu.Recoil ? 1 : 0) +
-                                (Config.ExtraMenu.Spread ? 1 : 0) + (Config.ExtraMenu.Fire ? 1 : 0) +
-                                (Config.ExtraMenu.Reload ? 1 : 0) + (Config.ExtraMenu.Scope ? 1 : 0) +
-                                (Config.ExtraMenu.Switch ? 1 : 0) + (Config.ExtraMenu.Flash ? 1 : 0) +
-                                (Config.ExtraMenu.WallHack ? 1 : 0);
-
-                            const float statsHeight = 176.0f * c::scale;
-                            {
-                                const ChildFrame stats = BeginContentChild("SESSION", ImVec2(contentRegion.x, statsHeight));
-                                home_tab::DrawStats(homeStats);
-                                EndContentChild(stats);
-                            }
-
-                            misc_tab::ContentGap(8.0f);
-
-                            {
-                                music_player::Init(VM);
-                                const float musicHeight = ImMax(140.0f, contentRegion.y - statsHeight - 8.0f);
-                                const ChildFrame music = BeginContentChild("MUSIC", ImVec2(contentRegion.x, musicHeight));
-                                music_player::Draw();
-                                EndContentChild(music);
-                            }
-
-                            EndContentChild(home);
                         }
 
                         if (runtimeState.activeTab == 7)
