@@ -6,14 +6,19 @@ badge, a clean glass rim with muted corner marks, and pill controls. Login adds
 an Access key label, sentence-case actions and an inset status footer. The
 primary action remains visually distinct, with its purple rim. Authentication
 still submits a captured key through the existing worker, consumes its published
-result and saves the verified key. Its sign-in icon enlarges and moves to the
-center while the label fades, then rotates for two seconds. A successful result
-allows a white fill to expand across the button, followed by a black check,
-a short hold and a complete card fade before loading begins. Slow verification
-keeps rotating until the result arrives. Failure restores the editable form;
-it never displays a success check or starts loading. Input, paste, cached-key
-and submit actions are disabled throughout the transition. The sequence uses
-monotonic elapsed time and does not block the render thread.
+result and saves the verified key. The authenticate action follows the corrected
+[storyboard timing and verification contract](authenticate-storyboard.md): label
+fade, centered icon growth, a two-second eased turn ending upright, droplet morph
+and hover, accelerating fall, clipped splash, bottom-up liquid wave and a drawn
+black check. The complete card then spirals inward before a singularity, flash
+and screen-space refractive shockwave. A real 350 ms checkerboard-only beat
+precedes the staggered loading reveal. The loading timeline and animated banner
+start at B6, never earlier. Failure restores the editable form; success artwork
+requires genuine verification. A late result holds the upright icon at the end
+of the spin. Controls and Unity touch-count input remain blocked through the
+completed reveal. Android's disabled-animator preference selects the reduced
+path: one presented success-check frame followed by settled loading. Timings use
+monotonic elapsed time without blocking the render thread.
 
 The login card centers on its first frame, when reopened, and whenever the
 viewport changes size or position. This handles the game's initial surface

@@ -5,6 +5,7 @@
 #include "../../Fonts/Icon.h"
 #include "StartupMedia.h"
 #include "StartupState.h"
+#include "AuthenticateButton.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -133,43 +134,15 @@ inline void FadeLogin(ImDrawList* draw,int first,float opacity) {
 #endif
 }
 inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,const LoginTransitionFrame& frame) {
-    if(!loginTransition.active)
-        return Pill("##login_auth","Authenticate",ICON_FA_SIGN_IN,lo,size,scale,true,pending);
     ImGui::SetCursorScreenPos(lo);
-    ImGui::BeginDisabled();
-    ImGui::InvisibleButton("##login_auth",size);
+    ImGui::BeginDisabled(pending || frame.inputBlocked);
+    const bool pressed=ImGui::InvisibleButton("##login_auth",size);
+    const bool held=ImGui::IsItemActive(),hovered=ImGui::IsItemHovered();
     ImGui::EndDisabled();
     auto* draw=ImGui::GetWindowDrawList();
-    PillMaterial(draw,lo,size,scale,true,false,false);
-    const float morph=Ease(frame.morph),textSize=17.f*scale;
-    const auto labelSize=Body()->CalcTextSizeA(textSize,FLT_MAX,0,"Authenticate");
-    const auto center=lo+size*.5f;
-    const float startX=lo.x+(size.x-labelSize.x-35.f*scale)*.5f+9.5f*scale;
-    const auto iconCenter=ImLerp(ImVec2(startX,center.y),center,morph);
-    const float iconSize=ImLerp(19.f,32.f,morph)*scale;
-    if(frame.fill<1.f) {
-        const int first=draw->VtxBuffer.Size;
-        Icon(draw,ICON_FA_SIGN_IN,iconCenter,iconSize,ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,1.f)));
-        const float sine=std::sin(frame.rotation),cosine=std::cos(frame.rotation);
-        for(int i=first;i<draw->VtxBuffer.Size;++i) {
-            auto& point=draw->VtxBuffer[i].pos;
-            const auto offset=point-iconCenter;
-            point=iconCenter+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
-        }
-    }
-    if(morph<1.f) Text(draw,Body(),textSize,
-        {startX+25.5f*scale,lo.y+(size.y-labelSize.y)*.5f},
-        ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,1.f-morph)),"Authenticate");
-    if(frame.fill>0.f) {
-        const auto half=size*(.5f*Ease(frame.fill));
-        draw->AddRectFilled(center-half,center+half,ImGui::GetColorU32(ImVec4(1,1,1,1)),half.y);
-    }
-    if(frame.check>0.f) {
-        const float checkSize=26.f*scale*ImLerp(.75f,1.f,Ease(frame.check));
-        ImGui::RenderCheckMark(draw,center-ImVec2(checkSize*.5f,checkSize*.55f),
-            ImGui::GetColorU32(ImVec4(.025f,.025f,.035f,Ease(frame.check))),checkSize);
-    }
-    return false;
+    PillMaterial(draw,lo,size,scale,true,held,hovered);
+    DrawAuthenticateContents(draw,lo,size,scale,frame.button,Body(),Icons());
+    return pressed;
 }
 struct LoginActions { bool paste=false, load=false, submit=false; };
 struct LoginPosition { ImVec2 resting,viewportPos,viewportSize; bool known=false, shifted=false; };
@@ -177,8 +150,10 @@ inline LoginPosition loginPosition;
 
 template<class Input>
 LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* error, bool cached,
-                         bool& keyboard, Input input) {
+                         bool& keyboard, Input input,const LoginTransitionFrame* overrideFrame=nullptr) {
     LoginActions result;
+    const auto animation=overrideFrame?*overrideFrame:loginTransition.At(Now());
+    if(!animation.loginVisible) return result;
     const ImVec2 logical(720,500); const float scale=Fit(logical);
     const auto size=logical*scale;
     const auto windowSize=size+ImVec2(20,20)*scale;
@@ -205,11 +180,12 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         loginPosition.shifted=false;
     } else if(resized) ImGui::SetNextWindowPos(loginPosition.resting,ImGuiCond_Always);
     ImGui::SetNextWindowSize(windowSize,ImGuiCond_Always);
-    const auto animation=loginTransition.At(Now());
-    const bool busy=pending || loginTransition.active;
+    const bool busy=pending || animation.inputBlocked || loginTransition.active;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,{0,0});
+    ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha,1.f);
     if(ImGui::Begin("Login Menu",nullptr,ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings|
-        ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse)) {
+        ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize|ImGuiWindowFlags_NoCollapse|
+        (busy?ImGuiWindowFlags_NoMove:0))) {
         if(!keyboard) { loginPosition.resting=ImGui::GetWindowPos(); loginPosition.known=true; }
         const auto pos=ImGui::GetWindowPos()+ImVec2(10,10)*scale;
         auto* draw=ImGui::GetWindowDrawList();
@@ -240,7 +216,7 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         result.load=Pill("##login_load","Load saved",ICON_FA_FOLDER_OPEN,utility+ImVec2(312,0)*scale,ImVec2(288,52)*scale,scale,false,busy);
         result.submit=AuthenticateButton(pos+ImVec2(60,358)*scale,ImVec2(600,66)*scale,scale,pending,animation);
         const bool failed=error && *error && std::strcmp(error,"OK")!=0;
-        const char* status=failed?error:loginTransition.succeeded?"Access granted":busy?"Checking access...":cached?"Saved key available":"Enter your access key to continue";
+        const char* status=failed?error:animation.granted?"Access granted":cached?"Saved key available":"Enter your access key to continue";
         const auto statusCard=pos+ImVec2(60,444)*scale;
         clay::Liquid(draw,statusCard,statusCard+ImVec2(600,42)*scale,21.f*scale,
             ImVec4(.075f,.06f,.125f,.68f),1.2f);
@@ -254,22 +230,70 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         draw->PopClipRect();
         FadeLogin(draw,first,animation.opacity);
     }
-    ImGui::End(); ImGui::PopStyleVar();
+    ImGui::End(); ImGui::PopStyleVar(2);
     return result;
 }
 
-inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, float progress, float time) {
-    Frame(draw,pos,size,scale); Brand(draw,pos,size.x,scale);
+struct DrawSlice {
+    int vertex=0;
+    unsigned material=0;
+};
+inline DrawSlice BeginSlice(ImDrawList* draw) {
+    DrawSlice slice;
+    slice.vertex=draw->VtxBuffer.Size;
+#ifndef CLAY_CPU_PREVIEW
+    slice.material=clay::materialCount;
+#endif
+    return slice;
+}
+inline void RevealSlice(ImDrawList* draw,const DrawSlice& slice,ImVec2 center,float scale,float opacity) {
+    for(int i=slice.vertex;i<draw->VtxBuffer.Size;++i) {
+        auto& vertex=draw->VtxBuffer[i];
+        vertex.pos=center+(vertex.pos-center)*scale;
+        const auto alpha=static_cast<ImU32>(((vertex.col>>IM_COL32_A_SHIFT)&255)*opacity);
+        vertex.col=(vertex.col&~IM_COL32_A_MASK)|(alpha<<IM_COL32_A_SHIFT);
+    }
+#ifndef CLAY_CPU_PREVIEW
+    for(unsigned i=slice.material;i<clay::materialCount;++i) {
+        auto& material=clay::materialDraws[i];
+        material.lo=center+(material.lo-center)*scale;
+        material.hi=center+(material.hi-center)*scale;
+        material.radius*=scale;
+        material.alpha*=opacity;
+    }
+#endif
+}
+
+inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, float progress, float time,const LoadingReveal* reveal=nullptr) {
+    const LoadingReveal appearance=reveal?*reveal:LoadingReveal{};
+    const auto center=pos+size*.5f;
+    auto section=BeginSlice(draw);
+    Frame(draw,pos,size,scale);
+    RevealSlice(draw,section,center,appearance.Scale(),Smooth(appearance.progress));
+    section=BeginSlice(draw);
+    Brand(draw,pos,size.x,scale);
     const float cx=pos.x+size.x*.5f;
     const auto tip=TipAt(time);
     const float tipSize=13.f*scale,tipWidth=612.f*scale;
     const auto tipBounds=Body()->CalcTextSizeA(tipSize,FLT_MAX,tipWidth,loadingTips[tip.index]);
     draw->PushClipRect(pos+ImVec2(30,134)*scale,pos+ImVec2(650,160)*scale,true);
+    const int tipFirstCommand=draw->CmdBuffer.Size-1;
     const ImVec2 tipPos(cx-tipBounds.x*.5f,pos.y+146.f*scale-tipBounds.y*.5f);
     Text(draw,Body(),tipSize,tipPos,
         ImGui::GetColorU32(ImVec4(.86f,.84f,.92f,tip.opacity)),loadingTips[tip.index],tipWidth);
+    const int tipEndCommand=draw->CmdBuffer.Size;
+    for(int i=tipFirstCommand;i<tipEndCommand;++i) {
+        auto& clip=draw->CmdBuffer[i].ClipRect;
+        const auto lo=center+(ImVec2(clip.x,clip.y)-center)*appearance.Scale();
+        const auto hi=center+(ImVec2(clip.z,clip.w)-center)*appearance.Scale();
+        clip={lo.x,lo.y,hi.x,hi.y};
+    }
     draw->PopClipRect();
+    RevealSlice(draw,section,center,appearance.Scale(),appearance.Group(0));
+    section=BeginSlice(draw);
     media::Banner(draw,pos+ImVec2(24,188)*scale,ImVec2(632,194)*scale,scale,time);
+    RevealSlice(draw,section,center,appearance.Scale(),appearance.Group(1));
+    section=BeginSlice(draw);
     const char* labels[]{"Initializing","Verifying","Loading Data","Finalizing"};
     for(int i=0;i<4;++i) {
         const auto lo=pos+ImVec2(50.f+i*154.f,408.f)*scale;
@@ -293,6 +317,8 @@ inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, 
             if(end>start) draw->AddLine({start,center.y},{end,center.y},IM_COL32(195,184,213,complete?65:30),1.f*scale);
         }
     }
+    RevealSlice(draw,section,center,appearance.Scale(),appearance.Group(2));
+    section=BeginSlice(draw);
     const auto bar=pos+ImVec2(50,479)*scale; const auto barSize=ImVec2(514,18)*scale;
     Gradient(draw,bar,bar+barSize,9.f*scale,ImVec4(.18f,.17f,.24f,.75f),ImVec4(.35f,.32f,.43f,.5f));
     draw->AddRect(bar,bar+barSize,IM_COL32(233,225,255,38),9.f*scale,0,1.f*scale);
@@ -304,11 +330,14 @@ inline void LoadingCard(ImDrawList* draw, ImVec2 pos, ImVec2 size, float scale, 
     }
     char percentage[16]; std::snprintf(percentage,sizeof(percentage),"%d%%",static_cast<int>(progress*100.f+.5f));
     Text(draw,Body(),20.f*scale,pos+ImVec2(600,477)*scale,IM_COL32(238,233,247,255),percentage);
+    RevealSlice(draw,section,center,appearance.Scale(),appearance.Group(3));
+    section=BeginSlice(draw);
     const auto info=pos+ImVec2(34,519)*scale;
     clay::Liquid(draw,info,info+ImVec2(612,58)*scale,29.f*scale,ImVec4(.075f,.06f,.125f,.68f),1.2f);
     draw->AddRect(info,info+ImVec2(612,58)*scale,IM_COL32(229,222,248,68),29.f*scale,0,1.f*scale);
     Icon(draw,ICON_FA_INFO_CIRCLE,info+ImVec2(40,29)*scale,23.f*scale,IM_COL32(225,219,241,245));
     Text(draw,Body(),14.f*scale,info+ImVec2(66,9)*scale,IM_COL32(242,237,250,255),"Please wait");
     Text(draw,Body(),12.f*scale,info+ImVec2(66,32)*scale,IM_COL32(224,218,235,255),"Preparing your interface. Keep the application open.");
+    RevealSlice(draw,section,center,appearance.Scale(),appearance.Group(4));
 }
 }

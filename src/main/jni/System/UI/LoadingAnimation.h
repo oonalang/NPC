@@ -11,7 +11,7 @@ inline double Now() {
 inline void Start(float durationSeconds=30.f) { timeline.Start(Now(),durationSeconds); }
 inline bool IsActive() { return timeline.active; }
 inline float GetProgress() { return timeline.Progress(Now()); }
-inline bool RenderWindow(ImTextureID=nullptr) {
+inline bool RenderWindow(ImTextureID=nullptr,const startup_ui::LoadingReveal* reveal=nullptr) {
     if(!IsActive()) return false;
     const float scale=startup_ui::Fit({680,600});
     const ImVec2 size=ImVec2(680,600)*scale;
@@ -22,7 +22,7 @@ inline bool RenderWindow(ImTextureID=nullptr) {
         ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoTitleBar|ImGuiWindowFlags_NoResize|
         ImGuiWindowFlags_NoCollapse|ImGuiWindowFlags_NoMove)) {
         startup_ui::LoadingCard(ImGui::GetWindowDrawList(),ImGui::GetWindowPos()+ImVec2(10,10)*scale,
-            size,scale,GetProgress(),static_cast<float>(std::max(0.0,Now()-timeline.started)));
+            size,scale,GetProgress(),static_cast<float>(std::max(0.0,Now()-timeline.started)),reveal);
     }
     ImGui::End(); ImGui::PopStyleVar();
     return timeline.Finish(Now());
