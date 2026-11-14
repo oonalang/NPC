@@ -41,41 +41,27 @@ struct LoadingTimeline {
     }
 };
 struct LoginTransitionFrame {
-    float label=1.f,morph=0.f,rotation=0.f;
-    float droplet=0.f,fall=0.f,splash=0.f,wave=0.f,check=0.f;
-    float opacity=1.f,suck=0.f,hole=0.f,flash=0.f,shock=0.f;
-    bool granted=false,ready=false;
+    float morph=0.f, rotation=0.f, fill=0.f, check=0.f, opacity=1.f;
+    bool ready=false;
 };
 struct LoginTransition {
-    static constexpr double labelSeconds=.15,morphSeconds=.30,spinSeconds=2.;
-    static constexpr double dropSeconds=.25,hoverSeconds=.10,fallSeconds=.35;
-    static constexpr double splashSeconds=.45,waveSeconds=.80,checkSeconds=.35;
-    static constexpr double holdSeconds=.20,suckSeconds=.70,holeSeconds=.15;
-    static constexpr double flashSeconds=.15,shockSeconds=1.80,pauseSeconds=.35;
-    static constexpr double sequenceStart=labelSeconds+morphSeconds+spinSeconds;
-    static constexpr double spinAt=labelSeconds+morphSeconds;
-    static constexpr double fallAt=dropSeconds+hoverSeconds;
-    static constexpr double splashAt=fallAt+fallSeconds;
-    static constexpr double waveAt=splashAt+splashSeconds;
-    static constexpr double checkAt=waveAt+waveSeconds;
-    static constexpr double suckAt=checkAt+checkSeconds+holdSeconds;
-    static constexpr double holeAt=suckAt+suckSeconds;
-    static constexpr double flashAt=holeAt+holeSeconds;
-    static constexpr double shockAt=flashAt+flashSeconds;
-    static constexpr double pauseAt=shockAt+shockSeconds;
-    static constexpr double readyAt=pauseAt+pauseSeconds;
-    double started=0.,accepted=0.;
-    bool active=false,succeeded=false;
+    static constexpr double morphSeconds=.24, spinSeconds=2., fillSeconds=.32;
+    static constexpr double checkSeconds=.20, holdSeconds=.45, fadeSeconds=.22;
+    double started=0., accepted=0.;
+    bool active=false, succeeded=false;
     void Reset() { *this={}; }
     bool Start(double now) {
         if(active || !std::isfinite(now)) return false;
-        started=now;accepted=0.;active=true;succeeded=false;
+        started=now;
+        accepted=0.;
+        active=true;
+        succeeded=false;
         return true;
     }
     void Resolve(double now,bool success) {
         if(!active || succeeded || !std::isfinite(now)) return;
         if(!success) { Reset(); return; }
-        accepted=std::max(now,started+sequenceStart);
+        accepted=std::max(now,started+morphSeconds+spinSeconds);
         succeeded=true;
     }
     LoginTransitionFrame At(double now) const {
@@ -83,25 +69,14 @@ struct LoginTransition {
         if(!active || !std::isfinite(now)) return frame;
         const double elapsed=std::max(0.,now-started);
         const auto unit=[](double value) { return static_cast<float>(std::clamp(value,0.,1.)); };
-        frame.label=1.f-unit(elapsed/labelSeconds);
-        frame.morph=unit((elapsed-spinAt)/morphSeconds);
-        const double spin=std::fmod(std::max(0.,elapsed-spinAt),spinSeconds)/spinSeconds;
-        frame.rotation=static_cast<float>(spin*spin*(3.-2.*spin)*6.283185307179586);
+        frame.morph=unit(elapsed/morphSeconds);
+        frame.rotation=static_cast<float>(std::fmod(std::max(0.,elapsed-morphSeconds),1.)*6.283185307179586);
         if(!succeeded || now<accepted) return frame;
-        const double t=now-accepted;
-        frame.granted=true;
-        frame.rotation=0.f;
-        frame.droplet=unit(t/dropSeconds);
-        frame.fall=unit((t-fallAt)/fallSeconds);
-        frame.splash=unit((t-splashAt)/splashSeconds);
-        frame.wave=unit((t-waveAt)/waveSeconds);
-        frame.check=unit((t-checkAt)/checkSeconds);
-        frame.suck=unit((t-suckAt)/suckSeconds);
-        frame.hole=unit((t-holeAt)/holeSeconds);
-        frame.flash=unit((t-flashAt)/flashSeconds);
-        frame.shock=unit((t-shockAt)/shockSeconds);
-        frame.opacity=1.f-frame.suck;
-        frame.ready=t>=readyAt;
+        const double reveal=now-accepted;
+        frame.fill=unit(reveal/fillSeconds);
+        frame.check=unit((reveal-fillSeconds)/checkSeconds);
+        frame.opacity=1.f-unit((reveal-fillSeconds-checkSeconds-holdSeconds)/fadeSeconds);
+        frame.ready=reveal>=fillSeconds+checkSeconds+holdSeconds+fadeSeconds;
         return frame;
     }
 };
