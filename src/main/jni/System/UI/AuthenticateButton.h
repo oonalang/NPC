@@ -2,7 +2,6 @@
 #include "../../ImGui/imgui_internal.h"
 #include "../../Fonts/Icon.h"
 #include "StartupState.h"
-#include <array>
 #include <cmath>
 
 namespace startup_ui { namespace button_art {
@@ -16,100 +15,6 @@ inline void Text(ImDrawList* draw,ImFont* font,float size,ImVec2 pos,ImU32 color
     for(const auto offset : {ImVec2(-spread,0),ImVec2(spread,0),ImVec2(0,-spread),ImVec2(0,spread)})
         draw->AddText(font,size,pos+offset,shadow,text);
     draw->AddText(font,size,pos,color,text);
-}
-inline void SignIn(ImDrawList* draw,ImFont* font,ImVec2 center,float size,float rotation,float opacity,float morph=0.f) {
-    if(opacity<=0.f) return;
-    const auto measured=font->CalcTextSizeA(size,FLT_MAX,0.f,ICON_FA_SIGN_IN);
-    const int first=draw->VtxBuffer.Size;
-    Text(draw,font,size,center-measured*.5f,ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,opacity)),ICON_FA_SIGN_IN);
-    const float sine=std::sin(rotation),cosine=std::cos(rotation);
-    for(int i=first;i<draw->VtxBuffer.Size;++i) {
-        auto& point=draw->VtxBuffer[i].pos;
-        auto offset=point-center;
-        offset.x*=ImLerp(1.f,.28f,morph);
-        offset.y*=ImLerp(1.f,1.15f,morph);
-        point=center+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
-    }
-}
-inline ImDrawList* fluidDraw=nullptr;
-inline ImDrawListSharedData* fluidData=nullptr;
-inline ImDrawList* FluidDraw(ImDrawList* target) {
-    if(!fluidDraw || fluidData!=target->_Data) {
-        if(fluidDraw) IM_DELETE(fluidDraw);
-        fluidData=target->_Data;
-        fluidDraw=IM_NEW(ImDrawList)(fluidData);
-        fluidDraw->VtxBuffer.reserve(2048);
-        fluidDraw->IdxBuffer.reserve(4096);
-    }
-    fluidDraw->_ResetForNewFrame();
-    fluidDraw->Flags=target->Flags&~(ImDrawListFlags_AllowVtxOffset|ImDrawListFlags_AntiAliasedLinesUseTex);
-    fluidDraw->PushTextureID(target->_CmdHeader.TextureId);
-    fluidDraw->PushClipRectFullScreen();
-    return fluidDraw;
-}
-struct ClipVertex { ImVec2 pos,uv; ImVec4 color; };
-inline float Cross(ImVec2 a,ImVec2 b) { return a.x*b.y-a.y*b.x; }
-inline ClipVertex Mix(const ClipVertex& a,const ClipVertex& b,float amount) {
-    return {ImLerp(a.pos,b.pos,amount),ImLerp(a.uv,b.uv,amount),ImLerp(a.color,b.color,amount)};
-}
-inline bool InsidePill(ImVec2 point,ImVec2 lo,ImVec2 size) {
-    const float radius=size.y*.5f;
-    const auto q=ImVec2(std::fabs(point.x-lo.x-size.x*.5f),std::fabs(point.y-lo.y-radius))-
-        ImVec2(size.x*.5f-radius,0);
-    const auto outer=ImVec2(ImMax(q.x,0.f),ImMax(q.y,0.f));
-    const float distance=std::sqrt(ImLengthSqr(outer))+ImMin(ImMax(q.x,q.y),0.f)-radius;
-    return distance<-.3f;
-}
-inline void Emit(ImDrawList* draw,const ClipVertex& a,const ClipVertex& b,const ClipVertex& c) {
-    if(std::fabs(Cross(b.pos-a.pos,c.pos-a.pos))<.0001f) return;
-    draw->PrimReserve(3,3);
-    const auto index=draw->_VtxCurrentIdx;
-    draw->PrimWriteIdx(static_cast<ImDrawIdx>(index));
-    draw->PrimWriteIdx(static_cast<ImDrawIdx>(index+1));
-    draw->PrimWriteIdx(static_cast<ImDrawIdx>(index+2));
-    draw->PrimWriteVtx(a.pos,a.uv,ImGui::ColorConvertFloat4ToU32(a.color));
-    draw->PrimWriteVtx(b.pos,b.uv,ImGui::ColorConvertFloat4ToU32(b.color));
-    draw->PrimWriteVtx(c.pos,c.uv,ImGui::ColorConvertFloat4ToU32(c.color));
-}
-inline void ClipFluid(ImDrawList* target,const ImDrawList* source,ImVec2 lo,ImVec2 size) {
-    std::array<ImVec2,20> boundary;
-    const float radius=size.y*.5f;
-    for(int i=0;i<=9;++i) {
-        const float angle=-IM_PI*.5f+IM_PI*i/9.f;
-        boundary[i]=lo+ImVec2(size.x-radius+std::cos(angle)*radius,radius+std::sin(angle)*radius);
-    }
-    for(int i=0;i<=9;++i) {
-        const float angle=IM_PI*.5f+IM_PI*i/9.f;
-        boundary[10+i]=lo+ImVec2(radius+std::cos(angle)*radius,radius+std::sin(angle)*radius);
-    }
-    for(int triangle=0;triangle+2<source->IdxBuffer.Size;triangle+=3) {
-        std::array<ClipVertex,40> polygon,next;
-        int count=3;
-        bool interior=true;
-        for(int j=0;j<3;++j) {
-            const auto& vertex=source->VtxBuffer[source->IdxBuffer[triangle+j]];
-            polygon[j]={vertex.pos,vertex.uv,ImGui::ColorConvertU32ToFloat4(vertex.col)};
-            interior=interior && InsidePill(vertex.pos,lo,size);
-        }
-        if(!interior) for(int edge=0;edge<static_cast<int>(boundary.size()) && count;++edge) {
-            const auto a=boundary[edge],b=boundary[(edge+1)%boundary.size()];
-            int output=0;
-            auto previous=polygon[count-1];
-            float previousDistance=Cross(b-a,previous.pos-a);
-            for(int j=0;j<count;++j) {
-                const auto current=polygon[j];
-                const float currentDistance=Cross(b-a,current.pos-a);
-                if((currentDistance>=0.f)!=(previousDistance>=0.f))
-                    next[output++]=Mix(previous,current,previousDistance/(previousDistance-currentDistance));
-                if(currentDistance>=0.f) next[output++]=current;
-                previous=current;
-                previousDistance=currentDistance;
-            }
-            count=output;
-            polygon.swap(next);
-        }
-        for(int j=1;j+1<count;++j) Emit(target,polygon[0],polygon[j],polygon[j+1]);
-    }
 }
 inline void Quad(ImDrawList* draw,ImVec2 a,ImVec2 b,ImVec2 c,ImVec2 d,ImU32 color) {
     draw->PrimReserve(6,4);
@@ -194,33 +99,38 @@ inline void DrawAuthenticateContents(ImDrawList* draw,ImVec2 lo,ImVec2 size,floa
                                       const ButtonFrame& frame,ImFont* body,ImFont* icons) {
     if(!draw || size.x<=0.f || size.y<=0.f) return;
     if(!body) body=ImGui::GetFont();
-    if(!icons) icons=body;
     const auto center=lo+size*.5f;
-    const float textSize=17.f*scale,baseIcon=40.f*scale;
-    const auto label=body->CalcTextSizeA(textSize,FLT_MAX,0.f,"Authenticate");
-    const float startX=lo.x+(size.x-label.x-35.f*scale)*.5f+9.5f*scale;
-    const auto iconCenter=ImLerp(ImVec2(startX,center.y),center,button_art::Smooth(frame.iconMove));
-    if(frame.stage==ButtonStage::Idle || frame.stage==ButtonStage::LabelFade)
-        button_art::Text(draw,body,textSize,{startX+25.5f*scale,lo.y+(size.y-label.y)*.5f},
+    const float radius=size.y*.5f;
+    const float collapse=button_art::Smooth(ImClamp(frame.iconMove,0.f,1.f));
+    const float restore=button_art::Smooth(ImClamp(frame.fall,0.f,1.f));
+    const float textSize=17.f*scale;
+    if(frame.stage==ButtonStage::Idle || frame.stage==ButtonStage::LabelFade) {
+        const auto label=body->CalcTextSizeA(textSize,FLT_MAX,0.f,"Authenticate");
+        button_art::Text(draw,body,textSize,ImVec2(center.x-label.x*.5f,lo.y+(size.y-label.y)*.5f),
             ImGui::GetColorU32(ImVec4(.96f,.92f,1.f,ImClamp(frame.labelOpacity,0.f,1.f))),"Authenticate");
-    if(frame.stage<=ButtonStage::Spin)
-        button_art::SignIn(draw,icons,iconCenter,baseIcon*frame.iconScale,frame.iconRotation,1.f);
-    if(frame.stage==ButtonStage::Droplet) {
-        const float morph=button_art::Smooth(frame.dropletMorph);
-        button_art::SignIn(draw,icons,center,baseIcon*frame.iconScale,0.f,1.f-morph,morph);
+    }
+    if(frame.stage>=ButtonStage::IconMove && frame.stage<=ButtonStage::Spin) {
+        const float chip=radius*ImLerp(1.f,.62f,collapse);
+        draw->AddCircle(center,chip,ImGui::GetColorU32(ImVec4(1.f,.93f,1.f,.13f+.07f*collapse)),32,1.1f*scale);
+        if(frame.stage==ButtonStage::Spin) {
+            draw->PathArcTo(center,ImMax(2.f*scale,chip-3.f*scale),frame.iconRotation,frame.iconRotation+2.f,18);
+            draw->PathStroke(ImGui::GetColorU32(ImVec4(1.f,.97f,1.f,.92f)),0,3.f*scale);
+        }
     }
     if(frame.stage>=ButtonStage::Droplet && frame.stage<=ButtonStage::Check) {
-        auto* fluid=button_art::FluidDraw(draw);
         if(frame.stage==ButtonStage::Droplet || frame.stage==ButtonStage::Hover || frame.stage==ButtonStage::Fall) {
             const float morph=frame.stage==ButtonStage::Droplet?button_art::Smooth(frame.dropletMorph):1.f;
             const float fall=frame.stage==ButtonStage::Fall?ImClamp(frame.fall,0.f,1.f):0.f;
-            const float y=ImLerp(center.y,lo.y+size.y-6.f*scale,fall*fall);
-            button_art::Droplet(fluid,{center.x,y},scale*ImLerp(.15f,1.f,morph),morph);
+            const float height=size.y*ImLerp(.46f,.78f,morph);
+            const float y=ImLerp(center.y,lo.y+size.y-height*.34f,fall*fall);
+            draw->AddCircleFilled(ImVec2(center.x,y),height*.42f,
+                ImGui::GetColorU32(ImVec4(1,1,1,.09f*morph)),28);
+            button_art::Droplet(draw,ImVec2(center.x,y),height/32.f,
+                ImGui::GetColorU32(ImVec4(1,1,1,ImLerp(.62f,1.f,morph))));
         }
-        if(frame.stage==ButtonStage::Splash) button_art::Splash(fluid,lo,size,scale,frame.splash);
+        if(frame.stage==ButtonStage::Splash) button_art::Splash(draw,lo,size,scale,frame.splash);
         if(frame.stage==ButtonStage::Wave || frame.stage==ButtonStage::Check)
-            button_art::Wave(fluid,lo,size,scale,frame.stage==ButtonStage::Check?1.f:frame.wave);
-        button_art::ClipFluid(draw,fluid,lo,size);
+            button_art::Wave(draw,lo,size,scale,frame.stage==ButtonStage::Check?1.f:frame.wave);
     }
     if(frame.stage==ButtonStage::Check) button_art::Check(draw,center,scale,frame.check);
 }

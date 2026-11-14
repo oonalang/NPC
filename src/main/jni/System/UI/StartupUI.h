@@ -219,8 +219,12 @@ inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,co
     const bool held=ImGui::IsItemActive(),hovered=ImGui::IsItemHovered();
     ImGui::EndDisabled();
     auto* draw=ImGui::GetWindowDrawList();
-    PillMaterial(draw,lo,size,scale,true,held,hovered);
-    DrawAuthenticateContents(draw,lo,size,scale,frame.button,Body(),Icons());
+    const auto& button=frame.button;
+    const float collapse=button_art::Smooth(ImClamp(button.iconMove,0.f,1.f));
+    const float restore=button_art::Smooth(ImClamp(button.fall,0.f,1.f));
+    const float width=ImLerp(size.x,size.y,collapse*(1.f-restore));
+    PillMaterial(draw,ImVec2(lo.x+(size.x-width)*.5f,lo.y),ImVec2(width,size.y),scale,true,held,hovered);
+    DrawAuthenticateContents(draw,lo,size,scale,button,Body(),Icons());
     return pressed;
 }
 struct LoginActions { bool paste=false, load=false, submit=false; };
