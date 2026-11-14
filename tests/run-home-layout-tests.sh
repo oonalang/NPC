@@ -14,5 +14,6 @@ trap 'rm -f "$test_binary"' EXIT HUP INT TERM
     "$project_dir/src/main/jni/ImGui/imgui_widgets.cpp" \
     "$project_dir/src/main/jni/ImGui/imgui_tables.cpp" \
     "$project_dir/src/main/jni/ImGui/custom_widgets.cpp" \
+    "$project_dir/src/main/jni/System/Audio/DriveMusic.cpp" \
     -Wl,--gc-sections -lpthread -o "$test_binary"
 ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary"

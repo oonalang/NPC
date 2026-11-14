@@ -73,9 +73,6 @@ static void TextEditing() {
 }
 int main() {
     TextEditing();
-    assert(music_player::EncodeQuery("a b&c/🎵")=="a%20b%26c%2F%F0%9F%8E%B5");
-    assert(music_player::SearchAddress(music_player::CloudProvider::Spotify,"hello world",true)=="spotify:search:hello%20world");
-    assert(music_player::SearchAddress(music_player::CloudProvider::YouTubeMusic,"a&b")=="https://music.youtube.com/search?q=a%26b");
     char root[]="/tmp/npc-music-XXXXXX";
     assert(mkdtemp(root));
     const std::string a=std::string(root)+"/a",b=std::string(root)+"/b";
@@ -116,16 +113,15 @@ int main() {
         auto second=wait([&](const auto& s){return s.scanned && !s.scanning && s.folders.size()==1 && s.folders[0]==b;});
         assert(second->tracks.size()==2 && first->tracks.size()==3);
         service.Queue({music_player::Action::Mode,1});
-        service.Queue({music_player::Action::Provider,1});
-        wait([](const auto& s){return s.cloudMode && s.provider==music_player::CloudProvider::YouTubeMusic;});
-        service.Queue({music_player::Action::OpenCloud});
-        auto cloud=wait([](const auto& s){return s.cloudMode && !s.error.empty();});
-        assert(!cloud->externalPlaying && !cloud->available);
+        wait([](const auto& s){return s.driveMode;});
+        service.Queue({music_player::Action::Connect,-1,0.f,{},"https://example.com/music"});
+        auto drive=wait([](const auto& s){return s.driveMode&&!s.error.empty();});
+        assert(!drive->available&&drive->tracks.empty());
         service.Queue({music_player::Action::Mode,0});
-        wait([](const auto& s){return !s.cloudMode;});
+        wait([](const auto& s){return !s.driveMode;});
     }
     unlink((a+"/Zulu.MP3").c_str());unlink((a+"/alpha.flac").c_str());unlink((a+"/.hidden.mp3").c_str());unlink((a+"/readme.txt").c_str());
     rmdir((a+"/folder.wav").c_str());unlink((b+"/Beta.ogg").c_str());unlink((b+"/duplicate.flac").c_str());
     rmdir(a.c_str());rmdir(b.c_str());rmdir(root);
-    std::puts("Music scan filtering, ordering, deduplication, limits, immutable snapshots, rescans and cloud-mode state passed");
+    std::puts("Music scan filtering, ordering, deduplication, limits, immutable snapshots, rescans and Drive-mode state passed");
 }

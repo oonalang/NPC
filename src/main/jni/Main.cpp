@@ -1,3 +1,4 @@
+#include "System/UI/StartupSounds.h"
 #include "Includes/Logger.h"
 #include "Includes/Macros.h"
 #include "Includes/obfuscate.h"
@@ -308,6 +309,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
     custom::UpdateTouchScroll();
+    music_player::Init(VM);
     if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
         isLogin = false;
         err = "License expired";
@@ -470,9 +472,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                 if (err == "OK") err = "License rejected";
                 else if (err.empty()) err = "Authentication failed.";
                 startup_ui::loginTransition.Resolve(startup_ui::Now(),false);
+                ui_sounds::Play(ui_sounds::Cue::Error);
             }
         }
         authFrame=startup_ui::loginTransition.At(startup_ui::Now());
+        static startup_ui::SoundObserver authSounds;
+        if(const auto cue=authSounds.Update(authFrame);cue&&isMenuVisible) ui_sounds::Play(*cue);
         if (!isLogin && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
         if (!isLogin && !ui_loading::IsActive() && (authFrame.loginVisible || startup_ui::loginTransition.active))
         {
@@ -508,6 +513,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     showKeyboard = false;
                     ImGui::ClearActiveID();
                     startup_ui::loginTransition.Start(startup_ui::Now(),startup_ui::ReducedMotionEnabled(VM));
+                    ui_sounds::Play(ui_sounds::Cue::Click);
                     auth_input::SetBlocked(true);
                     std::thread([](std::string key) {
                         g_LoginResult = Login(key.c_str());
@@ -705,7 +711,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         anime_artwork::Prepare();
                         if (runtimeState.activeTab == 1)
                         {
-                            music_player::Init(VM);
                             home_tab::Draw(homeStats,contentRegion);
                         }
 

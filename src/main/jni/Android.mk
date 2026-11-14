@@ -67,6 +67,7 @@ LOCAL_MODULE           := nets
 LOCAL_CFLAGS           := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w
 LOCAL_CFLAGS           += -fno-rtti -fno-exceptions -fpermissive
 LOCAL_ASFLAGS          += -DANIME_ARTWORK_FILE='"$(LOCAL_PATH)/Assets/wiz-preview.png"'
+LOCAL_ASFLAGS          += -DDRIVE_CA_FILE='"$(LOCAL_PATH)/Assets/drive-ca.pem"'
 LOCAL_CPPFLAGS         := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w -Werror -s -std=c++17
 LOCAL_CPPFLAGS         += -Wno-error=c++11-narrowing -fms-extensions -fno-rtti -fno-exceptions -fpermissive
 
@@ -81,6 +82,8 @@ FILE_LIST              += $(wildcard $(LOCAL_PATH)/IL2CppSDKGenerator/IL2Cpp/*.c
 FILE_LIST              += $(wildcard $(LOCAL_PATH)/IL2CppSDKGenerator/KittyMemory/*.c*)
 FILE_LIST              += $(wildcard $(LOCAL_PATH)/System/Texture/*.c*)
 FILE_LIST              += $(wildcard $(LOCAL_PATH)/*.c*)
+FILE_LIST              += $(LOCAL_PATH)/System/Audio/DriveMusic.cpp
+FILE_LIST              += $(LOCAL_PATH)/System/Audio/UiSounds.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerRuntime.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerCompatibility.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeProfile.cpp
@@ -94,7 +97,8 @@ LOCAL_SRC_FILES        := $(FILE_LIST:$(LOCAL_PATH)/%=%) \
                               Substrate/SubstratePosixMemory.cpp \
                               Substrate/And64InlineHook.cpp \
                               AstralPrtctn/md5.cpp \
-                              Assets/AnimeArtwork.S
+                              Assets/AnimeArtwork.S \
+                              Assets/DriveCA.S
                               
 LOCAL_LDLIBS := -llog -landroid
 FILE_LIST := $(wildcard $(LOCAL_PATH)/libzip/*.c)
@@ -104,7 +108,7 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/curl/curl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/curl/openssl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/libzip
 
-LOCAL_LDLIBS           := -llog -landroid -ldl -lz -lEGL -lGLESv2 -lGLESv3
+LOCAL_LDLIBS           := -llog -landroid -ldl -lz -lEGL -lGLESv2 -lGLESv3 -lOpenSLES
 LOCAL_STATIC_LIBRARIES := libcurl libssl libcrypto libdobby libfoxcheats libxhook libctorHook
 
 LOCAL_CPP_FEATURES                      := exceptions

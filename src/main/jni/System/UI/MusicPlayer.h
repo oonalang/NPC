@@ -8,6 +8,8 @@
 #include "../../ImGui/TouchScroll.h"
 #include "../../Fonts/Icon.h"
 #include "MusicTextDialog.h"
+#include "../Audio/DriveMusic.h"
+#include "../Audio/UiSounds.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -30,8 +32,9 @@
 #endif
 
 namespace music_player {
+inline constexpr const char* DefaultDrive="https://drive.google.com/drive/folders/1Hd0PK3TO8rm4JkWfNZpwCmtHKvxgzh0T";
 inline constexpr const char* AppFolder="/storage/emulated/0/Android/data/com.garena.game.codm/files/Music";
-struct Track { std::string path,title; };
+struct Track { std::string path,title; drive_music::Link remote; };
 struct LibraryResult { std::vector<Track> tracks; bool readable=false,truncated=false; };
 inline bool AudioFile(const std::string& name) {
     const auto dot=name.find_last_of('.');
@@ -102,36 +105,23 @@ inline std::string Clock(float seconds) {
     const auto total=std::isfinite(seconds)?static_cast<int>(std::clamp(seconds,0.f,359999.f)):0;
     char text[24];std::snprintf(text,sizeof(text),"%d:%02d",total/60,total%60);return text;
 }
-enum class CloudProvider { Spotify,YouTubeMusic };
-inline const char* ProviderName(CloudProvider provider) { return provider==CloudProvider::Spotify?"Spotify":"YouTube Music"; }
 struct Snapshot {
     std::vector<Track> tracks;
     std::vector<std::string> folders{AppFolder};
-    std::string appFolder=AppFolder;
+    std::string appFolder=AppFolder,driveLink=DefaultDrive;
     int current=-1;
     bool playing=false,loading=false,scanning=false,scanned=false,available=false,truncated=false;
-    float position=0.f,length=0.f;
+    bool driveMode=false;
+    float position=0.f,length=0.f,download=0.f;
     double positionAt=0.;
     std::string error;
-    bool cloudMode=false,externalPlaying=false;
-    CloudProvider provider=CloudProvider::Spotify;
 };
-enum class Action { Scan,Play,Toggle,Previous,Next,Seek,Stop,Mode,Provider,OpenCloud,SearchCloud,CloudToggle,CloudPrevious,CloudNext };
-inline std::string EncodeQuery(const std::string& text) {
-    static constexpr char hex[]="0123456789ABCDEF";
-    std::string encoded;
-    for(unsigned char c:text) {
-        if((c>='a' && c<='z') || (c>='A' && c<='Z') || (c>='0' && c<='9') || c=='-' || c=='_' || c=='.' || c=='~') encoded+=static_cast<char>(c);
-        else {encoded+='%';encoded+=hex[c>>4];encoded+=hex[c&15];}
-    }
-    return encoded;
-}
-inline std::string SearchAddress(CloudProvider provider,const std::string& query,bool app=false) {
-    const auto encoded=EncodeQuery(query);
-    return provider==CloudProvider::Spotify?(app?"spotify:search:":"https://open.spotify.com/search/")+encoded:
-        "https://music.youtube.com/search?q="+encoded;
-}
-struct Command { Action action; int index=-1; float position=0.f; std::vector<std::string> folders; std::string path; };
+enum class Action { Scan,Play,Toggle,Previous,Next,Seek,Stop,Mode,Connect };
+struct Command {
+    Action action;int index=-1;float position=0.f;
+    std::vector<std::string> folders;std::string path;
+    std::uint64_t revision=0;
+};
 #ifdef __ANDROID__
 using PlatformVM=JavaVM;
 class NativePlayer {
@@ -224,68 +214,6 @@ public:
         }();
         Failed();env_->PopLocalFrame(nullptr);return result;
     }
-    bool CloudAction(int key,CloudProvider provider,bool launch,std::string& error,const std::string& query={}) {
-        if(!env_ || env_->PushLocalFrame(64)<0) { if(env_) Failed();return false; }
-        const bool ok=[&] {
-            auto activity=env_->FindClass("android/app/ActivityThread");if(Failed() || !activity) return false;
-            auto current=env_->GetStaticMethodID(activity,"currentApplication","()Landroid/app/Application;");if(Failed() || !current) return false;
-            auto app=env_->CallStaticObjectMethod(activity,current);if(Failed() || !app) return false;
-            auto appClass=env_->GetObjectClass(app);
-            if(launch) {
-                auto intentClass=env_->FindClass("android/content/Intent");if(Failed() || !intentClass) return false;
-                auto uriClass=env_->FindClass("android/net/Uri");if(Failed() || !uriClass) return false;
-                auto parse=env_->GetStaticMethodID(uriClass,"parse","(Ljava/lang/String;)Landroid/net/Uri;");if(Failed() || !parse) return false;
-                auto ctor=env_->GetMethodID(intentClass,"<init>","(Ljava/lang/String;Landroid/net/Uri;)V");if(Failed() || !ctor) return false;
-                auto setPackage=env_->GetMethodID(intentClass,"setPackage","(Ljava/lang/String;)Landroid/content/Intent;");if(Failed() || !setPackage) return false;
-                auto flags=env_->GetMethodID(intentClass,"addFlags","(I)Landroid/content/Intent;");if(Failed() || !flags) return false;
-                auto category=env_->GetMethodID(intentClass,"addCategory","(Ljava/lang/String;)Landroid/content/Intent;");if(Failed() || !category) return false;
-                auto start=env_->GetMethodID(appClass,"startActivity","(Landroid/content/Intent;)V");if(Failed() || !start) return false;
-                const auto package=env_->NewStringUTF(provider==CloudProvider::Spotify?"com.spotify.music":"com.google.android.apps.youtube.music");
-                const auto attempt=[&](const char* address,bool packaged,bool launcher) {
-                    jobject uri=nullptr;
-                    if(address) {
-                        auto text=env_->NewStringUTF(address);if(Failed() || !text) return false;
-                        uri=env_->CallStaticObjectMethod(uriClass,parse,text);if(Failed() || !uri) return false;
-                    }
-                    auto action=env_->NewStringUTF(launcher?"android.intent.action.MAIN":"android.intent.action.VIEW");if(Failed() || !action) return false;
-                    auto intent=env_->NewObject(intentClass,ctor,action,uri);if(Failed() || !intent) return false;
-                    if(packaged) {env_->CallObjectMethod(intent,setPackage,package);if(Failed()) return false;}
-                    if(launcher) {
-                        auto name=env_->NewStringUTF("android.intent.category.LAUNCHER");if(Failed() || !name) return false;
-                        env_->CallObjectMethod(intent,category,name);if(Failed()) return false;
-                    }
-                    env_->CallObjectMethod(intent,flags,0x10000000);if(Failed()) return false;
-                    env_->CallVoidMethod(app,start,intent);return !Failed();
-                };
-                if(!query.empty()) {
-                    const auto appSearch=SearchAddress(provider,query,true),webSearch=SearchAddress(provider,query);
-                    return attempt(appSearch.c_str(),true,false) || attempt(webSearch.c_str(),false,false);
-                }
-                if(attempt(provider==CloudProvider::Spotify?"spotify:collection":"https://music.youtube.com/library",true,false)) return true;
-                if(attempt(nullptr,true,true)) return true;
-                return attempt(provider==CloudProvider::Spotify?"https://open.spotify.com/":"https://music.youtube.com/library",false,false);
-            }
-            auto service=env_->GetMethodID(appClass,"getSystemService","(Ljava/lang/String;)Ljava/lang/Object;");if(Failed() || !service) return false;
-            auto audioName=env_->NewStringUTF("audio");auto audio=env_->CallObjectMethod(app,service,audioName);if(Failed() || !audio) return false;
-            auto audioClass=env_->GetObjectClass(audio);
-            if(key<0) {
-                auto active=env_->GetMethodID(audioClass,"isMusicActive","()Z");if(Failed() || !active) return false;
-                return env_->CallBooleanMethod(audio,active)==JNI_TRUE && !Failed();
-            }
-            auto dispatch=env_->GetMethodID(audioClass,"dispatchMediaKeyEvent","(Landroid/view/KeyEvent;)V");if(Failed() || !dispatch) return false;
-            auto eventClass=env_->FindClass("android/view/KeyEvent");if(Failed() || !eventClass) return false;
-            auto eventCtor=env_->GetMethodID(eventClass,"<init>","(II)V");if(Failed() || !eventCtor) return false;
-            for(int action:{0,1}) {
-                auto event=env_->NewObject(eventClass,eventCtor,action,key);if(Failed() || !event) return false;
-                env_->CallVoidMethod(audio,dispatch,event);if(Failed()) return false;
-            }
-            return true;
-        }();
-        if(Failed()) error="The music app couldn't receive this action.";
-        env_->PopLocalFrame(nullptr);
-        if(!ok && key>=0 && error.empty()) error=launch?"Couldn't open the selected music app.":"No compatible active music session was found.";
-        return ok;
-    }
     ~NativePlayer() {
         Stop();
         if(type_) env_->DeleteGlobalRef(type_);
@@ -302,7 +230,6 @@ public:
     bool Toggle(bool,bool) { return false; }
     bool Seek(float) { return false; }
     bool Poll(Snapshot&) { return false; }
-    bool CloudAction(int,CloudProvider,bool,std::string&,const std::string& = {}) { return false; }
     std::string ExternalMusicFolder() { return AppFolder; }
 };
 #endif
@@ -314,103 +241,127 @@ class Service {
     std::thread worker_;
     PlatformVM* vm_=nullptr;
     bool stopping_=false;
+    std::atomic<std::uint64_t> revision_{0};
     void Publish(const Snapshot& state) {
         auto next=std::make_shared<Snapshot>(state);
         std::lock_guard<std::mutex> lock(mutex_);published_=std::move(next);
     }
     void Run() {
-        Snapshot state;
-        NativePlayer player;
+        Snapshot state;NativePlayer player;drive_music::Client drive;
+        LibraryResult local;drive_music::Catalog remote;
         bool sourceConfigured=false,defaultResolved=false,openAttempted=false;
+        const auto stop=[&] {player.Stop();state.current=-1;state.playing=false;state.position=state.length=0.f;};
+        const auto library=[&] {
+            std::string selected;
+            if(state.current>=0&&state.current<static_cast<int>(state.tracks.size())) selected=state.tracks[state.current].path;
+            state.tracks.clear();state.truncated=state.driveMode?remote.truncated:local.truncated;
+            if(state.driveMode) for(const auto& entry:remote.tracks) state.tracks.push_back({drive_music::Canonical(entry.link),entry.title,entry.link});
+            else state.tracks=local.tracks;
+            state.current=-1;
+            for(std::size_t i=0;i<state.tracks.size();++i) if(state.tracks[i].path==selected) state.current=static_cast<int>(i);
+            if(!selected.empty()&&state.current<0) stop();
+        };
         for(;;) {
-            Command command{Action::Stop};bool hasCommand=false;
-            PlatformVM* vm=nullptr;
+            Command command{Action::Stop};bool hasCommand=false;PlatformVM* vm=nullptr;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                wake_.wait_for(lock,std::chrono::milliseconds(250),[&]{return stopping_ || !commands_.empty();});
+                wake_.wait_for(lock,std::chrono::milliseconds(250),[&]{return stopping_||!commands_.empty();});
                 if(stopping_) break;
                 vm=vm_;
                 if(!commands_.empty()) {command=std::move(commands_.front());commands_.pop_front();hasCommand=true;}
             }
+            const auto canceled=[&] {return revision_.load()!=command.revision;};
             const bool wasAvailable=state.available;
-            if(!state.available && vm && !openAttempted) {openAttempted=true;state.available=player.Open(vm);}
-            if(state.available && !defaultResolved) {
+            if(!state.available&&vm&&!openAttempted) {openAttempted=true;state.available=player.Open(vm);}
+            if(state.available&&!defaultResolved) {
                 const auto folder=player.ExternalMusicFolder();
                 if(!folder.empty()) {
-                    state.appFolder=folder;defaultResolved=true;
+                    state.appFolder=folder;mkdir(folder.c_str(),0700);defaultResolved=true;
+                    ui_sounds::Configure(folder);
+                    if(drive.Configure(folder+"/.drive-cache")) {
+                        remote=drive.Restore();if(remote.source) state.driveLink=drive_music::Canonical(remote.source);
+                        if(state.driveMode) library();
+                    }
                     if(!sourceConfigured) {
                         state.folders={folder};
-                        if(!hasCommand) {command={Action::Scan};hasCommand=true;}
+                        if(!hasCommand) {command={Action::Scan};command.revision=revision_;hasCommand=true;}
                     }
                 }
             }
-            if(hasCommand && command.action==Action::Scan) {
+            const auto connect=[&](const drive_music::Link& link) {
+                if(canceled()) return;
+                state.scanning=true;state.error.clear();Publish(state);
+                auto catalog=drive.Read(link,canceled);state.scanning=false;
+                if(canceled()) return;
+                if(catalog.error.empty()) {
+                    if(!state.driveMode) stop();
+                    remote=std::move(catalog);state.driveMode=true;state.driveLink=drive_music::Canonical(link);
+                    drive.Save(remote);library();state.scanned=true;
+                } else state.error=catalog.error;
+            };
+            if(hasCommand&&command.action==Action::Mode) {
+                const bool mode=command.index!=0;
+                if(mode!=state.driveMode) {stop();state.driveMode=mode;state.error.clear();library();}
+                if(mode&&!remote.source&&drive.Ready()) connect(drive_music::ParseLink(state.driveLink));
+            } else if(hasCommand&&(command.action==Action::Connect||(command.action==Action::Scan&&state.driveMode))) {
+                const auto link=drive_music::ParseLink(command.action==Action::Connect?command.path:state.driveLink);
+                if(!link) state.error="Paste a Google Drive folder or audio-file sharing link.";
+                else if(!drive.Ready()) state.error="Drive music is available when the Android app can open its music cache.";
+                else connect(link);
+            } else if(hasCommand&&command.action==Action::Scan) {
                 state.scanning=true;state.error.clear();Publish(state);
                 if(!command.folders.empty()) sourceConfigured=true;
                 auto folders=command.folders.empty()?state.folders:command.folders;
 #ifdef __ANDROID__
-                if(!sourceConfigured && !defaultResolved) folders.clear();
+                if(!sourceConfigured&&!defaultResolved) folders.clear();
 #endif
-                if(folders.size()==1 && folders.front()==state.appFolder) mkdir(state.appFolder.c_str(),0755);
-                auto library=ReadLibrary(folders);
-                std::string selected;
-                if(state.current>=0 && state.current<static_cast<int>(state.tracks.size())) selected=state.tracks[state.current].path;
-                state.tracks=std::move(library.tracks);state.folders=folders;state.current=-1;
-                for(std::size_t i=0;i<state.tracks.size();++i) if(state.tracks[i].path==selected) state.current=static_cast<int>(i);
-                if(!selected.empty() && state.current<0) {player.Stop();state.playing=false;state.position=state.length=0.f;}
-                state.scanning=false;state.scanned=true;state.truncated=library.truncated;
-                if(!library.readable && !folders.empty()) state.error="Can't read this folder. Choose a folder this app can access.";
-            } else if(hasCommand && command.action==Action::Mode) {
-                const bool cloud=command.index!=0;
-                state.error.clear();
-                if(cloud && state.playing) {player.Toggle(true,false);player.Poll(state);}
-                if(!cloud && state.cloudMode) player.CloudAction(127,state.provider,false,state.error);
-                state.cloudMode=cloud;
-            } else if(hasCommand && command.action==Action::Provider) {
-                state.provider=command.index==0?CloudProvider::Spotify:CloudProvider::YouTubeMusic;state.error.clear();
-            } else if(hasCommand && (command.action==Action::OpenCloud || command.action==Action::SearchCloud || command.action==Action::CloudToggle || command.action==Action::CloudPrevious || command.action==Action::CloudNext)) {
-                if(state.playing) {player.Toggle(true,false);player.Poll(state);}
-                state.cloudMode=true;state.error.clear();
-                const int key=command.action==Action::CloudPrevious?88:command.action==Action::CloudNext?87:85;
-                if(!state.available || !player.CloudAction(key,state.provider,(command.action==Action::OpenCloud || command.action==Action::SearchCloud),state.error,command.path)) {
-                    if(state.error.empty()) state.error="Cloud controls are available in the Android app.";
-                } else if(command.action==Action::CloudToggle) state.externalPlaying=!state.externalPlaying;
-                else state.externalPlaying=true;
+                if(folders.size()==1&&folders.front()==state.appFolder) mkdir(state.appFolder.c_str(),0700);
+                local=ReadLibrary(folders);state.folders=std::move(folders);library();
+                state.scanning=false;state.scanned=true;
+                if(!local.readable&&!state.folders.empty()) state.error="Can't read this folder. Choose a folder this app can access.";
             } else if(hasCommand) {
-                if(command.action==Action::Stop) {player.Stop();state.current=-1;state.playing=false;state.position=state.length=0.f;}
+                if(command.action==Action::Stop) stop();
                 else if(!state.available) state.error="Audio playback is available in the Android app.";
                 else {
                     int index=command.index;
-                    if(command.action==Action::Play && !command.path.empty()) {
+                    if(command.action==Action::Play&&!command.path.empty()) {
                         index=-1;
                         for(std::size_t i=0;i<state.tracks.size();++i) if(state.tracks[i].path==command.path) {index=static_cast<int>(i);break;}
                     }
-                    if(command.action==Action::Previous) index=state.current<0?0:(state.current-1+static_cast<int>(state.tracks.size()))%std::max(1,static_cast<int>(state.tracks.size()));
-                    if(command.action==Action::Next) index=state.current<0?0:(state.current+1)%std::max(1,static_cast<int>(state.tracks.size()));
-                    if(command.action==Action::Toggle && state.current<0) index=0;
-                    const bool selecting=command.action==Action::Play || command.action==Action::Previous || command.action==Action::Next || (command.action==Action::Toggle && state.current<0);
-                    if(selecting && index>=0 && index<static_cast<int>(state.tracks.size())) {
-                        if(state.cloudMode) player.CloudAction(127,state.provider,false,state.error);
-                        state.cloudMode=false;state.loading=true;state.playing=false;state.error.clear();Publish(state);
-                        const bool ok=player.Play(state.tracks[index].path);
+                    const int count=static_cast<int>(state.tracks.size());
+                    if(command.action==Action::Previous) index=state.current<0?0:(state.current-1+count)%std::max(1,count);
+                    if(command.action==Action::Next) index=state.current<0?0:(state.current+1)%std::max(1,count);
+                    if(command.action==Action::Toggle&&state.current<0) index=0;
+                    const bool selecting=command.action==Action::Play||command.action==Action::Previous||command.action==Action::Next||(command.action==Action::Toggle&&state.current<0);
+                    if(selecting&&index>=0&&index<count&&!canceled()) {
+                        stop();state.current=index;state.loading=true;state.download=0.f;state.error.clear();Publish(state);
+                        const auto& track=state.tracks[index];auto path=track.path;
+                        if(track.remote) {
+                            auto last=std::chrono::steady_clock::now();
+                            path=drive.Fetch({track.remote,track.title},state.error,canceled,[&](float progress) {
+                                const auto now=std::chrono::steady_clock::now();
+                                if(now-last>std::chrono::milliseconds(120)||progress>=1.f) {state.download=progress;Publish(state);last=now;}
+                            });
+                        }
+                        const bool ok=!path.empty()&&!canceled()&&player.Play(path);
                         state.loading=false;
-                        if(ok) {state.current=index;player.Poll(state);}
-                        else {state.current=-1;state.position=state.length=0.f;state.error="Couldn't play this track. Try another audio file.";}
-                    } else if(command.action==Action::Toggle && state.current>=0) {
-                        if(!player.Toggle(state.playing,state.length>0 && state.position>=state.length-.1f)) state.error="Playback couldn't be changed.";
+                        if(ok) player.Poll(state);
+                        else {stop();if(canceled()) state.error.clear();else if(state.error.empty()) state.error="Couldn't play this track. Try another audio file.";}
+                    } else if(command.action==Action::Toggle&&state.current>=0) {
+                        if(!player.Toggle(state.playing,state.length>0&&state.position>=state.length-.1f)) state.error="Playback couldn't be changed.";
                         else state.error.clear();
-                    } else if(command.action==Action::Seek && state.current>=0) {
+                    } else if(command.action==Action::Seek&&state.current>=0) {
                         if(!player.Seek(std::clamp(command.position,0.f,state.length))) state.error="This track couldn't seek to that position.";
                     }
                 }
             }
-            if(state.current>=0 && !player.Poll(state)) {player.Stop();state.playing=false;state.current=-1;state.position=state.length=0;state.error="Playback stopped. Choose a track to try again.";}
-            if(hasCommand || state.current>=0 || wasAvailable!=state.available) Publish(state);
+            if(state.current>=0&&!player.Poll(state)) {stop();state.error="Playback stopped. Choose a track to try again.";}
+            if(hasCommand||state.current>=0||wasAvailable!=state.available) Publish(state);
         }
     }
 public:
     ~Service() {
-        {std::lock_guard<std::mutex> lock(mutex_);stopping_=true;}
+        {std::lock_guard<std::mutex> lock(mutex_);stopping_=true;++revision_;}
         wake_.notify_all();if(worker_.joinable()) worker_.join();
     }
     void Start(PlatformVM* vm=nullptr) {
@@ -418,42 +369,45 @@ public:
         if(vm) vm_=vm;
         if(!worker_.joinable()) {commands_.push_back({Action::Scan});worker_=std::thread([this]{Run();});}
     }
-    std::shared_ptr<const Snapshot> Read() { std::lock_guard<std::mutex> lock(mutex_);return published_; }
+    std::shared_ptr<const Snapshot> Read() {std::lock_guard<std::mutex> lock(mutex_);return published_;}
     void Queue(Command command) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if(stopping_) return;
-        if(command.action==Action::Seek || command.action==Action::Scan)
+        std::lock_guard<std::mutex> lock(mutex_);if(stopping_) return;
+        if(command.action==Action::Seek||command.action==Action::Scan||command.action==Action::Connect||command.action==Action::Mode)
             commands_.erase(std::remove_if(commands_.begin(),commands_.end(),[&](const Command& other){return other.action==command.action;}),commands_.end());
-        if(commands_.size()<32) commands_.push_back(std::move(command));
+        if(commands_.size()>=32) return;
+        if(command.action!=Action::Seek&&command.action!=Action::Toggle) ++revision_;
+        command.revision=revision_;
+        commands_.push_back(std::move(command));
         wake_.notify_one();
     }
 };
-inline Service& Engine() { static Service service;return service; }
-inline void Init(PlatformVM* vm) { Engine().Start(vm); }
-inline std::shared_ptr<const Snapshot> GetSnapshot() { return Engine().Read(); }
-inline void Scan() { Engine().Queue({Action::Scan}); }
-inline void ScanFolders(std::vector<std::string> folders) { Engine().Queue({Action::Scan,-1,0.f,std::move(folders)}); }
+inline Service& Engine() {static Service service;return service;}
+inline void Init(PlatformVM* vm) {Engine().Start(vm);}
+inline std::shared_ptr<const Snapshot> GetSnapshot() {return Engine().Read();}
+inline void Scan() {Engine().Queue({Action::Scan});}
+inline void ScanFolders(std::vector<std::string> folders) {Engine().Queue({Action::Scan,-1,0.f,std::move(folders)});}
 inline void Play(int index) {
     const auto state=GetSnapshot();
-    if(index>=0 && index<static_cast<int>(state->tracks.size())) Engine().Queue({Action::Play,index,0.f,{},state->tracks[index].path});
+    if(index>=0&&index<static_cast<int>(state->tracks.size())) Engine().Queue({Action::Play,index,0.f,{},state->tracks[index].path});
 }
-inline void Stop() { Engine().Queue({Action::Stop}); }
-inline void Toggle() { Engine().Queue({Action::Toggle}); }
-inline void Next() { Engine().Queue({Action::Next}); }
-inline void Previous() { Engine().Queue({Action::Previous}); }
-inline void Seek(float seconds) { Engine().Queue({Action::Seek,-1,seconds}); }
+inline void Stop() {Engine().Queue({Action::Stop});}
+inline void Toggle() {Engine().Queue({Action::Toggle});}
+inline void Next() {Engine().Queue({Action::Next});}
+inline void Previous() {Engine().Queue({Action::Previous});}
+inline void Seek(float seconds) {Engine().Queue({Action::Seek,-1,seconds});}
 inline void Update() {}
-inline void SetCloudMode(bool cloud) { Engine().Queue({Action::Mode,cloud?1:0}); }
-inline void SetProvider(CloudProvider provider) { Engine().Queue({Action::Provider,provider==CloudProvider::Spotify?0:1}); }
-inline void OpenCloud() { Engine().Queue({Action::OpenCloud}); }
-inline void SearchCloud(const std::string& query) { if(!query.empty()) Engine().Queue({Action::SearchCloud,-1,0.f,{},query}); }
-inline music_ui::TextDialog sourceDialog,searchDialog;
-inline void CloudToggle() { Engine().Queue({Action::CloudToggle}); }
-inline void CloudPrevious() { Engine().Queue({Action::CloudPrevious}); }
-inline void CloudNext() { Engine().Queue({Action::CloudNext}); }
+inline void SetDriveMode(bool drive) {Engine().Queue({Action::Mode,drive?1:0});}
+inline void ConnectDrive(const std::string& link) {Engine().Queue({Action::Connect,-1,0.f,{},link});}
+inline music_ui::TextDialog sourceDialog,driveDialog,searchDialog;
+inline bool Matches(const Track& track,const std::string& filter) {
+    const auto lower=[](std::string value) {for(char& c:value) if(c>='A'&&c<='Z') c+=32;return value;};
+    return filter.empty()||lower(track.title).find(lower(filter))!=std::string::npos;
+}
 inline bool TapButton(const char* id,ImVec2 size) {
     const bool pressed=ImGui::InvisibleButton(id,size);
-    return pressed && (!custom::touch::Applies() || custom::touch::Tap());
+    const bool accepted=pressed&&(!custom::touch::Applies()||custom::touch::Tap());
+    if(accepted) ui_sounds::Play(ui_sounds::Cue::Click);
+    return accepted;
 }
 inline bool IconButton(const char* id,const char* icon,ImVec2 size,bool primary=false,bool disabled=false) {
     ImGui::BeginDisabled(disabled);
@@ -475,7 +429,10 @@ inline bool TextButton(const char* id,const char* label,ImVec2 size,bool selecte
     auto* draw=ImGui::GetWindowDrawList();
     draw->AddRectFilled(at,at+size,ImGui::GetColorU32(selected?ImVec4(c::accent.x,c::accent.y,c::accent.z,.24f):ImVec4(.17f,.16f,.23f,.75f)),8.f*c::scale);
     const auto measured=ImGui::CalcTextSize(label);
-    draw->AddText(at+(size-measured)*.5f,ImGui::GetColorU32(selected?c::text::text:c::text::text_hov),label);
+    const auto inset=ImVec2(8.f*c::scale,0);
+    draw->PushClipRect(at+inset,at+size-inset,true);
+    draw->AddText(at+ImVec2(ImMax(inset.x,(size.x-measured.x)*.5f),(size.y-measured.y)*.5f),ImGui::GetColorU32(selected?c::text::text:c::text::text_hov),label);
+    draw->PopClipRect();
     return tapped;
 }
 inline void Draw() {
@@ -493,35 +450,17 @@ inline void Draw() {
         draw->AddText(at+(ImVec2(modeWidth,22.f*scale)-measured)*.5f,ImGui::GetColorU32(selected?c::text::text:c::text::text_hov),label);
         return tapped;
     };
-    if(modeButton("##music_local_mode","Local",!state.cloudMode)) SetCloudMode(false);
+    if(modeButton("##music_local_mode","Local",!state.driveMode)) SetDriveMode(false);
     ImGui::SameLine(0,8.f*scale);
-    if(modeButton("##music_cloud_mode","Cloud",state.cloudMode)) SetCloudMode(true);
-    if(state.cloudMode) {
-        const float providerWidth=(width-6.f*scale)*.5f;
-        if(TextButton("##cloud_spotify","Spotify",{providerWidth,24.f*scale},state.provider==CloudProvider::Spotify)) SetProvider(CloudProvider::Spotify);
-        ImGui::SameLine(0,6.f*scale);
-        if(TextButton("##cloud_youtube","YouTube Music",{providerWidth,24.f*scale},state.provider==CloudProvider::YouTubeMusic)) SetProvider(CloudProvider::YouTubeMusic);
-        if(TextButton("##cloud_search",searchDialog.text[0]?searchDialog.text:"Search songs, artists or albums",{width,34.f*scale})) {
-            searchDialog.Open(searchDialog.text);ImGui::OpenPopup("Search music");
+    if(modeButton("##music_drive_mode","Drive",state.driveMode)) SetDriveMode(true);
+    if(state.driveMode) {
+        if(TextButton("##drive_connect",state.driveLink.empty()?"Connect a Google Drive folder":"Change Drive folder",{width,30.f*scale},true)) {
+            driveDialog.Open(state.driveLink);ImGui::OpenPopup("Drive source");
         }
-        if(music_ui::Dialog("Search music",searchDialog,"Search your music app","Search")==music_ui::DialogResult::Apply) SearchCloud(searchDialog.text);
-        if(TextButton("##cloud_open_library","Open music app / sign in",{width,28.f*scale},true)) OpenCloud();
-        const float h=30.f*scale,gap=9.f*scale;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX()+ImMax(0.f,(width-h*3-gap*2)*.5f));
-        if(IconButton("##cloud_previous",ICON_FA_STEP_BACKWARD,{h,h},false,!state.available)) CloudPrevious();
-        ImGui::SameLine(0,gap);
-        if(IconButton("##cloud_toggle",ICON_FA_PLAY,{h,h},true,!state.available)) CloudToggle();
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Play / pause the active music app");
-        ImGui::SameLine(0,gap);
-        if(IconButton("##cloud_next",ICON_FA_STEP_FORWARD,{h,h},false,!state.available)) CloudNext();
-        const char* hint="Search opens the app. Sign in and play there. Controls use the active media session.";
-        const float hintSize=13.f*scale;
-        const auto hintArea=ImGui::GetFont()->CalcTextSizeA(hintSize,FLT_MAX,width,hint);
-        draw->AddText(ImGui::GetFont(),hintSize,ImGui::GetCursorScreenPos(),ImGui::GetColorU32(c::text::text_hov),hint,nullptr,width);
-        ImGui::Dummy({width,hintArea.y+2.f*scale});
-        if(!state.error.empty()) {ImGui::PushTextWrapPos();ImGui::TextColored(ImVec4(.98f,.61f,.67f,1.f),"%s",state.error.c_str());ImGui::PopTextWrapPos();}
-        ImGui::PopStyleVar();
-        return;
+        if(state.driveLink.empty()) {
+            ImGui::PushTextWrapPos();ImGui::TextColored(c::text::text_hov,"Share your music folder: Anyone with the link / Viewer. Then paste its link here.");ImGui::PopTextWrapPos();
+        }
+        if(music_ui::Dialog("Drive source",driveDialog,"Paste your shared Drive link","Connect")==music_ui::DialogResult::Apply) ConnectDrive(driveDialog.text);
     }
     const auto origin=ImGui::GetCursorScreenPos();
     const float artSize=36.f*scale;
@@ -533,7 +472,8 @@ inline void Draw() {
         draw->AddRectFilled({x,origin.y+(artSize-height)*.5f},{x+3.f*scale,origin.y+(artSize+height)*.5f},ImGui::GetColorU32(c::accent),2.f*scale);
     }
     const char* title=state.current>=0 && state.current<static_cast<int>(state.tracks.size())?state.tracks[state.current].title.c_str():"Pick a soundtrack";
-    const char* detail=state.loading?"Opening track...":state.scanning?"Finding your music...":state.playing?"Playing locally":state.current>=0?"Paused":"Your songs, ready when you are";
+    char progress[48];std::snprintf(progress,sizeof(progress),"Caching track... %.0f%%",state.download*100.f);
+    const char* detail=state.loading?(state.driveMode?progress:"Opening track..."):state.scanning?"Finding your music...":state.playing?(state.driveMode?"Playing from Drive":"Playing locally"):state.current>=0?"Paused":"Your songs, ready when you are";
     const auto textStart=origin+ImVec2(artSize+10.f*scale,1.f*scale);
     draw->PushClipRect(textStart,{origin.x+width,origin.y+42.f*scale},true);
     draw->AddText(ImGui::GetFont(),18.f*scale,textStart,ImGui::GetColorU32(c::text::text),title);
@@ -553,7 +493,7 @@ inline void Draw() {
     const bool dragging=ImGui::IsItemActive() && (!custom::touch::Applies() || custom::touch::Horizontal());
     if(dragging || released) {
         seekPreview=state.length*ImClamp((ImGui::GetIO().MousePos.x-seekMin.x)/ImMax(1.f,width),0.f,1.f);
-        if(released) Seek(seekPreview);
+        if(released) {Seek(seekPreview);ui_sounds::Play(ui_sounds::Cue::Slider);}
     }
     if(dragging || released) shown=seekPreview;
     const float ratio=state.length>0?ImClamp(shown/state.length,0.f,1.f):0.f;
@@ -575,7 +515,9 @@ inline void Draw() {
     const bool disabled=state.tracks.empty() || state.loading || !state.available;
     if(IconButton("##music_previous",ICON_FA_STEP_BACKWARD,{buttonHeight,buttonHeight},false,disabled)) Previous();
     ImGui::SameLine(0,buttonGap);
-    if(IconButton("##music_toggle",state.playing?ICON_FA_PAUSE:ICON_FA_PLAY,{buttonHeight,buttonHeight},true,disabled)) Toggle();
+    if(IconButton("##music_toggle",state.loading?ICON_FA_STOP:state.playing?ICON_FA_PAUSE:ICON_FA_PLAY,{buttonHeight,buttonHeight},true,state.loading?!state.available:disabled)) {
+        if(state.loading) Stop();else Toggle();
+    }
     ImGui::SameLine(0,buttonGap);
     if(IconButton("##music_next",ICON_FA_STEP_FORWARD,{buttonHeight,buttonHeight},false,disabled)) Next();
     static bool libraryOpen=false;
@@ -588,21 +530,26 @@ inline void Draw() {
     draw->AddText(ImGui::GetFont(),13.f*scale,row+ImVec2(0,7.f*scale),ImGui::GetColorU32(c::text::text),libraryLabel);
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_source",ICON_FA_FOLDER_OPEN,{sourceWidth,30.f*scale})) {
-        const auto path=state.folders.empty()?state.appFolder:state.folders.front();
-        sourceDialog.Open(path);ImGui::OpenPopup("Music source");
+        if(state.driveMode) {driveDialog.Open(state.driveLink);ImGui::OpenPopup("Drive source");}
+        else {const auto path=state.folders.empty()?state.appFolder:state.folders.front();sourceDialog.Open(path);ImGui::OpenPopup("Music source");}
     }
-    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Music folder");
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip(state.driveMode?"Shared Drive folder":"Music folder");
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_refresh",ICON_FA_SYNC,{refreshWidth,30.f*scale},false,state.scanning)) Scan();
     if(!state.error.empty()) {ImGui::PushTextWrapPos();ImGui::TextColored(ImVec4(.98f,.61f,.67f,1.f),"%s",state.error.c_str());ImGui::PopTextWrapPos();}
     if(libraryOpen) {
+        if(TextButton("##music_search",searchDialog.text[0]?searchDialog.text:"Search your songs",{width,28.f*scale})) {searchDialog.Open(searchDialog.text);ImGui::OpenPopup("Find a song");}
+        music_ui::Dialog("Find a song",searchDialog,"Search this library","Search");
         const float listHeight=ImClamp(ImGui::GetContentRegionAvail().y,80.f*scale,220.f*scale);
         ImGui::BeginChild("##music_library",{0,listHeight},false,ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoMove);
         if(state.tracks.empty()) {
             ImGui::TextColored(c::text::text,"No songs here yet");
-            ImGui::PushTextWrapPos();ImGui::TextColored(c::text::text_hov,"Add audio files to your selected folder, then refresh.");ImGui::PopTextWrapPos();
+            ImGui::PushTextWrapPos();ImGui::TextColored(c::text::text_hov,state.driveMode?"Upload audio files to your shared Drive folder, then refresh.":"Add audio files to your selected folder, then refresh.");ImGui::PopTextWrapPos();
         }
+        bool found=false;
         for(std::size_t i=0;i<state.tracks.size();++i) {
+            if(!Matches(state.tracks[i],searchDialog.text)) continue;
+            found=true;
             ImGui::PushID(static_cast<int>(i));
             const auto item=ImGui::GetCursorScreenPos();const ImVec2 itemSize(ImGui::GetContentRegionAvail().x,35.f*scale);
             const bool tapped=TapButton("##track",itemSize);
@@ -614,6 +561,7 @@ inline void Draw() {
             if(tapped && !state.loading) Play(static_cast<int>(i));
             ImGui::PopID();
         }
+        if(!found&&!state.tracks.empty()) ImGui::TextColored(c::text::text_hov,"No matching songs");
         ImGui::EndChild();
         if(state.truncated) ImGui::TextColored(c::text::text_hov,"Showing the first 256 tracks");
     }

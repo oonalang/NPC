@@ -1,4 +1,5 @@
 #pragma once
+#include "../Audio/UiSounds.h"
 #include "../../ImGui/imgui_internal.h"
 #include "../../ImGui/imgui_settings.h"
 #include "../../ImGui/TouchScroll.h"
@@ -42,6 +43,7 @@ inline bool Button(const char* label,ImVec2 size,bool primary=false) {
     ImGui::PushStyleColor(ImGuiCol_Button,primary?ImVec4(c::accent.x,c::accent.y,c::accent.z,.5f):ImVec4(.22f,.20f,.29f,1.f));
     const bool pressed=ImGui::Button(label,size);
     const bool accepted=pressed && (!custom::touch::Applies() || custom::touch::Tap());
+    if(accepted) ui_sounds::Play(ui_sounds::Cue::Click);
     ImGui::PopStyleColor();return accepted;
 }
 enum class DialogResult { None,Apply,Shortcut };

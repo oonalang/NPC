@@ -4,20 +4,23 @@
 #include "ClayGlass.h"
 #include "TouchScroll.h"
 #include "SliderGeometry.h"
+#include "../System/Audio/UiSounds.h"
 extern ImFont* F50;
 extern ImFont* F107;
 namespace custom
 {
     void UpdateTouchScroll() { touch::Update(); }
     void CancelTouchScroll() { touch::Cancel(); }
-    static bool GestureButtonBehavior(const ImRect& bounds,ImGuiID id,bool* hovered,bool* held,ImGuiButtonFlags flags=0) {
+    static bool GestureButtonBehavior(const ImRect& bounds,ImGuiID id,bool* hovered,bool* held,ImGuiButtonFlags flags=0,ui_sounds::Cue cue=ui_sounds::Cue::Click) {
         const bool applies=touch::Applies();
         if(applies) {
             flags&=~ImGuiButtonFlags_PressedOnMask_;
             flags|=ImGuiButtonFlags_PressedOnClickRelease;
         }
         const bool pressed=ImGui::ButtonBehavior(bounds,id,hovered,held,flags);
-        return pressed && (!applies || touch::Tap() || GImGui->NavActivateId==id);
+        const bool accepted=pressed&&(!applies||touch::Tap()||GImGui->NavActivateId==id);
+        if(accepted) ui_sounds::Play(cue);
+        return accepted;
     }
     namespace shell
     {
@@ -1231,7 +1234,7 @@ namespace custom
         if (!ItemAdd(total, id)) return false;
 
         bool hovered, held;
-        bool pressed = GestureButtonBehavior(total, id, &hovered, &held);
+        bool pressed = GestureButtonBehavior(total, id, &hovered, &held,0,*v?ui_sounds::Cue::ToggleOff:ui_sounds::Cue::ToggleOn);
         if (pressed) {
             *v = !*v;
             MarkItemEdited(id);
@@ -1392,7 +1395,7 @@ namespace custom
 
         if (!ItemAdd(total_bb, id, &field_bb)) return false;
 
-        bool hovered, held, pressed = GestureButtonBehavior(field_bb, id, &hovered, &held);
+        bool hovered, held, pressed = GestureButtonBehavior(field_bb, id, &hovered, &held,0,ui_sounds::Cue::Open);
         const ImGuiID popup_id = ImHashStr("##CustomComboPopup", 0, id);
 
         static std::map<ImGuiID, begin_state> anim;
@@ -2667,7 +2670,7 @@ namespace custom
 
         if (!ItemAdd(total_bb, id, &slider_bb, temp_input_allowed ? ImGuiItemFlags_Inputable : 0)) return false;
 
-        bool hovered = ItemHoverable(slider_bb, id, g.LastItemData.InFlags), held, pressed = GestureButtonBehavior(slider_bb, id, &hovered, &held, NULL);
+        bool hovered = ItemHoverable(slider_bb, id, g.LastItemData.InFlags), held, pressed = GestureButtonBehavior(slider_bb, id, &hovered, &held,0,ui_sounds::Cue::Count);
 
         ImRect grab_bb;
 
@@ -2763,6 +2766,7 @@ namespace custom
         clay::Glass(GetWindowDrawList(), knob_min, knob_max, knob_half_height,
                     it_anim->second.active_t);
 
+        if(IsItemDeactivatedAfterEdit()) ui_sounds::Play(ui_sounds::Cue::Slider);
         return value_changed;
     }
 

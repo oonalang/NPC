@@ -142,16 +142,14 @@ int main() {
         }));
         for(const auto size : sizes) Check(size,"local error",label.c_str());
 
-        music_player::SetCloudMode(true);
-        assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) { return state.cloudMode; }));
-        for(const auto size : sizes) Check(size,"cloud error",label.c_str());
-        music_player::ScanFolders({folder});
-        assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) {
-            return !state.scanning && state.tracks.size()==2 && state.error.empty();
-        }));
-        for(const auto size : sizes) Check(size,"cloud",label.c_str());
-        music_player::SetCloudMode(false);
-        assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) { return !state.cloudMode; }));
+        music_player::SetDriveMode(true);
+        assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) { return state.driveMode; }));
+        for(const auto size : sizes) Check(size,"Drive empty",label.c_str());
+        music_player::ConnectDrive("https://invalid.example/music");
+        assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) {return !state.scanning&&!state.error.empty();}));
+        for(const auto size:sizes) Check(size,"Drive error",label.c_str());
+        music_player::SetDriveMode(false);
+        assert(WaitFor(io.DisplaySize,[](const music_player::Snapshot& state) { return !state.driveMode; }));
     }
 
     music_player::ScanFolders({folder});
@@ -160,5 +158,5 @@ int main() {
     unlink((folder+"/Alpha.mp3").c_str());
     unlink((folder+"/Beta.flac").c_str());
     rmdir(folder.c_str());
-    std::puts("Home dashboard keeps the music card and its Local and Cloud controls fully visible at wide, landscape, portrait and narrow sizes, and overflowing panels stay scrollable");
+    std::puts("Home dashboard keeps the music card and its Local and Drive controls fully visible at wide, landscape, portrait and narrow sizes, and overflowing panels stay scrollable");
 }

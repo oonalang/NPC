@@ -1,4 +1,5 @@
 #pragma once
+#include "../Audio/UiSounds.h"
 
 #include "ImGui/Call_ImGui.h"
 #include "../Core/SaveConfig.h"
@@ -227,6 +228,12 @@ namespace settings_tab
         if (Config.Aim.showFPSLevelSlider) {
             custom::SliderFloat("Frame Level", &Config.Aim.FpsLevel1, 30, 120, "%.0f");
         }
+        ImGui::Separator();
+        bool effects=ui_sounds::Enabled();
+        if(custom::Checkbox("Creamy UI sounds",&effects)) ui_sounds::SetEnabled(effects);
+        float effectsVolume=ui_sounds::Gain()*100.f;
+        if(custom::SliderFloat("Effects volume",&effectsVolume,0.f,100.f,"%.0f%%")) ui_sounds::SetGain(effectsVolume*.01f);
+        if(custom::Button("PREVIEW SOUND",ImVec2(ImMax(1.f,ImGui::GetContentRegionAvail().x),40.f))) ui_sounds::Play(ui_sounds::Cue::Success);
         ImGui::Separator();
         if (custom::Checkbox("Ultra Frame Boost", &Config.Aim.FpsLevelUltra)) {
             Config.Aim.showFPSLevelUltraSlider = Config.Aim.FpsLevelUltra;
