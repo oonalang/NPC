@@ -133,6 +133,75 @@ inline void FadeLogin(ImDrawList* draw,int first,float opacity) {
             static_cast<clay::MaterialDraw*>(command.UserCallbackData)->alpha*=opacity;
 #endif
 }
+inline void CollapseCard(ImDrawList* draw,int first,ImVec2 center,float amount) {
+    if(amount<=0.f) return;
+    const float ease=Ease(ImClamp(amount,0.f,1.f));
+    const float shrink=1.f-.85f*ease;
+    const float angle=2.6f*ease;
+    const float sine=std::sin(angle),cosine=std::cos(angle);
+    for(int i=first;i<draw->VtxBuffer.Size;++i) {
+        auto& vertex=draw->VtxBuffer[i];
+        const auto offset=(vertex.pos-center)*shrink;
+        vertex.pos=center+ImVec2(offset.x*cosine-offset.y*sine,offset.x*sine+offset.y*cosine);
+        const auto alpha=static_cast<ImU32>(((vertex.col>>IM_COL32_A_SHIFT)&255)*(1.f-ease));
+        vertex.col=(vertex.col&~IM_COL32_A_MASK)|(alpha<<IM_COL32_A_SHIFT);
+    }
+#ifndef CLAY_CPU_PREVIEW
+    for(const auto& command : draw->CmdBuffer)
+        if(command.UserCallback==clay::DrawMaterial)
+            static_cast<clay::MaterialDraw*>(command.UserCallbackData)->alpha*=1.f-ease;
+#endif
+}
+inline float LumpyRadius(float angle,float time) {
+    return 1.f+.10f*std::sin(angle*3.f+time*2.16f)+.06f*std::sin(angle*5.f-time*2.88f+.7f)
+        +.035f*std::sin(angle*8.f+time*3.78f+1.9f)+.02f*std::sin(angle*13.f-time*5.76f);
+}
+inline void AuthOverlay(ImDrawList* draw,ImVec2 center,const LoginTransitionFrame& frame,float scale) {
+    const float time=static_cast<float>(ImGui::GetTime());
+    const float progress=ImClamp(frame.sceneProgress,0.f,1.f);
+    if(frame.stage==AuthStage::Singularity) {
+        const float amount=Ease(progress);
+        draw->AddCircleFilled(center,ImLerp(3.f,23.f,amount)*scale,IM_COL32(4,3,9,235),28);
+        const float ring=ImLerp(52.f,9.f,amount)*scale;
+        draw->AddCircle(center,ring,IM_COL32(214,184,255,215),36,2.4f*scale);
+        for(int i=1;i<=2;++i)
+            draw->AddCircle(center,ring+(i*2.6f)*scale,IM_COL32(176,118,255,static_cast<ImU32>(70-i*18)),36,1.4f*scale);
+        draw->AddCircleFilled(center,ImMax(1.f,ring*.34f),IM_COL32(255,252,255,240),18);
+        return;
+    }
+    if(frame.stage==AuthStage::Flash) {
+        const float amount=Ease(progress);
+        for(int i=6;i>=1;--i)
+            draw->AddCircleFilled(center,(5.f+i*6.f)*scale*(1.f+amount*.8f),
+                ImGui::GetColorU32(ImVec4(1.f,.97f,1.f,.09f*(1.f-i/8.f))),32);
+        draw->AddCircleFilled(center,ImLerp(5.f,22.f,amount)*scale,IM_COL32(255,255,255,255),28);
+        const float arm=ImLerp(12.f,62.f,amount)*scale;
+        draw->AddLine(center-ImVec2(arm,0),center+ImVec2(arm,0),IM_COL32(255,250,255,205),1.8f*scale);
+        draw->AddLine(center-ImVec2(0,arm),center+ImVec2(0,arm),IM_COL32(255,250,255,205),1.8f*scale);
+        return;
+    }
+    const float far=ImMin(ImGui::GetIO().DisplaySize.x,ImGui::GetIO().DisplaySize.y)*.72f;
+    const float radius=ImLerp(26.f*scale,ImMax(far,40.f*scale),1.f-(1.f-progress)*(1.f-progress));
+    const float alpha=progress<.08f?progress/.08f:ImMax(0.f,1.f-(progress-.08f)/.92f);
+    ImVec2 points[56],ring[56];
+    for(int i=0;i<56;++i) {
+        const float angle=i*6.283185307179586f/56.f;
+        const float r=radius*LumpyRadius(angle,time);
+        points[i]=center+ImVec2(std::cos(angle)*r,std::sin(angle)*r);
+    }
+    const auto shade=static_cast<ImU32>(ImClamp(alpha,0.f,1.f)*255.f);
+    const auto scaled=[&](float factor) {
+        for(int i=0;i<56;++i) ring[i]=center+(points[i]-center)*factor;
+    };
+    scaled(1.f);
+    draw->AddPolyline(ring,56,IM_COL32(150,120,255,(shade*24)/255),ImDrawFlags_Closed,radius*.15f);
+    scaled(.9f);
+    draw->AddPolyline(ring,56,IM_COL32(255,150,66,(shade*110)/255),ImDrawFlags_Closed,4.5f*scale);
+    scaled(1.012f);
+    draw->AddPolyline(ring,56,IM_COL32(120,160,255,(shade*70)/255),ImDrawFlags_Closed,2.f*scale);
+    scaled(1.f);
+    draw->AddPolyline(ring,56,IM_COL32(228,234,255,shade),ImDrawFlags_Closed,2.2f*scale);
+}
 inline bool AuthenticateButton(ImVec2 lo,ImVec2 size,float scale,bool pending,const LoginTransitionFrame& frame) {
     ImGui::SetCursorScreenPos(lo);
     ImGui::BeginDisabled(pending || frame.inputBlocked);
@@ -153,7 +222,11 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
                          bool& keyboard, Input input,const LoginTransitionFrame* overrideFrame=nullptr) {
     LoginActions result;
     const auto animation=overrideFrame?*overrideFrame:loginTransition.At(Now());
-    if(!animation.loginVisible) return result;
+    if(!animation.loginVisible) {
+        if(animation.stage==AuthStage::Singularity||animation.stage==AuthStage::Flash||animation.stage==AuthStage::Explosion)
+            AuthOverlay(ImGui::GetForegroundDrawList(),ImGui::GetMainViewport()->GetCenter(),animation,Fit({720,500}));
+        return result;
+    }
     const ImVec2 logical(720,500); const float scale=Fit(logical);
     const auto size=logical*scale;
     const auto windowSize=size+ImVec2(20,20)*scale;
@@ -228,7 +301,7 @@ LoginActions RenderLogin(char* key, size_t capacity, bool pending, const char* e
         Text(draw,Body(),13.f*scale,statusMin+ImVec2(32,0)*scale,
             failed?IM_COL32(255,170,183,255):IM_COL32(220,212,233,255),status,statusMax.x-statusMin.x-32.f*scale);
         draw->PopClipRect();
-        FadeLogin(draw,first,animation.opacity);
+        if(animation.stage==AuthStage::Suck) CollapseCard(draw,first,pos+size*.5f,animation.sceneProgress);
     }
     ImGui::End(); ImGui::PopStyleVar(2);
     return result;

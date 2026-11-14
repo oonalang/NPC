@@ -321,7 +321,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         clay::sceneValid=clay::materialValid=false;
         previousStartupScene=startupScene;
     }
-    const bool authSceneActive=startupScene && auth_scene::Begin(g_GlWidth,g_GlHeight);
     clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed, GImGui->MovingWindow != nullptr);
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
@@ -1095,7 +1094,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     }
     ImGui::EndFrame();
     ImGui::Render();
-    bool renderedOffscreen = authSceneActive && auth_scene::Render(ImGui::GetDrawData(),startup_ui::SceneFrame(authFrame,g_AuthCenter));
+    bool renderedOffscreen = false;
     if (!startupScene && hideRecordEnabled && old_eglSwapBuffers) {
         renderedOffscreen = ZEL_Render(ImGui::GetDrawData(), dpy, surface,
                                       eglGetCurrentContext(), old_eglSwapBuffers);
@@ -1110,7 +1109,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         ZEL_Shutdown();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
-    if(isLogin && startupScene) auth_scene::Release();
     feedback::PumpAfterRender();
     const EGLBoolean presented=old_eglSwapBuffers(dpy,surface);
     if(presented && g_GlWidth>0 && g_GlHeight>0) {

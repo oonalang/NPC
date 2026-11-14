@@ -72,15 +72,15 @@ inline void Emit(ImDrawList* draw,const ClipVertex& a,const ClipVertex& b,const 
     draw->PrimWriteVtx(c.pos,c.uv,ImGui::ColorConvertFloat4ToU32(c.color));
 }
 inline void ClipFluid(ImDrawList* target,const ImDrawList* source,ImVec2 lo,ImVec2 size) {
-    std::array<ImVec2,34> boundary;
+    std::array<ImVec2,20> boundary;
     const float radius=size.y*.5f;
-    for(int i=0;i<=16;++i) {
-        const float angle=-IM_PI*.5f+IM_PI*i/16.f;
+    for(int i=0;i<=9;++i) {
+        const float angle=-IM_PI*.5f+IM_PI*i/9.f;
         boundary[i]=lo+ImVec2(size.x-radius+std::cos(angle)*radius,radius+std::sin(angle)*radius);
     }
-    for(int i=0;i<=16;++i) {
-        const float angle=IM_PI*.5f+IM_PI*i/16.f;
-        boundary[17+i]=lo+ImVec2(radius+std::cos(angle)*radius,radius+std::sin(angle)*radius);
+    for(int i=0;i<=9;++i) {
+        const float angle=IM_PI*.5f+IM_PI*i/9.f;
+        boundary[10+i]=lo+ImVec2(radius+std::cos(angle)*radius,radius+std::sin(angle)*radius);
     }
     for(int triangle=0;triangle+2<source->IdxBuffer.Size;triangle+=3) {
         std::array<ClipVertex,40> polygon,next;
@@ -168,12 +168,9 @@ inline void Wave(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,float progre
     const auto background=ImGui::GetColorU32(ImVec4(.86f,.80f,1.f,.40f));
     const auto foreground=ImGui::GetColorU32(ImVec4(1,1,1,1));
     const auto base=lo.y+size.y+2.f*scale;
-    for(int i=0;i<128;++i) {
-        const float x0=lo.x+size.x*i/128.f,x1=lo.x+size.x*(i+1)/128.f;
+    for(int i=0;i<40;++i) {
+        const float x0=lo.x+size.x*i/40.f,x1=lo.x+size.x*(i+1)/40.f;
         Quad(draw,{x0,surface(x0,1.6f,.95f)},{x1,surface(x1,1.6f,.95f)},{x1,base},{x0,base},background);
-    }
-    for(int i=0;i<128;++i) {
-        const float x0=lo.x+size.x*i/128.f,x1=lo.x+size.x*(i+1)/128.f;
         Quad(draw,{x0,surface(x0,0.f,1.f)},{x1,surface(x1,0.f,1.f)},{x1,base},{x0,base},foreground);
     }
 }
