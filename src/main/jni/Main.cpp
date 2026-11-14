@@ -41,6 +41,7 @@
 #include "System/UI/TriggerTab.h"
 #include "System/UI/AuthenticateFlow.h"
 #include "System/UI/ReducedMotion.h"
+#include "System/UI/HomeTab.h"
 #include "System/UI/AuthenticateInput.h"
 
 static void RequestTriggerInitialization();
@@ -625,11 +626,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         ICON_FA_BULLSEYE,
                         ICON_FA_MICROCHIP,
                         ICON_FA_MAGIC,
-                        ICON_FA_SLIDERS_H,
+                        ICON_FA_HOME,
                         ICON_FA_COG
                     };
                     static const char *sidebarLabels[] = {
-                        "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Misc", "Settings"
+                        "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Home", "Settings"
                     };
                     const int sidebarButtonCount = IM_ARRAYSIZE(sidebarIcons);
                     const float sidebarButtonGap = 6.0f;
@@ -887,62 +888,44 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 6)
                         {
-                            const ChildFrame misc = BeginContentChild("MISC", ImVec2(contentRegion.x, childHeight));
-                            const misc_tab::LayoutMetrics layout = misc_tab::CalculateLayout(contentRegion.x, runtime_preview_menu::g_activeChangelogTab);
+                            const ChildFrame home = BeginContentChild("HOME", ImVec2(contentRegion.x, childHeight));
 
+                            home_tab::HomeStats homeStats;
+                            homeStats.fps = ImGui::GetIO().Framerate;
+                            homeStats.frameMs = homeStats.fps > 0.0f ? 1000.0f / homeStats.fps : 0.0f;
+                            homeStats.uptime = ImGui::GetTime();
+                            homeStats.width = static_cast<int>(displaySize.x);
+                            homeStats.height = static_cast<int>(displaySize.y);
+                            homeStats.keySaved = g_LoginTextLoaded;
+                            homeStats.activeFeatures =
+                                (Config.ESPMenu.Box ? 1 : 0) + (Config.ESPMenu.Name ? 1 : 0) +
+                                (Config.ESPMenu.Skeleton ? 1 : 0) + (Config.ESPMenu.Health ? 1 : 0) +
+                                (Config.ESPMenu.Distance ? 1 : 0) + (Config.ESPMenu.Count ? 1 : 0) +
+                                (Config.ESPMenu.Alert ? 1 : 0) + (Config.Aim.Aimbot360 ? 1 : 0) +
+                                (Config.Aim.AimSilent ? 1 : 0) + (Config.ExtraMenu.Recoil ? 1 : 0) +
+                                (Config.ExtraMenu.Spread ? 1 : 0) + (Config.ExtraMenu.Fire ? 1 : 0) +
+                                (Config.ExtraMenu.Reload ? 1 : 0) + (Config.ExtraMenu.Scope ? 1 : 0) +
+                                (Config.ExtraMenu.Switch ? 1 : 0) + (Config.ExtraMenu.Flash ? 1 : 0) +
+                                (Config.ExtraMenu.WallHack ? 1 : 0);
+
+                            const float statsHeight = 176.0f * c::scale;
                             {
-                                const ChildFrame changelog = BeginContentChild("CHANGELOG", ImVec2(contentRegion.x, layout.changelogHeight), ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-                                const float changelogTabGap = 5.0f;
-                                const float changelogTabH = 40.0f;
-                                const float changelogSafeRight = ImGui::GetStyle().ScrollbarSize + 12.0f;
-                                const float changelogAvailW = ImMax(1.0f, ImGui::GetContentRegionAvail().x - changelogSafeRight);
-                                const float changelogTabW = ImMax(1.0f, ImFloor((changelogAvailW - changelogTabGap * 2.0f) / 3.0f));
-                                for (int i = 0; i < IM_ARRAYSIZE(misc_tab::kChangelogTabs); ++i) {
-                                    char buttonId[48] = {};
-                                    std::snprintf(buttonId, sizeof(buttonId), "##changelog_%d", i);
-                                    if (i > 0) {
-                                        ImGui::SameLine(0.0f, changelogTabGap);
-                                    }
-                                    if (misc_tab::DrawChangelogTab(buttonId, misc_tab::kChangelogIcons[i], misc_tab::kChangelogTabs[i], runtime_preview_menu::g_activeChangelogTab == i, ImVec2(changelogTabW, changelogTabH))) {
-                                        runtime_preview_menu::g_activeChangelogTab = i;
-                                    }
-                                }
-
-                                misc_tab::ContentGap(12.0f);
-
-                                const misc_tab::ChangelogSelection activeSection = misc_tab::GetActiveChangelogSelection(runtime_preview_menu::g_activeChangelogTab);
-
-                                ImFont *activeIconFont = F107 ? F107 : ImGui::GetFont();
-                                ImGui::PushFont(activeIconFont);
-                                ImGui::TextColored(activeSection.color, "%s", activeSection.icon);
-                                ImGui::PopFont();
-                                ImGui::SameLine(0.0f, 8.0f);
-                                ImGui::TextColored(activeSection.color, "%s", activeSection.title);
-                                ImGui::SameLine(0.0f, 10.0f);
-                                ImGui::TextColored(c::text::text, "March 10, 2026");
-                                misc_tab::ContentGap(8.0f);
-                                misc_tab::DrawSectionItems(activeSection.items, activeSection.count);
-                                EndContentChild(changelog);
+                                const ChildFrame stats = BeginContentChild("SESSION", ImVec2(contentRegion.x, statsHeight));
+                                home_tab::DrawStats(homeStats);
+                                EndContentChild(stats);
                             }
 
-                            misc_tab::ContentGap(layout.rowGap);
+                            misc_tab::ContentGap(8.0f);
 
                             {
-                                const ChildFrame info = BeginContentChild("INFO", ImVec2(contentRegion.x, layout.infoHeight), ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-                                misc_tab::DrawInfoSummary();
-                                EndContentChild(info);
+                                music_player::Init(VM);
+                                const float musicHeight = ImMax(140.0f, contentRegion.y - statsHeight - 8.0f);
+                                const ChildFrame music = BeginContentChild("MUSIC", ImVec2(contentRegion.x, musicHeight));
+                                music_player::Draw();
+                                EndContentChild(music);
                             }
 
-                            misc_tab::ContentGap(layout.rowGap);
-
-                            {
-                                const ChildFrame price = BeginContentChild("PRICELIST", ImVec2(contentRegion.x, layout.priceHeight), ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-                                misc_tab::DrawPriceSummary("##runtime_main_misc_prices");
-                                EndContentChild(price);
-                            }
-
-                            EndContentChild(misc);
+                            EndContentChild(home);
                         }
 
                         if (runtimeState.activeTab == 7)
