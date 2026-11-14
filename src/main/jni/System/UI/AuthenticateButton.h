@@ -63,6 +63,7 @@ inline void Splash(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,float prog
 inline void Wave(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,float progress) {
     const float t=ImClamp(progress,0.f,1.f);
     if(t<=0.f) return;
+    const float radius=size.y*.5f;
     const float amplitude=size.y*.19f*std::sin(IM_PI*t);
     const float level=lo.y+size.y*(1.f-t);
     const auto surface=[&](float x,float phase,float strength) {
@@ -70,14 +71,21 @@ inline void Wave(ImDrawList* draw,ImVec2 lo,ImVec2 size,float scale,float progre
         return level+amplitude*strength*(std::sin(u*IM_PI*3.f-t*IM_PI*2.f+phase)+
             .28f*std::sin(u*IM_PI*5.f+t*IM_PI*2.8f+phase));
     };
-    const auto background=ImGui::GetColorU32(ImVec4(.86f,.80f,1.f,.40f));
-    const auto foreground=ImGui::GetColorU32(ImVec4(1,1,1,1));
-    const auto base=lo.y+size.y+2.f*scale;
-    for(int i=0;i<40;++i) {
-        const float x0=lo.x+size.x*i/40.f,x1=lo.x+size.x*(i+1)/40.f;
-        Quad(draw,{x0,surface(x0,1.6f,.95f)},{x1,surface(x1,1.6f,.95f)},{x1,base},{x0,base},background);
-        Quad(draw,{x0,surface(x0,0.f,1.f)},{x1,surface(x1,0.f,1.f)},{x1,base},{x0,base},foreground);
-    }
+    const float leftX=lo.x+radius,rightX=lo.x+size.x-radius,cy=lo.y+radius,base=lo.y+size.y;
+    const auto paint=[&](float phase,float strength,ImU32 color) {
+        for(int i=0;i<40;++i) {
+            const float x0=ImLerp(leftX,rightX,i/40.f),x1=ImLerp(leftX,rightX,(i+1)/40.f);
+            Quad(draw,{x0,surface(x0,phase,strength)},{x1,surface(x1,phase,strength)},{x1,base},{x0,base},color);
+        }
+        const float right=std::asin(ImClamp((surface(rightX,phase,strength)-cy)/radius,-1.f,1.f));
+        const float left=std::asin(ImClamp((surface(leftX,phase,strength)-cy)/radius,-1.f,1.f));
+        draw->PathArcTo(ImVec2(rightX,cy),radius,right,IM_PI*.5f,14);
+        draw->PathFillConvex(color);
+        draw->PathArcTo(ImVec2(leftX,cy),radius,IM_PI*.5f,IM_PI-left,14);
+        draw->PathFillConvex(color);
+    };
+    paint(1.6f,.95f,ImGui::GetColorU32(ImVec4(.86f,.80f,1.f,.40f)));
+    paint(0.f,1.f,ImGui::GetColorU32(ImVec4(1,1,1,1)));
 }
 inline void Check(ImDrawList* draw,ImVec2 center,float scale,float progress) {
     const float t=ImClamp(progress,0.f,1.f);

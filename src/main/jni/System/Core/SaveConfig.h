@@ -48,6 +48,7 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
     config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
+    config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
     config["ExtraMenu"]["Recoil"] = Config.ExtraMenu.Recoil;
     config["ExtraMenu"]["Shake"] = Config.ExtraMenu.Shake;
     config["ExtraMenu"]["Spread"] = Config.ExtraMenu.Spread;
@@ -129,6 +130,7 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
             Config.ExtraMenu.Rpd = config["ExtraMenu"]["Rpd"].get<bool>();
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
+            Config.ExtraMenu.NoCrouch = config["ExtraMenu"].value("NoCrouch", false);
             Config.ExtraMenu.Recoil = config["ExtraMenu"]["Recoil"].get<bool>();
             Config.ExtraMenu.Shake = config["ExtraMenu"]["Shake"].get<bool>();
             Config.ExtraMenu.Spread = config["ExtraMenu"]["Spread"].get<bool>();
