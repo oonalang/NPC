@@ -10,6 +10,7 @@
 #include "../../Hacks/Feature/Init_Hacks.h"
 #include "../../BlueprintTierFilter.h"
 #include "../../Trigger/TriggerDotStyle.h"
+#include "../Hooks/Hitbox.h"
 
 // Externals defined in Main.cpp
 extern float menu[4];
@@ -54,6 +55,7 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Fire"] = Config.ExtraMenu.Fire;
     config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
+    config["ExtraMenu"]["HitboxScale"] = hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
     config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
     config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
@@ -137,6 +139,8 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Fire = config["ExtraMenu"]["Fire"].get<bool>();
             Config.ExtraMenu.NoSprintFire = config["ExtraMenu"].value("NoSprintFire", false);
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
+            Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(config["ExtraMenu"].value("HitboxScale",hitbox::defaultScale));
+            hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
             Config.ExtraMenu.Rpd = config["ExtraMenu"]["Rpd"].get<bool>();
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
             Config.ExtraMenu.NoCrouch = config["ExtraMenu"].value("NoCrouch", false);
@@ -148,7 +152,7 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Reload = config["ExtraMenu"]["Reload"].get<bool>();
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
             Config.ExtraMenu.Switch = config["ExtraMenu"]["Switch"].get<bool>();
-            Config.ExtraMenu.Kinetic = config["ExtraMenu"]["Kinetic"].get<bool>();
+            Config.ExtraMenu.Kinetic = config["ExtraMenu"].value("Kinetic",config["ExtraMenu"].value("KineticArmor",false));
             if (config["ExtraMenu"].contains("Blueprints"))
                 Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();
             if (config["ExtraMenu"].contains("BlueprintTiers"))

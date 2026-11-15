@@ -46,6 +46,7 @@
 #include "System/UI/AuthenticateInput.h"
 
 static void RequestTriggerInitialization();
+void Init_Thread2();
 
 
 #include <jni.h>
@@ -311,6 +312,13 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     custom::UpdateTouchScroll();
     music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
+    hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
+    static auto lastHitboxProbe=frameTime;
+    if(Config.ExtraMenu.Hit&&!hitbox::available.load()&&hitbox::status.load()==hitbox::Status::Waiting&&
+       frameTime-lastHitboxProbe>=std::chrono::seconds(1)) {
+        lastHitboxProbe=frameTime;
+        Init_Thread2();
+    }
     frame_rate::Publish(frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
     if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
         isLogin = false;
@@ -1063,7 +1071,8 @@ void Init_Thread2()
         for(unsigned attempt=0;attempt<80;++attempt) {
             frame_rate::Install(base,install);
             slide_fatigue::Install(base,install);
-            if(frame_rate::available.load()&&slide_fatigue::available.load()) break;
+            hitbox::Install(base,install);
+            if(frame_rate::available.load()&&slide_fatigue::available.load()&&hitbox::available.load()) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         running=false;

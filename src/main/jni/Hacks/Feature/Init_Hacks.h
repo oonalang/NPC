@@ -216,6 +216,7 @@ sColorsESPBOT sColorsESPBOT{0};
         bool Switch;
         bool Flash;
         bool Hit;
+        float HitboxScale = 1.f;
         bool Rpd;
         bool Parachute;
 		bool WallHack;

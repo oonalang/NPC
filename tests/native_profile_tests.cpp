@@ -1,4 +1,5 @@
 #include "../src/main/jni/Trigger/NativeProfile.h"
+#include "../src/main/jni/Trigger/NativeDriver.h"
 #include "../src/main/jni/Trigger/TriggerCompatibility.h"
 
 #include <algorithm>
@@ -213,8 +214,8 @@ extern "C" int __wrap_open(const char*, int, ...) {
 
 namespace PhantomTrigger {
 bool InstallNativeDriver(std::uintptr_t) noexcept { ++installs; return true; }
-void NativeDriverFailure(const char*) noexcept { ++failures; }
-void NativeDriverPending(const char*) noexcept { ++pending; }
+void NativeDriverFailure() noexcept { ++failures; }
+void NativeDriverPending() noexcept { ++pending; }
 }
 
 int main(int argc, char** argv) {

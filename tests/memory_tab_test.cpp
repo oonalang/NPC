@@ -47,6 +47,8 @@ int main() {
         c::scale=scale;
         for(auto size:{ImVec2(900,360),ImVec2(700,280),ImVec2(400,600),ImVec2(280,360)}) {
             for(int category=0;category<4;++category) {
+                Config.ExtraMenu.Hit=category==1;
+                Config.ExtraMenu.HitboxScale=2.f;
                 memory_tab::selected=static_cast<memory_tab::Category>(category);Pump(size);
                 if(category==0) assert(Find("memory_movement"));
                 if(category==1) assert(Find("memory_weapons"));

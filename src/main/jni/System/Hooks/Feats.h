@@ -3,6 +3,7 @@
 #include <cstdint>
 #include "FrameRate.h"
 #include "SlideFatigue.h"
+#include "Hitbox.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -214,17 +215,6 @@ inline float hook_get_m_MaxPovmp(void* instance) {
         return MpBsize;
     }
     return get_m_MaxPovmp(instance);
-}
-
-//-- Increase Damage
-inline bool (*orig_SingleLineCheckPhysics)(void* instance, int hitType, void* hitTarget, void* hitCollider, Vector3 startPos, Vector3 dir, void* impactInfo) = nullptr;
-inline bool SingleLineCheckPhysics(void* instance, int hitType, void* hitTarget, void* hitCollider, Vector3 startPos, Vector3 dir, void* impactInfo) {
-    if (instance != NULL) {
-        if (Config.ExtraMenu.Hit) {
-            return true;
-        }
-    }
-    return orig_SingleLineCheckPhysics(instance, hitType, hitTarget, hitCollider, startPos, dir, impactInfo);
 }
 
 //-- Long Slide
@@ -970,6 +960,7 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 inline void InitializeAllHooks() {
     slide_fatigue::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
     frame_rate::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
+    hitbox::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
 
             //--MP VIEW
     HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);
@@ -1004,9 +995,6 @@ inline void InitializeAllHooks() {
 
     //-- High Jump
     HOOK_LIB("libunity.so", "0x53F7E7C", hook_GetMaxJumpHeight, orig_GetMaxJumpHeight);
-
-    //-- Increase Damage
-    HOOK_LIB("libunity.so", "0xC2BE0C8", SingleLineCheckPhysics, orig_SingleLineCheckPhysics);
 
 /*
     //-- Long Slide
