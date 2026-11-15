@@ -64,7 +64,7 @@ Matrix4 Multiply(const Matrix4& a,const Matrix4& b) {Matrix4 m{};for(int c=0;c<4
 Vec3 Point(const Matrix4& m,Vec3 v) {return {m[0]*v.x+m[4]*v.y+m[8]*v.z+m[12],m[1]*v.x+m[5]*v.y+m[9]*v.z+m[13],m[2]*v.x+m[6]*v.y+m[10]*v.z+m[14]};}
 Vec3 Direction(const Matrix4& m,Vec3 v) {return Point(m,v)-Point(m,{});}
 bool SampleLocal(const Model& model,double seconds,std::vector<Transform>& local,std::array<float,5>& expression) {
-    if(model.version!=2||model.frames<2||model.duration<=0||model.rig.bones.size()!=model.bones||model.animation.size()!=model.Stride()*model.frames) return false;
+    if(model.version<2||model.frames<2||model.duration<=0||model.rig.bones.size()!=model.bones||model.animation.size()!=model.Stride()*model.frames) return false;
     if(!std::isfinite(seconds)) seconds=0;
     const double phase=std::fmod(std::max(0.,seconds),model.duration)*model.fps;
     const auto first=std::min<std::size_t>(phase,model.frames-2),second=first+1;const auto mix=static_cast<float>(phase-first);
@@ -101,8 +101,9 @@ void StabilizeFeet(const Rig& rig,std::vector<Transform>& local,std::vector<Matr
         local[foot].rotation=Normalize(Multiply(Inverse(Rotation(world[shin])),footRotation));Compose(rig,local,world);
     }
 }
-void PackFrame(const Model& model,const std::vector<Matrix4>& world,const std::array<float,5>& expression,std::vector<float>& output) {
+void PackFrame(const Model& model,const std::vector<Matrix4>& world,const std::array<float,5>& expression,std::vector<float>& output,const Matrix4* projection,ScreenBounds* screen) {
     output.resize(model.bones*16+56);const auto offset=model.bones*16;
+    if(screen) *screen=ScreenBounds{};
     Vec3 low{1e6f,1e6f,1e6f},high{-1e6f,-1e6f,-1e6f};
     for(unsigned i=0;i<model.bones;++i) {
         const auto matrix=Multiply(world[i],model.rig.bones[i].inverseBind);std::copy(matrix.begin(),matrix.end(),output.begin()+i*16);
@@ -117,6 +118,13 @@ void PackFrame(const Model& model,const std::vector<Matrix4>& world,const std::a
             skinned=skinned+Vec3{m[0]*p.x+m[4]*p.y+m[8]*p.z+m[12],m[1]*p.x+m[5]*p.y+m[9]*p.z+m[13],m[2]*p.x+m[6]*p.y+m[10]*p.z+m[14]}*weight;
         }
         low={std::min(low.x,skinned.x),std::min(low.y,skinned.y),std::min(low.z,skinned.z)};high={std::max(high.x,skinned.x),std::max(high.y,skinned.y),std::max(high.z,skinned.z)};
+        if(projection&&screen) {
+            const auto& m=*projection;const float w=m[3]*skinned.x+m[7]*skinned.y+m[11]*skinned.z+m[15];
+            if(w>1e-6f) {
+                const auto clip=Point(m,skinned);const float point[]{.5f+.5f*clip.x/w,.5f-.5f*clip.y/w};
+                for(unsigned axis=0;axis<2;++axis) {screen->low[axis]=std::min(screen->low[axis],point[axis]);screen->high[axis]=std::max(screen->high[axis],point[axis]);}
+            }
+        }
     }
     std::copy_n(expression.begin(),3,output.begin()+offset);
     for(unsigned i=0;i<15;++i) {
@@ -156,23 +164,74 @@ Vec3 ConstrainTip(Vec3 origin,Vec3 target,Vec3 tip,float length,const SpringBone
 void Simulation::Reset() {model_=nullptr;tick_=-1;lastTime_=-1;}
 void Simulation::SetSeed(std::uint32_t seed) {if(seed_!=seed) {seed_=seed;Reset();}}
 void Simulation::SetDynamics(Dynamics mode) {if(dynamics_!=mode) {dynamics_=mode;Reset();}}
+SpringSample IntegrateSpring(Vec3 position,Vec3 velocity,Vec3 previousTarget,Vec3 target,Vec3 gravity,float stiffness,float damping,float dt) {
+    if(dt<=0) return {position,velocity};
+    const auto targetVelocity=(target-previousTarget)/dt;
+    const auto equilibrium=gravity/stiffness;
+    const auto displacement=position-previousTarget-equilibrium,relativeVelocity=velocity-targetVelocity;
+    const float half=damping*.5f,frequencySquared=stiffness-half*half;
+    float positionFactor,velocityFactor,derivativeFactor;
+    if(frequencySquared>1e-5f) {
+        const float frequency=std::sqrt(frequencySquared),decay=std::exp(-half*dt);
+        positionFactor=decay*std::cos(frequency*dt);velocityFactor=decay*std::sin(frequency*dt)/frequency;
+        derivativeFactor=-frequencySquared*velocityFactor;
+    } else if(frequencySquared< -1e-5f) {
+        const float frequency=std::sqrt(-frequencySquared),a=std::exp((-half+frequency)*dt),b=std::exp((-half-frequency)*dt);
+        positionFactor=(a+b)*.5f;velocityFactor=(a-b)/(2*frequency);derivativeFactor=-frequencySquared*velocityFactor;
+    } else {positionFactor=std::exp(-half*dt);velocityFactor=positionFactor*dt;derivativeFactor=0;}
+    const auto coefficient=relativeVelocity+displacement*half;
+    const auto offset=displacement*positionFactor+coefficient*velocityFactor;
+    return {target+equilibrium+offset,targetVelocity+displacement*derivativeFactor+coefficient*positionFactor-offset*half};
+}
+double GestureTime(double seconds,std::uint32_t seed) {
+    if(seconds<=12) return seconds;
+    const auto block=static_cast<std::uint32_t>((seconds-12)/20);
+    const double phase=std::fmod(seconds-12,20.);
+    const double wave=2.5+Random(seed+block*23)*3.5,hop=11.5+Random(seed+block*23+1)*4;
+    if(phase>=wave&&phase<wave+2.97) return 2.98+phase-wave;
+    if(phase>=hop&&phase<hop+1.26) return 7.4+phase-hop;
+    return 1.;
+}
 void Simulation::Pose(double time) {
-    SampleLocal(*model_,time,local_,expression_);
+    SampleLocal(*model_,model_->version>=3?GestureTime(time,seed_):time,local_,expression_);
     const auto& roles=model_->rig.roles;
     const auto add=[&](unsigned bone,Vec3 angles) {
         const auto delta=Multiply(AxisAngle({0,0,1},angles.z),Multiply(AxisAngle({0,1,0},angles.y),AxisAngle({1,0,0},angles.x)));
-        local_[bone].rotation=Normalize(Multiply(local_[bone].rotation,delta));
+        const auto basis=Rotation(model_->rig.bones[bone].inverseBind);
+        local_[bone].rotation=Normalize(Multiply(local_[bone].rotation,Multiply(basis,Multiply(delta,Inverse(basis)))));
     };
     const float breath=std::sin(float(std::fmod(time,4.17))*2*pi/4.17f);
-    add(roles[4],{.007f*breath,.006f*Noise(time,3.7,seed_+1),.008f*Noise(time,5.1,seed_+2)});
-    add(roles[5],{.004f*breath,0,.004f*Noise(time,6.4,seed_+3)});
-    add(roles[0],{.024f*Noise(time,2.8,seed_+4),.018f*Noise(time,3.3,seed_+5),.035f*Noise(time,4.2,seed_+6)});
+    const auto adjustmentCycle=static_cast<std::uint32_t>(time/9);
+    const float adjustmentPhase=static_cast<float>(std::fmod(time,9.)),adjustmentStart=1.2f+1.7f*Random(seed_+adjustmentCycle*29);
+    const float adjustment=Smooth((adjustmentPhase-adjustmentStart)/.9f)*(1-Smooth((adjustmentPhase-adjustmentStart-2.3f)/.9f))*(1-Smooth((expression_[1]-.24f)/.3f));
+    const float sway=Noise(time,3.4,seed_+1),turn=Noise(time,2.7,seed_+4),nod=Noise(time,3.1,seed_+5);
+    const unsigned pelvis=model_->rig.anchors[3].a;
+    local_[pelvis].position=local_[pelvis].position+Vec3{.025f*sway,.005f*Noise(time,4.3,seed_+2),0};
+    add(pelvis,{0,.025f*sway,.018f*Noise(time,5.1,seed_+3)});
+    add(roles[4],{.014f*breath,-.036f*sway,.025f*Noise(time,4.6,seed_+12)});
+    add(roles[5],{.006f*breath,-.012f*sway,0});
+    const auto chestParent=model_->rig.bones[roles[4]].parent;
+    local_[roles[4]].position=local_[roles[4]].position+Direction(model_->rig.bones[chestParent].inverseBind,{0,0,.002f*breath});
+    add(roles[0],{.055f*nod+.025f*adjustment,.045f*Noise(time,3.9,seed_+6),.15f*turn});
     for(unsigned eye=2;eye<=3;++eye) {
         const auto& bind=model_->rig.bones[roles[eye]];
-        const auto bindRotation=Rotation(bind.inverseBind);const auto gaze=Multiply(AxisAngle({0,0,1},.035f*Noise(time-.16,1.7,seed_+7)),AxisAngle({1,0,0},.018f*Noise(time-.24,2.1,seed_+8)));
+        const auto bindRotation=Rotation(bind.inverseBind);const auto gaze=Multiply(AxisAngle({0,0,1},.045f*Noise(time+.2,2.7,seed_+4)),AxisAngle({1,0,0},.024f*Noise(time+.16,3.1,seed_+5)));
         local_[roles[eye]].rotation=Multiply(local_[roles[eye]].rotation,Multiply(bindRotation,Multiply(gaze,Inverse(bindRotation))));
     }
-    for(unsigned finger=6;finger<=7;++finger) add(roles[finger],{.025f*Noise(time,2.9+finger*.13,seed_+finger+9),0,0});
+    for(unsigned side=0;side<2;++side) {
+        const auto hand=model_->rig.anchors[8+side].a;
+        const auto forearm=model_->rig.bones[hand].parent,upper=model_->rig.bones[forearm].parent;
+        const float sign=side? -1.f:1.f;
+        add(upper,{.018f*Noise(time,3.2+side,seed_+31+side),sign*.025f*Noise(time-.18,3.6+side,seed_+34+side),.015f*breath});
+        add(forearm,{.025f*Noise(time-.3,3.3+side,seed_+36+side),0,0});
+        add(hand,{.03f*Noise(time-.5,2.9+side,seed_+38+side),.018f*Noise(time,3.8+side,seed_+41+side),0});
+        if(side==1) {
+            add(upper,{-.11f*adjustment,.06f*adjustment,-.05f*adjustment});
+            add(forearm,{-.42f*adjustment,.08f*adjustment,0});
+            add(hand,{.04f*adjustment,.1f*adjustment,0});
+        }
+        add(roles[6+side],{.035f*Noise(time,3.1+side*.23,seed_+43+side),0,0});
+    }
     const auto block=static_cast<std::uint32_t>(std::floor(time/5));float blink=0;
     for(unsigned previous=0;previous<=1;++previous) {
         if(previous&&block==0) continue;
@@ -183,36 +242,62 @@ void Simulation::Pose(double time) {
             if(elapsed>=0&&elapsed<.18f) blink=std::max(blink,elapsed<.065f?Smooth(elapsed/.065f):1-Smooth((elapsed-.065f)/.115f));
         }
     }
-    expression_[0]=blink;expression_[1]=Clamp(expression_[1]+.025f*Noise(time,3.6,seed_+23),0,1);
+    expression_[0]=blink;expression_[1]=Clamp(expression_[1]+.09f*Noise(time,3.6,seed_+23),0,1);
     Compose(model_->rig,local_,animated_);
     StabilizeFeet(model_->rig,local_,animated_,expression_[3]);
 }
-void Simulation::Step(double time,bool initialize) {
-    Pose(time);const auto& rig=model_->rig;const float dt=static_cast<float>(stepSeconds);
-    colliders_.resize(rig.colliders.size());
-    for(unsigned i=0;i<rig.colliders.size();++i) {const auto& c=rig.colliders[i];colliders_[i]={Point(animated_[c.bone],c.a),Point(animated_[c.bone],c.b),c.radius,c.mask};}
-    world_.resize(model_->bones);
+void Simulation::FitSprings(bool integrate,bool initialize) {
+    const auto& rig=model_->rig;const auto dt=static_cast<float>(stepSeconds);
     for(unsigned i=0;i<model_->bones;++i) {
         const auto parent=rig.bones[i].parent;const auto parentMatrix=parent<0?Matrix(Transform{}):world_[parent];
         world_[i]=Multiply(parentMatrix,Matrix(local_[i]));const int index=springForBone_[i];if(index<0) continue;
         const auto& spring=rig.springs[index];auto& state=springs_[index];
         const auto origin=Point(world_[i],{}),target=Point(world_[i],rig.bones[i].tail);const float length=Length(target-origin);
-        if(initialize) {state.tip=target;state.velocity={};}
+        if(integrate) {
+            if(initialize) {state.tip=ConstrainTip(origin,target,target+Vec3{0,0,-9.81f*spring.gravity/spring.stiffness},length,spring,colliders_);state.velocity={};state.target=target;}
+            const auto next=IntegrateSpring(state.tip,state.velocity,state.target,target,{0,0,-9.81f*spring.gravity},spring.stiffness,spring.damping,dt);
+            state.tip=next.position;state.velocity=next.velocity;state.target=target;predicted_[index]=next.position;
+        }
+        state.target=target;
         const bool active=dynamics_==Dynamics::Full||(dynamics_==Dynamics::Hair&&static_cast<unsigned>(spring.group)<4);
         if(!active) {state.tip=target;state.velocity={};continue;}
-        const Vec3 acceleration=(target-state.tip)*spring.stiffness+Vec3{0,0,-9.81f*spring.gravity};
-        state.velocity=(state.velocity+acceleration*dt)*std::exp(-spring.damping*dt);
-        const auto previous=state.tip;state.tip=ConstrainTip(origin,target,state.tip+state.velocity*dt,length,spring,colliders_);
-        state.velocity=(state.tip-previous)/dt;const float speed=Length(state.velocity);if(speed>2) state.velocity=state.velocity*(2/speed);
+        state.tip=ConstrainTip(origin,target,state.tip,length,spring,colliders_);
+        stats_.maxAngle=std::max(stats_.maxAngle,std::acos(Clamp(Dot(Normalize(target-origin),Normalize(state.tip-origin)),-1,1)));
         const auto swing=FromTo(target-origin,state.tip-origin),parentRotation=Rotation(parentMatrix);
         local_[i].rotation=Normalize(Multiply(Multiply(Inverse(parentRotation),Multiply(swing,parentRotation)),local_[i].rotation));
         world_[i]=Multiply(parentMatrix,Matrix(local_[i]));
-        stats_.maxAngle=std::max(stats_.maxAngle,std::acos(Clamp(Dot(Normalize(target-origin),Normalize(state.tip-origin)),-1,1)));
-        for(const auto& collider:colliders_) if(collider.mask&spring.collisionMask) stats_.maxPenetration=std::max(stats_.maxPenetration,spring.radius-Separation(state.tip,collider));
     }
 }
+void Simulation::Step(double time,bool initialize) {
+    Pose(time);const auto& rig=model_->rig;const float dt=static_cast<float>(stepSeconds);
+    colliders_.resize(rig.colliders.size());
+    for(unsigned i=0;i<rig.colliders.size();++i) {const auto& c=rig.colliders[i];colliders_[i]={Point(animated_[c.bone],c.a),Point(animated_[c.bone],c.b),c.radius,c.mask};}
+    world_.resize(model_->bones);predicted_.resize(springs_.size());linkLambda_.assign(rig.links.size(),0);
+    std::array<Quat,64> animatedRotations{};
+    for(unsigned i=0;i<rig.springs.size();++i) animatedRotations[i]=local_[rig.springs[i].bone].rotation;
+    const auto fit=[&](bool integrate) {for(unsigned i=0;i<rig.springs.size();++i) local_[rig.springs[i].bone].rotation=animatedRotations[i];FitSprings(integrate,initialize);};
+    const unsigned iterations=dynamics_==Dynamics::Full&&!rig.links.empty()?clothIterations:1;
+    for(unsigned iteration=0;iteration<iterations;++iteration) {
+        fit(iteration==0);
+        if(iteration+1==iterations) break;
+        for(unsigned i=0;i<rig.links.size();++i) {
+            const auto& link=rig.links[i];auto& a=springs_[link.a];auto& b=springs_[link.b];const auto delta=b.tip-a.tip;
+            const float length=Length(delta),alpha=link.compliance/(dt*dt);
+            if(length<1e-6f) continue;
+            const float impulse=(-(length-link.length)-alpha*linkLambda_[i])/(2+alpha);linkLambda_[i]+=impulse;
+            a.tip=a.tip-delta*(impulse/length);b.tip=b.tip+delta*(impulse/length);
+        }
+    }
+    for(unsigned i=0;i<springs_.size();++i) {
+        auto& state=springs_[i];const auto& spring=rig.springs[i];
+        const bool active=dynamics_==Dynamics::Full||(dynamics_==Dynamics::Hair&&unsigned(spring.group)<4);
+        if(active) {state.velocity=state.velocity+(state.tip-predicted_[i])/dt;const float speed=Length(state.velocity);if(speed>4) state.velocity=state.velocity*(4/speed);}
+        if(active) for(const auto& collider:colliders_) if(collider.mask&spring.collisionMask) stats_.maxPenetration=std::max(stats_.maxPenetration,spring.radius-Separation(state.tip,collider));
+    }
+    if(dynamics_==Dynamics::Full) for(const auto& link:rig.links) stats_.maxLinkStretch=std::max(stats_.maxLinkStretch,std::fabs(Length(springs_[link.a].tip-springs_[link.b].tip)/link.length-1));
+}
 void Simulation::Advance(const Model& model,double seconds) {
-    stats_.lastSteps=0;if(model.version!=2) return;
+    stats_.lastSteps=0;if(model.version<2) return;
     if(!std::isfinite(seconds)) seconds=0;seconds=std::max(0.,std::min(1e9,seconds));
     const auto target=static_cast<std::int64_t>(std::floor(seconds/stepSeconds+1e-7));
     const bool reset=model_!=&model||tick_<0||seconds<lastTime_-1e-8||target-tick_>maxCatchUp;
@@ -225,6 +310,6 @@ void Simulation::Advance(const Model& model,double seconds) {
     } else while(tick_<target) {++tick_;Step(tick_*stepSeconds,false);++stats_.steps;++stats_.lastSteps;}
     lastTime_=seconds;
 }
-void Simulation::FrameData(std::vector<float>& frame) const {if(model_) PackFrame(*model_,world_,expression_,frame);}
-std::size_t Simulation::StorageBytes() const {return local_.capacity()*sizeof(Transform)+(world_.capacity()+animated_.capacity())*sizeof(Matrix4)+springs_.capacity()*sizeof(SpringState)+colliders_.capacity()*sizeof(WorldCollider);}
+void Simulation::FrameData(std::vector<float>& frame,const Matrix4* projection,ScreenBounds* screen) const {if(model_) PackFrame(*model_,world_,expression_,frame,projection,screen);}
+std::size_t Simulation::StorageBytes() const {return local_.capacity()*sizeof(Transform)+(world_.capacity()+animated_.capacity())*sizeof(Matrix4)+springs_.capacity()*sizeof(SpringState)+colliders_.capacity()*sizeof(WorldCollider)+predicted_.capacity()*sizeof(Vec3)+linkLambda_.capacity()*sizeof(float);}
 }

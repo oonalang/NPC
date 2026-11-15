@@ -1,81 +1,85 @@
-# Native ESP character upgrade
+# Native ESP character physics revision
 
-## Baseline and ownership
+This revision continues `07c9ad6` on `feature/esp-3d-runtime-physics`. It addresses stiff movement and broken clothing in the existing native Wiz preview. Main is not the delivery branch. The attached prompt and 320 × 512, 240-frame, 12-second reference GIF were inspected. The original Glayer3d mesh, face, proportions, UVs, purple/gold materials and painted textures remain the source asset. Attribution and CC BY-NC 4.0 are preserved in [WIZ_LICENSE.md](../src/main/jni/Assets/WIZ_LICENSE.md).
 
-The starting main commit is `51e03ed`. The attached prompt and the original reference GIF were read before editing. The GIF is 320 × 512, 240 frames at 50 ms each, lasting 12 seconds. It demonstrates the existing purple/gold Wiz design, a wave around 3–6 seconds and the hop near 8 seconds. Its green background is reference-only.
+## What changed
 
-- `Main.cpp`: existing ESP page layout and config pointers; calls the preview panel only on the ESP page.
-- `runtime_preview_menu.h`: clay/glass preview panel and existing option-controlled lines, boxes, health, labels and skeleton.
-- `AnimePreview.h`: ImGui image presentation and conversion of projected native anchors to overlay coordinates; PNG compatibility fallback.
-- `WizModel.cpp/.h`: asynchronous asset/PNG decode, animation sampling, GPU skinning, 320 × 512 transparent target, 30-Hz render cache, projection and isolated EGL/GL resources.
-- `tools/export-wiz-model.py`: imports the artist FBX and painted textures and generates the embedded compressed asset.
-- `Assets/WizModel.S` and `Android.mk`: embed the model and rebuild its assembly object when the binary changes.
+The old garment assignment used abrupt height/position rules and independent skirt panels. In particular, the folded inner hem crosses the center line: assigning a panel by `atan2` alone sent neighboring vertices to opposite sides of the skirt. The exporter now solves a harmonic direction field through the actual garment edge graph for those interior folds. Arm-weight checks keep sleeve geometry out of the skirt assignment. The waist and sector weights blend continuously. All new garment influences fit four GPU weights without truncation; the previous maximum discarded source influence elsewhere remains 0.02883.
 
-`WIZSKN01` stores 98 finished skinning matrices per sample, not parent-local poses. Its matrices alone cannot safely support joint-local dynamics. The source FBX is available in this workspace. A fresh Blender audit confirmed existing side-lock (`HairF.*`), back-hair (`Hairb.*`, `HairM*`) and top-strand (`HairA*`) chains, actual Blink/Smile/Speak shapes, and no dedicated skirt/sleeve bones. Hair skinning must use these actual names and hierarchy. Garment geometry is identifiable as two connected coat components spanning the upper torso and lower hem; hands, boots, face and hair belong to other components.
+Eight skirt chains replace four. Their 16 moving joints have 48 explicit distance, shear and bending constraints, solved with XPBD compliance and a bounded ten-pass solve. Both original garment layers use the same continuous attachment field. The simulated control net maintains the dress shape during acceleration instead of allowing neighboring panels to drift independently.
 
-## Implementation and validation
+Hair, sleeves and the original `breast.L` / `breast.R` bones use damped 3D springs. The integrator solves the spring response analytically in the moving target frame, including gravity, inertia and relative damping. A child hair joint targets its already simulated parent; it does not fight an unrelated baked world transform. Constraint corrections feed back into velocity. Fixed bone lengths, cone limits, speed limits and 16 animated body capsules bound movement. The chest's previous baked sine motion is removed and its source local transforms stay constant; acceleration now produces the secondary response.
 
-Implementation details, exact asset layout, executed validation and remaining limits are recorded here as the upgrade is completed. Original Glayer3d attribution and CC BY-NC 4.0 remain in `Assets/WIZ_LICENSE.md`. This feature branch does not change gameplay hooks, authentication, licensing, ESP configuration or main.
+The body has an asymmetric resting pose, weight transfer, breathing, coordinated head/gaze movement, irregular blinks, finger variation and occasional arm/posture adjustments. The wave folds the elbow before raising the arm, includes body counterbalance and a slower varied wrist rhythm, and stays inside the preview. The hop has anticipation, ballistic flight under 9.81 m/s², and a cushioned landing. The original gesture clip remains 12 seconds of source poses; after its initial demonstration, wave and hop events are scheduled at seeded, varied intervals independently of continuous idle and physics. This deliberately changes the original GIF's slow float and exact repeated timing.
 
-### Rig and dynamics
+The final palette still uses GPU skinning. Skeleton landmarks follow the final rig. ESP boxes now use bounds projected from the skinned vertices, rather than projecting a loose world-space bounding box. Orbit/Front controls, scroll behavior, overlay option wiring, UI styling, saved configuration and the failure-only PNG path retain their existing integration.
 
-The mesh remains 17,530 exported vertices / 27,024 triangles. Fourteen export-time bones extend the original 98-bone rig: two front bangs, two sleeve chains (two bones each) and four skirt-panel chains (two bones each). Topology checks identify the two original coat components before reweighting 939 garment vertices; 282 bang vertices are identified separately. Hands, boots, face, UVs, topology and all three painted PNGs remain unchanged. Four normalized GPU influences are retained per vertex; the largest discarded influence sum is 0.08394 in the extended garment weights. The metadata reports this rather than implying lossless weight storage.
+## Ownership and runtime budget
 
-There are 32 weighted spring joints in six independent parameter groups:
+- `Main.cpp`: existing ESP page and config pointers; unchanged.
+- `runtime_preview_menu.h`: existing option-controlled overlays and panel; unchanged by this revision.
+- `AnimePreview.h`: existing native presentation, tab-reopen reset, landmarks and failure-only fallback; unchanged by this revision.
+- `WizModel.cpp/.h`: bounded asset decoder, asynchronous textures, GPU skinning, projected bounds, render cache and EGL/GL lifecycle.
+- `WizMotion.cpp/.h`: local-pose interpolation, idle/gesture timing, feet, spring dynamics and cloth constraints.
+- `tools/export-wiz-model.py`: source FBX audit, garment weights/rig, source gestures and packed asset.
 
-| Group | Joints | Acceleration stiffness | Damping / s | Gravity scale | Tip radius / m | Cone / radians |
+The character has 17,530 exported vertices, 27,024 triangles and 120 bones: the original 98 plus 22 bang/garment bones. There are 42 spring joints and 16 body capsules. All three embedded painted PNGs are byte-identical to the previous asset.
+
+| Group | Joints | Stiffness / mass | Damping / mass | Gravity scale | Tip radius / m | Cone / radians |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Bangs | 2 | 220 | 18 | .03 | .007 | .08 |
-| Side locks | 6 | 110 | 10 | .09 | .009 | .18 |
-| Back hair | 9 | 75 | 8 | .14 | .012 | .20 |
-| Top strand | 3 | 145 | 6 | .04 | .006 | .32 |
-| Skirt | 8 | 180 | 13 | .09 | .012 | .14 |
-| Sleeves | 4 | 160 | 12 | .06 | .009 | .10 |
+| Bangs | 2 | 150 | 12 | .10 | .007 | .12 |
+| Side locks | 6 | 85 | 7 | .18 | .009 | .28 |
+| Back hair | 9 | 52 | 5 | .28 | .012 | .34 |
+| Top strand | 3 | 110 | 4.5 | .08 | .006 | .46 |
+| Skirt | 16 | 95 | 8 | .24 | .012 | .28 |
+| Sleeves | 4 | 105 | 8 | .18 | .009 | .24 |
+| Chest | 2 | 170 | 9 | .12 | .025 | .18 |
 
-The audited model uses meters and Z up. Damped semi-implicit integration tracks world-space tips under gravity and moving animated parents. Length and angular-cone constraints, plus body-capsule separation, are solved before the resulting swing is converted back through the actual parent rotation to a local quaternion. Children inherit the solved parent transform. Only then are global poses and inverse binds multiplied into GPU skinning matrices. Ten capsules follow the head, neck, shoulders, torso, hips, thighs and forearms. Finite collision iterations and a bounded cone search handle difficult contacts without an unbounded solver.
+The model uses meters and Z up. Physics advances at 60 Hz, independently of the 30-Hz cached 320 × 512 GLES target. Repeated timestamps do not advance it twice. `Simulation::stepSeconds`, `maxCatchUp`, `warmSteps` and `clothIterations` name the scheduling/solver limits. Catch-up is bounded at six ticks; seek, long stall, tab reopen and resource recreation use an eleven-step warm start initialized near gravity equilibrium. `Full`, `Hair` and `Off` dynamics modes remain available through the existing runtime API. No work is submitted by a hidden ESP panel.
 
-`Simulation::stepSeconds`, `maxCatchUp` and `warmSteps` define the scheduling: 1/60 second, at most six catch-up steps, or an eleven-step bounded warm start after a seek, long stall, tab reopen or resource recreation. Repeated timestamps never integrate twice. A renderer cache hit still allows the fixed-step simulation to advance; it does not rebuild the displayed frame. Render requests, including changing camera angles/aspect ratios, coalesce into 1/30-second buckets. Repeated explicit resets are outside that normal cadence. The existing offscreen size and GPU material cache remain unchanged. `SetDynamics(Full/Hair/Off)` offers lower-cost dynamics modes without adding saved game settings.
+Measured host storage estimates after upload are 4,058,578 CPU bytes, plus the 1,717,345-byte embedded asset, and 12,155,104 bytes of requested GLES buffer/texture storage. Simulation scratch is 22,880 bytes. Storage/upload counts remained stable during the 48-second test and orbit stress checks. These counts exclude allocator/driver overhead, other menu/game resources and Android process memory. They are not device frame-time or thermal measurements.
 
-### Pose, face and preview controls
+## Asset format and reproduction
 
-All new-format rotations interpolate with normalized shortest-path quaternion slerp. A two-bone leg solve removes foot drift after interpolation while retaining the foot orientation and authored hop lift. The major wave, anticipation, hop and landing keep the reference's 12-second sequence. Separate 4.17-second breathing, smoothly seeded head/gaze/finger variation, delayed eye motion, irregular blink intervals with occasional doubles, and expression blending do not restart with that clip. Existing Blink/Smile/Speak geometry is retained; no new facial shape is fabricated.
+`WIZSKN03` extends the explicit local hierarchy introduced by `WIZSKN02`. All fields are little endian. The envelope is eight magic bytes, a uint32 raw length and zlib data. The payload is:
 
-The initial front camera retains the previous position, target and field of view. **Orbit** in the preview heading enables horizontal dragging, limited to ±90 degrees. **Front** disables orbit and resets the view. Vertical gestures cancel orbit intent and remain available to content scrolling; no existing slider, toggle or config is reassigned. The renderer also bounds its programmatic pitch input to ±.18 radians. Camera movement does not apply fake forces to the character.
+1. Seven uint32 header values: version=3, vertices, indices, bones, samples, sample FPS, materials; followed by float duration.
+2. Existing 80-byte vertex layout: position/normal/UV, four byte joints, four normalized uint16 weights, Blink/Smile/Speak position deltas. Then uint32 triangle indices.
+3. Material records: first index, count, PNG length (three uint32), followed by the unchanged PNG bytes.
+4. Five uint32 rig counts: bones, springs, colliders, anchors and cloth links. Version 2 has only the first four.
+5. Bone records: signed parent index, name length, rest local TRS (position3, XYZW quaternion4, scale3), inverse-bind matrix16, local tail3, low/high bounds6, bounded flag and printable name bytes. The fixed part is 152 bytes; parents precede children.
+6. Springs: bone/group/mask (three uint32), stiffness/damping/gravity/radius/cone (five floats). Groups 0–5 retain their old meanings; group 6 is chest in version 3. Bone length comes from the actual local tail.
+7. Colliders: bone/mask (two uint32), local capsule A/B/radius (seven floats). Fifteen anchors: bone A/B, local A/B and mix (two uint32 + seven floats). Eight existing semantic bone IDs follow.
+8. Cloth links: spring-array index A/B (two uint32), rest distance and compliance (two floats). These refer to spring entries, not arbitrary bone indices. Rest lengths are validated against the decoded bind hierarchy.
+9. 289 samples at 24 Hz: local position3/quaternion4/scale3 for every bone, followed by Blink/Smile/Speak, hop lift and excitement. The current stride is 1,205 floats.
 
-The GPU palette, 15 landmark bindings and exact current skinned-vertex bounds come from the same final pose. Existing config-controlled overlay drawing stays in `runtime_preview_menu.h`. A loading state does not draw a temporary 2D character. Native failure explicitly selects/lists the old PNG fallback; `Bounds::native3d` remains false for it. GPU resources are rebuilt after an EGL context change or loss of owned GL objects. Partial initialization frees its allocated GPU objects before falling back.
+The decoder validates limits, counts, topology indices, normalized weights, finite/unit transforms, hierarchy, inverse binds, bounded physical parameters, PNGs and constraint endpoints/rest distances. Duplicate or malformed cloth links are rejected. `WIZSKN01` keeps its original sampled-matrix path; `WIZSKN02` still decodes and simulates its explicit spring hierarchy without cloth links. The renderer does not import FBX or fetch assets at runtime.
 
-### WIZSKN02 layout and migration
+Re-export using the artist files described in the attribution file:
 
-All integers/floats are little endian. The outer envelope is eight bytes `WIZSKN02`, a `uint32` uncompressed size and a zlib payload. The payload is:
-
-1. Header: seven `uint32` values (version=2, vertices, indices, bones, frames, sample FPS, materials), then float duration.
-2. Existing 80-byte vertices: position/normal/UV, four byte joint IDs, four normalized `uint16` weights, and Blink/Smile/Speak position deltas. Then `uint32` triangle indices.
-3. Each material: first index, index count, PNG byte length (three `uint32`), then the unchanged PNG.
-4. Rig counts: bones, spring joints, colliders, anchors (four `uint32`).
-5. Each bone: signed parent index; name byte count; local rest position (3 floats), quaternion XYZW (4), scale (3); column-major inverse bind (16); local tail (3); conservative local low/high bounds (6); bounded flag (`uint32`); printable name bytes. Parents precede children. The fixed portion is 152 bytes.
-6. Each spring: bone/group/collision-mask (`3 × uint32`), stiffness/damping/gravity/radius/cone (`5 × float`). Length derives from the real local tail. Each collider: bone/mask (`2 × uint32`), local capsule A/B/radius (`7 × float`).
-7. Fifteen anchors: two bone IDs, two local points and blend weight (`2 × uint32 + 7 × float`). Eight semantic bone IDs identify the head, face, eyes, chest/spine and fingers.
-8. 289 samples at 24 Hz: 10 floats per bone (local position, XYZW quaternion, scale), followed by Blink/Smile/Speak, hop lift and excited weight. The stride is 1,125 floats.
-
-Validation bounds counts, raw/compressed lengths, indices, weights, finite values, unit quaternions/scales, names, hierarchy order, spring/collider parameters and anchors. Reconstructed rest transforms must agree with inverse binds. PNG CRCs and decoding remain checked. `WIZSKN01` is still accepted and follows its original matrix-sampling path, with no invented hierarchy or spring physics. A true physics migration requires the original FBX/textures; re-export with the command in `WIZ_LICENSE.md`. A clean Blender 4.3.2 re-export reproduced the exact new binary SHA-256:
-
-```text
-64b253a83c8ead867092396a184b619076ca657bfa54512360536ed2cb32f62f
+```sh
+blender -b -t 2 -P tools/export-wiz-model.py -- /path/to/WizFiles src/main/jni/Assets/wiz-model.bin
 ```
 
-### Validation and resource scope
+Blender 4.3.2 was used. A clean second export reproduced the exact binary:
 
-Executed validation commands and results are recorded below. GPU captures use a surfaceless Mesa GLES3 context, not an Android phone. ASan/UBSan scripts disable leak detection for the execution environment, as the existing scripts already did.
+```text
+932117890fe0b5da96d0c693f15f0cf45f13ca736b4ca98e4600cc8e7e52a2c0
+```
+
+The new raw payload is 4,022,985 bytes; the packed asset is 1,717,345 bytes, down from 2,165,320 in the preceding feature commit. `wiz-model.json` records geometry, groups, 941 reweighted garment vertices, 282 bang vertices and both source/new-garment influence losses.
+
+## Executed validation
 
 | Check | Result |
 | --- | --- |
-| `sh tests/run-anime-preview-tests.sh` | Fallback geometry/PNG checks; actual ImGui touch Orbit/Front taps, horizontal drag and vertical scroll coexistence. |
-| `sh tests/run-wiz-model-tests.sh /workspace/wiz-upgrade-reference/wiz-model-v1.bin` | Codec/parser rejection, v1 fixture and original shipped v1 asset, slerp, all six real weighted groups, stability, joint lengths/cones, capsule separation, deterministic 30/60/120-Hz inputs, settling, quality modes, seeds and bounded pause/seek behavior. The optional argument adds the original asset check; it does not replace the base suite. |
-| `MESA_SHADER_CACHE_DIR=/tmp/npc-mesa-cache sh tests/run-wiz-model-gpu-tests.sh /workspace/wiz-upgrade-frames` | Full real GLES loop, representative motion captures, front/quarter/side views, landmark bounds, camera cache budget, stable storage/upload counts, separate read/draw FBO and shader/VAO/UBO/texture/sampler/pixel-store/state restoration, owned-resource loss, EGL recreation and native-failure PNG fallback. |
-| NDK r22 `ndk-build`, existing Android.mk/Application.mk, ARM64, API 21 | Native `libnets.so` build; an APK build is not claimed. |
-| Artist material comparison | All three embedded PNGs match the previous asset byte for byte. |
+| `sh tests/run-wiz-model-tests.sh /workspace/wiz-upgrade-reference/wiz-model-v1.bin /workspace/wiz-motion-rework/wiz-v2.bin` | ASan/UBSan: malformed v3 data, v1/v2 compatibility, quaternion interpolation, passive under/critical/overdamped spring response, gravity equilibrium, moving-frame invariance, acceleration lag, gesture scheduling, 48-second deterministic 30/60/120-Hz inputs, finite matrices, cones/lengths/capsules, feet, stalls and dynamics modes. Also checks actual skinned garment edges/seams and confirms chest source transforms contain no baked wobble. |
+| `MESA_SHADER_CACHE_DIR=/tmp/npc-mesa-cache sh tests/run-wiz-model-gpu-tests.sh /workspace/wiz-motion-rework/frames` | Real surfaceless Mesa GLES3: 48 seconds / 1,440 cached renders, no clipped pixels in 960 saved motion frames, current-pose landmarks, front/quarter/both side views, camera cache limits, fixed storage/upload counts, hostile shared-GL-state restoration, owned-resource loss, EGL recreation and failure-only real PNG fallback. |
+| `sh tests/run-anime-preview-tests.sh` | Existing preview/fallback geometry and actual ImGui Orbit/Front touch/scroll coexistence suite. |
+| NDK r22 ARM64 / API 21 | Built `libnets.so` using the existing Android.mk/Application.mk. The final asset was verified inside the built library. An APK build is not claimed. |
+| Asset reproduction and materials | A second export is byte-identical; all three embedded PNG hashes match the preceding feature asset. |
 
-The original v1 check file was extracted with `git show 51e03ed:src/main/jni/Assets/wiz-model.bin`. The native build command was:
+The optional CPU arguments add original asset compatibility checks. ASan/UBSan scripts retain the existing environment-specific leak-detection setting. GPU captures are software GLES output, not an Android recording. The native build command is:
 
 ```sh
 /workspace/toolchains/android-ndk-r22/ndk-build NDK_PROJECT_PATH=. \
@@ -84,33 +88,23 @@ The original v1 check file was extracted with `git show 51e03ed:src/main/jni/Ass
   NDK_OUT=/workspace/liquid-build/obj NDK_LIBS_OUT=/workspace/liquid-build/libs -j2
 ```
 
-Review media was generated outside the repository: `/workspace/wiz-upgrade-preview.mp4`, `/workspace/wiz-upgrade-comparison.mp4` and `/workspace/wiz-upgrade-reference/final-contact.png`. The comparison places the unchanged original GIF on the left and captured native output on the right; both run for 12 seconds. It is a software GLES validation artifact, not an Android screen recording.
+Measured over 48 seconds, planted-foot error stayed below 0.0000006 m, and the spring-tip capsule penetration metric stayed below 0.0001 m. Maximum cloth-link strain was about 0.0056. Skinned garment edges of at least 4 mm ranged from 0.8487 to 1.1997 times the same poses with physics disabled; 103 duplicated garment seams showed no measured separation. Chest-tip acceleration lag reached 0.0363 m during the hop/landing and averaged 0.0066 m in the later settling window. These are deterministic host-rig measurements, not guarantees about every triangle or device.
 
-Across the real-rig host test, maximum planted-foot position error was approximately 0.0000006 m, and the accumulated spring-tip capsule penetration metric stayed below 0.0001 m. Fixed-step outputs matched for 30/60/120-Hz input schedules. Settled aggregate tip speed after the hop was .724 versus a 27.584 peak during the landing window; this is a comparison of the same host simulation, not a device performance measurement.
+Representative idle, blink, wave, anticipation, jump, landing, settling, later gestures and orbit frames were inspected against the reference and preceding output. The folded-hem spikes seen during development were corrected before the final captures. Review artifacts are outside the repository: `/workspace/wiz-motion-rework/comparison.mp4` (preceding feature vs revised first 12 seconds), `/workspace/wiz-motion-rework/preview.mp4` (48 seconds), `final-contact.png` and `orbit-contact.png`. Frame captures are sampled at 20 Hz; the renderer itself remains cached at 30 Hz.
 
-The model's packed bytes fall from 2,541,277 to 2,165,320. Reported host storage estimates after upload are 3,958,970 CPU bytes plus the 2,165,320-byte embedded asset and 12,155,104 bytes of requested GLES texture/buffer storage. Simulation scratch capacity is 19,904 bytes. These stayed constant through the captured loop and camera stress test. They exclude allocator/driver overhead, other menu/game resources and Android process memory. Native CPU/GPU time, thermal behavior and phone FPS have not been measured.
+## Exact files in this revision
 
-Representative original/new frames were inspected for clipping, eye attachment, foot placement, costume fidelity, wave/hop framing and the new side views. Original GIF timing is preserved for the main gestures; new secondary motion and facial timing deliberately differ. The coat now follows its garment rig rather than the old leg twist, so its front panel/hem is straighter. Source face, proportions, topology, purple/gold materials and painted details remain intact. The GIF provides no authoritative side/back animation; side-view validation uses the genuine source mesh.
+- `src/main/jni/ImGui/WizMotion.cpp`, `WizMotion.h`: moving-frame spring integration, connected cloth solve, chest physics, expressive idle, independent gesture schedule and projected skinned bounds.
+- `src/main/jni/ImGui/WizModel.cpp`, `WizModel.h`: v1/v2/v3 decode, cloth-link validation, current-pose bounds and resource accounting.
+- `tools/export-wiz-model.py`: garment topology/weights, extended skirt rig, physical descriptors, source motion and v3 output.
+- `src/main/jni/Assets/wiz-model.bin`, `wiz-model.json`, `WIZ_LICENSE.md`: exported rig and preserved attribution.
+- `tests/wiz_model_test.cpp`, `wiz_model_gpu_test.cpp`: physical-response, garment, extended-motion and real rendered-frame checks.
+- `docs/ESP_3D_UPGRADE.md`, `NEXT_STEPS.md`: review notes and remaining device validation.
 
-### Exact changed files
+No gameplay hooks, auth/licensing flow, music, saved ESP fields or unrelated menu styling were changed. No explanatory source comments were added.
 
-- `src/main/jni/ImGui/WizModel.cpp`, `WizModel.h`: v1/v2 decoder, rigged rendering, physics/cache/camera integration, diagnostics and resource lifecycle.
-- `src/main/jni/ImGui/WizMotion.cpp`, `WizMotion.h`: quaternion/local-pose math, foot stabilization, spring solver, collision constraints and deterministic scheduling.
-- `src/main/jni/ImGui/PreviewOrbit.h`, `PreviewOrbitUi.h`: isolated transient camera input/control and shared ImGui gesture handling.
-- `src/main/jni/ImGui/AnimePreview.h`, `runtime_preview_menu.h`: correct 3D/pending/failure presentation, shared orbit control and current-pose overlays.
-- `tools/export-wiz-model.py`: audited source rig/weight extension and explicit WIZSKN02 export.
-- `src/main/jni/Assets/wiz-model.bin`, `wiz-model.json`, `WIZ_LICENSE.md`: new embedded rig, metadata and preserved/updated attribution.
-- `tests/anime_preview_test.cpp`, `wiz_model_test.cpp`, `wiz_model_gpu_test.cpp`: touch, parser, physics, legacy/fallback, state/resource and rendered-frame validation.
-- `tests/run-wiz-model-tests.sh`, `run-wiz-model-gpu-tests.sh`: compile the real runtime modules and exercise good/failing native assets.
-- `docs/ESP_3D_UPGRADE.md`, `NEXT_STEPS.md`: review notes and remaining validation.
+## Limits and device review
 
-`Main.cpp`, gameplay hooks, auth/licensing, music, ESP option/config fields and unrelated UI styling are unchanged. Android.mk's existing source wildcard already includes the new motion module; its existing embedded-asset dependency rebuilds the model assembly correctly.
+This is a constrained physical rig with a coarse coupled cloth control net. It is not triangle-level cloth/self-collision or volumetric soft-body simulation. Body capsules constrain spring tips; they do not prove all intervening hair cards and garment triangles are collision-free for every possible pose. The same original gesture assets are reused at varied intervals, with new procedural idle layered on them; a motion-capture library was not added.
 
-### Remaining limits and phone review
-
-- Cloth is weighted spring-bone cloth, not a triangle cloth/self-collision solver. Capsule constraints protect tips; they do not prove every hair card or garment triangle is penetration-free at every possible pose. Inspected frames did not show severe body clipping.
-- The authored wave/hop clip still repeats every 12 seconds. Independent idle, face and physics state prevent a perfectly repeated whole-character loop; new gestures were not invented beyond the reference sequence.
-- The exporter preserves four GPU influences, including the reported maximum weight truncation. It does not change mesh topology or add facial morph geometry.
-- Normal render cadence is 30 Hz, physics is 60 Hz. This is not a claim of 60 rendered preview frames per second.
-- On a real Android phone, check Orbit/Front taps and vertical scrolling beside ESP controls, all overlay combinations, face/cloth motion at the actual panel size, app background/resume, tab reopen, shader/texture allocation failure, device frame time, thermal load and memory. No phone, Android touch backend, device GPU profiler or APK build was available for this pass.
-- Commit/publish only the feature branch for review; main is unchanged by this task.
+Android touch backend behavior, real device CPU/GPU time, FPS, thermal load, process memory and background/resume still require phone testing. Check cloth/hair/chest motion at the actual ESP panel size, all overlay combinations, Orbit/Front and adjacent scrolling, reopening the tab, EGL recreation and asset/GPU allocation failure. Host tests and an ARM64 library build do not establish those device results.

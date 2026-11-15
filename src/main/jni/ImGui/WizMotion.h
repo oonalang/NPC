@@ -37,7 +37,7 @@ struct Bone {
     Vec3 tail,low,high;
     bool bounded=false;
 };
-enum class SpringGroup:std::uint32_t {Bangs=0,SideLocks=1,BackHair=2,TopStrand=3,Skirt=4,Sleeves=5};
+enum class SpringGroup:std::uint32_t {Bangs=0,SideLocks=1,BackHair=2,TopStrand=3,Skirt=4,Sleeves=5,Chest=6};
 struct SpringBone {
     std::uint32_t bone=0;
     SpringGroup group=SpringGroup::BackHair;
@@ -45,11 +45,13 @@ struct SpringBone {
     float stiffness=0,damping=0,gravity=0,radius=0,angle=0;
 };
 struct Collider {std::uint32_t bone=0,mask=0;Vec3 a,b;float radius=0;};
+struct SpringLink {std::uint32_t a=0,b=0;float length=0,compliance=0;};
 struct Anchor {std::uint32_t a=0,b=0;Vec3 localA,localB;float mix=0;};
 struct Rig {
     std::vector<Bone> bones;
     std::vector<SpringBone> springs;
     std::vector<Collider> colliders;
+    std::vector<SpringLink> links;
     std::array<Anchor,15> anchors;
     std::array<std::uint32_t,8> roles{};
     std::array<Vec3,2> footGround{};
@@ -58,10 +60,14 @@ struct Model;
 bool SampleLocal(const Model& model,double seconds,std::vector<Transform>& local,std::array<float,5>& expression);
 void Compose(const Rig& rig,const std::vector<Transform>& local,std::vector<Matrix4>& world);
 void StabilizeFeet(const Rig& rig,std::vector<Transform>& local,std::vector<Matrix4>& world,float lift);
-void PackFrame(const Model& model,const std::vector<Matrix4>& world,const std::array<float,5>& expression,std::vector<float>& output);
+struct ScreenBounds {std::array<float,2> low{1,1},high{};};
+void PackFrame(const Model& model,const std::vector<Matrix4>& world,const std::array<float,5>& expression,std::vector<float>& output,const Matrix4* projection=nullptr,ScreenBounds* screen=nullptr);
 enum class Dynamics {Off,Hair,Full};
-struct MotionStats {unsigned steps=0,resets=0,lastSteps=0;float maxAngle=0,maxPenetration=0;};
-struct SpringState {Vec3 tip,velocity;};
+struct MotionStats {unsigned steps=0,resets=0,lastSteps=0;float maxAngle=0,maxPenetration=0,maxLinkStretch=0;};
+struct SpringState {Vec3 tip,velocity,target;};
+struct SpringSample {Vec3 position,velocity;};
+SpringSample IntegrateSpring(Vec3 position,Vec3 velocity,Vec3 previousTarget,Vec3 target,Vec3 gravity,float stiffness,float damping,float dt);
+double GestureTime(double seconds,std::uint32_t seed);
 struct WorldCollider {Vec3 a,b;float radius=0;std::uint32_t mask=0;};
 Vec3 ConstrainTip(Vec3 origin,Vec3 target,Vec3 tip,float length,const SpringBone& spring,const std::vector<WorldCollider>& colliders);
 float Separation(Vec3 point,const WorldCollider& collider);
@@ -74,20 +80,23 @@ class Simulation {
     std::vector<Transform> local_;
     std::vector<Matrix4> animated_,world_;
     std::vector<SpringState> springs_;
+    std::vector<Vec3> predicted_;
+    std::vector<float> linkLambda_;
     std::vector<WorldCollider> colliders_;
     std::array<int,128> springForBone_{};
     std::array<float,5> expression_{};
     MotionStats stats_;
     void Pose(double time);
+    void FitSprings(bool integrate,bool initialize=false);
     void Step(double time,bool initialize);
 public:
     static constexpr double stepSeconds=1./60.;
-    static constexpr unsigned maxCatchUp=6,warmSteps=10;
+    static constexpr unsigned maxCatchUp=6,warmSteps=10,clothIterations=10;
     void Reset();
     void SetSeed(std::uint32_t seed);
     void SetDynamics(Dynamics mode);
     void Advance(const Model& model,double seconds);
-    void FrameData(std::vector<float>& frame) const;
+    void FrameData(std::vector<float>& frame,const Matrix4* projection=nullptr,ScreenBounds* screen=nullptr) const;
     const std::vector<Matrix4>& World() const {return world_;}
     const std::vector<SpringState>& Springs() const {return springs_;}
     const MotionStats& Stats() const {return stats_;}

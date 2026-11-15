@@ -27,7 +27,7 @@ struct Model {
     std::vector<Material> materials;
     std::vector<float> animation;
     Rig rig;
-    std::size_t Stride() const { return version==2?bones*10+5:bones*16+56; }
+    std::size_t Stride() const { return version>=2?bones*10+5:bones*16+56; }
 };
 bool Decode(const unsigned char* bytes,std::size_t size,Model& model);
 bool DecodeTextures(Model& model);

@@ -1,15 +1,16 @@
 {
-  "format": "WIZSKN02",
+  "format": "WIZSKN03",
   "vertices": 17530,
   "triangles": 27024,
-  "bones": 112,
+  "bones": 120,
   "frames": 289,
   "fps": 24,
   "duration": 12,
-  "frameFloats": 1125,
+  "frameFloats": 1205,
   "landmarks": 15,
-  "springBones": 32,
-  "colliders": 10,
+  "springBones": 42,
+  "colliders": 16,
+  "clothLinks": 48,
   "addedBones": [
     "Bang.L",
     "Sleeve.L",
@@ -24,7 +25,15 @@
     "Skirt.2",
     "Skirt.2.Hem",
     "Skirt.3",
-    "Skirt.3.Hem"
+    "Skirt.3.Hem",
+    "Skirt.4",
+    "Skirt.4.Hem",
+    "Skirt.5",
+    "Skirt.5.Hem",
+    "Skirt.6",
+    "Skirt.6.Hem",
+    "Skirt.7",
+    "Skirt.7.Hem"
   ],
   "physicsGroups": {
     "0": [
@@ -63,19 +72,32 @@
       "Skirt.2",
       "Skirt.2.Hem",
       "Skirt.3",
-      "Skirt.3.Hem"
+      "Skirt.3.Hem",
+      "Skirt.4",
+      "Skirt.4.Hem",
+      "Skirt.5",
+      "Skirt.5.Hem",
+      "Skirt.6",
+      "Skirt.6.Hem",
+      "Skirt.7",
+      "Skirt.7.Hem"
     ],
     "5": [
       "Sleeve.L",
       "SleeveHem.L",
       "Sleeve.R",
       "SleeveHem.R"
+    ],
+    "6": [
+      "breast.L",
+      "breast.R"
     ]
   },
-  "reweightedGarmentVertices": 939,
+  "reweightedGarmentVertices": 941,
   "bangVertices": 282,
-  "maximumDiscardedWeight": 0.08394148293882608,
-  "maximumFootDrift": 2.9040336310705067e-05,
-  "packedBytes": 2165320,
-  "rawBytes": 3927909
+  "maximumDiscardedWeight": 0.02882816642522812,
+  "maximumNewGarmentDiscardedWeight": 0.0,
+  "maximumFootDrift": 3.6568730210695376e-05,
+  "packedBytes": 1717345,
+  "rawBytes": 4022985
 }

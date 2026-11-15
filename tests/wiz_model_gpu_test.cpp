@@ -32,6 +32,8 @@ static void Save(const wiz_model::Frame& frame,const std::string& path) {
     constexpr unsigned w=320,h=512;std::vector<unsigned char> pixels(w*h*4),rows((w*4+1)*h);
     glBindBuffer(GL_PIXEL_PACK_BUFFER,0);glPixelStorei(GL_PACK_ALIGNMENT,1);glReadPixels(0,0,w,h,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
     unsigned visible=0;for(unsigned i=3;i<pixels.size();i+=4) if(pixels[i]) ++visible;assert(visible>5000&&visible<w*h/2);
+    for(unsigned x=0;x<w;++x) assert(!pixels[x*4+3]&&!pixels[((h-1)*w+x)*4+3]);
+    for(unsigned y=0;y<h;++y) assert(!pixels[(y*w)*4+3]&&!pixels[(y*w+w-1)*4+3]);
     for(unsigned y=0;y<h;++y) std::memcpy(rows.data()+y*(w*4+1)+1,pixels.data()+(h-1-y)*w*4,w*4);
     uLongf size=compressBound(rows.size());std::vector<unsigned char> packed(size);assert(compress2(packed.data(),&size,rows.data(),rows.size(),3)==Z_OK);
     std::ofstream output(path,std::ios::binary);assert(output);
@@ -103,8 +105,8 @@ int main(int argc,char** argv) {
     }
     Wait();StateTest();const auto initialUploads=wiz_model::UploadCount();
     const auto initialResources=wiz_model::Resources();
-    assert(initialResources.bones==112&&initialResources.springs==32&&initialResources.cpuBytes<8*1024*1024&&initialResources.gpuBytes<16*1024*1024);
-    for(int i=0;i<720;++i) {
+    assert(initialResources.bones==120&&initialResources.springs==42&&initialResources.cpuBytes<8*1024*1024&&initialResources.gpuBytes<16*1024*1024);
+    for(int i=0;i<48*60;++i) {
         const double t=i/60.;const auto before=wiz_model::RenderCount();const auto frame=wiz_model::Render(t,.625f);assert(frame.texture);
         for(int axis=0;axis<2;++axis) {
             if(!(frame.min[axis]>0&&frame.max[axis]<1&&frame.max[axis]>frame.min[axis])) std::fprintf(stderr,"Bounds at %.3fs axis %d: %.4f .. %.4f\n",t,axis,frame.min[axis],frame.max[axis]);
@@ -117,7 +119,7 @@ int main(int argc,char** argv) {
         for(const auto& point:frame.points) assert(point[0]>=frame.min[0]-.01f&&point[0]<=frame.max[0]+.01f&&point[1]>=frame.min[1]-.01f&&point[1]<=frame.max[1]+.01f);
         if(i%3==0) Save(frame,directory+"/frame-"+std::to_string(i/3)+".png");
     }
-    assert(wiz_model::RenderCount()==360);
+    assert(wiz_model::RenderCount()==48*30);
     const auto beforeOrbit=wiz_model::RenderCount();
     for(int i=1;i<=120;++i) {wiz_model::SetView(std::sin(i/120.f)*.8f);wiz_model::Render(12.+i/120.,.625f);}
     assert(wiz_model::RenderCount()-beforeOrbit<=31);wiz_model::SetView(0);
@@ -136,7 +138,7 @@ int main(int argc,char** argv) {
     wiz_model::SetDynamics(wiz_model::Dynamics::Off);Save(wiz_model::Render(8.7,.625f),directory+"/physics-off.png");
     wiz_model::SetDynamics(wiz_model::Dynamics::Full);Save(wiz_model::Render(8.7,.625f),directory+"/physics-warm.png");
     wiz_model::ResetMotion();const auto reset=wiz_model::Render(120,.625f);assert(reset.texture&&wiz_model::PhysicsStats().lastSteps<=wiz_model::Simulation::warmSteps+1);
-    std::printf("Resource storage estimate: CPU %zu bytes; GLES buffers/textures %zu bytes; packed asset %zu bytes; 32 spring bones; 30-Hz rendering / 60-Hz simulation\n",initialResources.cpuBytes,initialResources.gpuBytes,initialResources.assetBytes);
+    std::printf("Resource storage estimate: CPU %zu bytes; GLES buffers/textures %zu bytes; packed asset %zu bytes; 42 spring bones; 30-Hz rendering / 60-Hz simulation\n",initialResources.cpuBytes,initialResources.gpuBytes,initialResources.assetBytes);
     auto owned=wiz_model::Render(120,.625f);GLuint removedTexture=owned.texture;glDeleteTextures(1,&removedTexture);
     assert(!wiz_model::Render(120,.625f).texture);Wait();assert(wiz_model::Render(120,.625f).texture);const auto recoveredUploads=wiz_model::UploadCount();assert(recoveredUploads==initialUploads+1);
     assert(eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT));eglDestroyContext(display,context);context=Context();
@@ -144,5 +146,5 @@ int main(int argc,char** argv) {
     assert(glGetError()==GL_NO_ERROR);wiz_model::Release();assert(!wiz_model::Ready());
     Wait();assert(wiz_model::Render(0,.625f).texture);wiz_model::Release();
     assert(eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT));eglDestroyContext(display,context);eglDestroySurface(display,surface);eglTerminate(display);
-    std::puts("Wiz GLES: full loop, runtime secondary motion, front/quarter/side views, overlay landmarks, 30-Hz render cache / 60-Hz simulation, bounded storage, shared GL-state restoration, context recovery and release/reload passed");
+    std::puts("Wiz GLES: 48s gesture schedule, no clipped capture pixels, runtime secondary motion, front/quarter/side views, overlay landmarks, 30-Hz render cache / 60-Hz simulation, bounded storage, shared GL-state restoration, context recovery and release/reload passed");
 }

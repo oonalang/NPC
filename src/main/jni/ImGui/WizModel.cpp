@@ -35,7 +35,8 @@ struct Reader {
 };
 bool ReadRig(Reader& read,Model& model) {
     const auto bones=read.Word(),springs=read.Word(),colliders=read.Word(),anchors=read.Word();
-    if(bones!=model.bones||!springs||springs>64||!colliders||colliders>64||anchors!=15) return false;
+    const auto links=model.version>=3?read.Word():0;
+    if(bones!=model.bones||!springs||springs>64||!colliders||colliders>64||anchors!=15||links>128) return false;
     auto& rig=model.rig;rig.bones.resize(bones);
     for(unsigned i=0;i<bones;++i) {
         auto& b=rig.bones[i];b.parent=static_cast<std::int32_t>(read.Word());const auto nameSize=read.Word();
@@ -49,7 +50,7 @@ bool ReadRig(Reader& read,Model& model) {
     std::array<bool,128> assigned{};
     for(unsigned i=0;i<springs;++i) {
         SpringBone s;s.bone=read.Word();const auto group=read.Word();s.group=static_cast<SpringGroup>(group);s.collisionMask=read.Word();s.stiffness=read.Float();s.damping=read.Float();s.gravity=read.Float();s.radius=read.Float();s.angle=read.Float();
-        if(!read.valid||s.bone>=bones||assigned[s.bone]||group>5||!s.collisionMask||s.stiffness<1||s.stiffness>400||s.damping<1||s.damping>40||s.gravity<0||s.gravity>1||s.radius<.001f||s.radius>.08f||s.angle<.01f||s.angle>.6f||!rig.bones[s.bone].bounded) return false;
+        if(!read.valid||s.bone>=bones||assigned[s.bone]||group>(model.version>=3?6u:5u)||!s.collisionMask||s.stiffness<1||s.stiffness>400||s.damping<1||s.damping>40||s.gravity<0||s.gravity>1||s.radius<.001f||s.radius>.08f||s.angle<.01f||s.angle>.6f||!rig.bones[s.bone].bounded) return false;
         assigned[s.bone]=true;rig.springs.push_back(s);
     }
     for(unsigned i=0;i<colliders;++i) {
@@ -59,6 +60,13 @@ bool ReadRig(Reader& read,Model& model) {
     }
     for(auto& a:rig.anchors) {a.a=read.Word();a.b=read.Word();a.localA=read.Vector();a.localB=read.Vector();a.mix=read.Float();if(!read.valid||a.a>=bones||a.b>=bones||a.mix<0||a.mix>1) return false;}
     for(auto& role:rig.roles) {role=read.Word();if(role>=bones) return false;}
+    for(unsigned i=0;i<links;++i) {
+        SpringLink link;link.a=read.Word();link.b=read.Word();link.length=read.Float();link.compliance=read.Float();
+        if(!read.valid||link.a>=springs||link.b>=springs||link.a==link.b||link.length<.005f||link.length>2||link.compliance<0||link.compliance>.001f) return false;
+        if(rig.springs[link.a].group!=SpringGroup::Skirt||rig.springs[link.b].group!=SpringGroup::Skirt) return false;
+        for(const auto& previous:rig.links) if((previous.a==link.a&&previous.b==link.b)||(previous.a==link.b&&previous.b==link.a)) return false;
+        rig.links.push_back(link);
+    }
     std::vector<Transform> rest;for(const auto& b:rig.bones) rest.push_back(b.rest);
     std::vector<Matrix4> world;Compose(rig,rest,world);
     for(unsigned side=0;side<2;++side) {
@@ -69,6 +77,10 @@ bool ReadRig(Reader& read,Model& model) {
     for(unsigned i=0;i<bones;++i) {
         const auto identity=Multiply(world[i],rig.bones[i].inverseBind);
         for(unsigned j=0;j<16;++j) if(std::fabs(identity[j]-(j%5==0?1.f:0.f))>.002f) return false;
+    }
+    for(const auto& link:rig.links) {
+        const auto a=rig.springs[link.a].bone,b=rig.springs[link.b].bone;
+        if(std::fabs(Length(Point(world[a],rig.bones[a].tail)-Point(world[b],rig.bones[b].tail))-link.length)>.001f) return false;
     }
     return read.valid;
 }
@@ -111,7 +123,7 @@ bool Texture(Material& m) {
 }
 bool Decode(const unsigned char* bytes,std::size_t size,Model& model) {
     if(!bytes||size<12||size>8*1024*1024) return false;
-    const unsigned versionMagic=!std::memcmp(bytes,"WIZSKN01",8)?1:!std::memcmp(bytes,"WIZSKN02",8)?2:0;
+    const unsigned versionMagic=!std::memcmp(bytes,"WIZSKN01",8)?1:!std::memcmp(bytes,"WIZSKN02",8)?2:!std::memcmp(bytes,"WIZSKN03",8)?3:0;
     if(!versionMagic) return false;
     const auto rawSize=Little(bytes+8);if(rawSize<32||rawSize>16*1024*1024) return false;
     std::vector<unsigned char> raw(rawSize);uLongf length=rawSize;
@@ -140,12 +152,12 @@ bool Decode(const unsigned char* bytes,std::size_t size,Model& model) {
         m.png.assign(p,p+pngSize);p+=pngSize;next+=m.count;result.materials.push_back(std::move(m));
     }
     if(next!=indices) return false;
-    if(version==2) {Reader reader{p,end};if(!ReadRig(reader,result)) return false;p=reader.p;}
+    if(version>=2) {Reader reader{p,end};if(!ReadRig(reader,result)) return false;p=reader.p;}
     const auto count=result.Stride()*frames;
     if(std::size_t(end-p)!=count*sizeof(float)) return false;
     result.animation.resize(count);std::memcpy(result.animation.data(),p,count*sizeof(float));
     for(float value:result.animation) if(!std::isfinite(value)) return false;
-    if(version==2) for(unsigned sample=0;sample<frames;++sample) {
+    if(version>=2) for(unsigned sample=0;sample<frames;++sample) {
         Reader reader{reinterpret_cast<const unsigned char*>(result.animation.data()+sample*result.Stride()),reinterpret_cast<const unsigned char*>(result.animation.data()+(sample+1)*result.Stride())};
         for(unsigned bone=0;bone<bones;++bone) reader.Pose();
         for(unsigned i=0;i<5;++i) {const auto value=reader.Float();if(value<0||value>1) return false;}
@@ -160,7 +172,7 @@ bool DecodeTextures(Model& model) {
 bool Sample(const Model& model,double seconds,std::vector<float>& frame) {
     if(model.frames<2||!model.fps||!std::isfinite(model.duration)||model.duration<=0||model.animation.size()!=model.Stride()*model.frames) return false;
     if(!std::isfinite(seconds)) seconds=0;
-    if(model.version==2) {
+    if(model.version>=2) {
         std::vector<Transform> local;std::array<float,5> expression;std::vector<Matrix4> world;
         if(!SampleLocal(model,seconds,local,expression)) return false;
         Compose(model.rig,local,world);StabilizeFeet(model.rig,local,world,expression[3]);PackFrame(model,world,expression,frame);return true;
@@ -349,7 +361,7 @@ ResourceUsage Resources() {
     if(!Ready()) return result;
     const auto& model=loader.model;result.bones=model.bones;result.springs=model.rig.springs.size();
     result.cpuBytes=model.vertices.capacity()*sizeof(Vertex)+model.indices.capacity()*4+model.animation.capacity()*4+gpu.sample.capacity()*4+gpu.motion.StorageBytes();
-    result.cpuBytes+=model.rig.bones.capacity()*sizeof(Bone)+model.rig.springs.capacity()*sizeof(SpringBone)+model.rig.colliders.capacity()*sizeof(Collider);
+    result.cpuBytes+=model.rig.bones.capacity()*sizeof(Bone)+model.rig.springs.capacity()*sizeof(SpringBone)+model.rig.colliders.capacity()*sizeof(Collider)+model.rig.links.capacity()*sizeof(SpringLink);
     for(const auto& bone:model.rig.bones) result.cpuBytes+=bone.name.capacity();
     for(const auto& m:model.materials) {result.cpuBytes+=m.png.capacity()+m.rgba.capacity();if(gpu.program) result.gpuBytes+=std::size_t(m.width)*m.height*4;}
     if(gpu.program) result.gpuBytes+=model.vertices.size()*sizeof(Vertex)+model.indices.size()*4+128*64+320*512*6;
@@ -370,7 +382,7 @@ Frame Render(double seconds,float aspect) {
         if(rebuild&&Ready()) loader.state.store(0,std::memory_order_release);
     }
     Prepare();if(!Ready()||gpu.failed) return {};
-    if(loader.model.version==2) {gpu.motion.SetDynamics(requestedDynamics);gpu.motion.Advance(loader.model,seconds);}
+    if(loader.model.version>=2) {gpu.motion.SetDynamics(requestedDynamics);gpu.motion.Advance(loader.model,seconds);}
     const double bucket=std::floor(std::max(0.,seconds)*30.+.00001);
     if(gpu.frame.texture&&gpu.bucket==bucket) return gpu.frame;
     State state;
@@ -380,8 +392,9 @@ Frame Render(double seconds,float aspect) {
         return {};
     }
     auto& frame=gpu.sample;
-    if(loader.model.version==2) gpu.motion.FrameData(frame);else Sample(loader.model,bucket/30.,frame);
     const auto matrix=Camera(aspect);const auto offset=loader.model.bones*16;
+    ScreenBounds screen;
+    if(loader.model.version>=2) gpu.motion.FrameData(frame,&matrix,&screen);else Sample(loader.model,bucket/30.,frame);
     glBindFramebuffer(GL_FRAMEBUFFER,gpu.fbo);glViewport(0,0,320,512);
     glDisable(GL_SCISSOR_TEST);glDisable(GL_STENCIL_TEST);glDisable(GL_RASTERIZER_DISCARD);glDisable(GL_BLEND);glDisable(GL_POLYGON_OFFSET_FILL);glDisable(GL_SAMPLE_COVERAGE);glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
     glEnable(GL_DEPTH_TEST);glDepthFunc(GL_LEQUAL);glDepthMask(GL_TRUE);glColorMask(GL_TRUE,GL_TRUE,GL_TRUE,GL_TRUE);glClearColor(0,0,0,0);glClearDepthf(1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -403,6 +416,7 @@ Frame Render(double seconds,float aspect) {
         float point[3];for(int i=0;i<3;++i) point[i]=corner&(1u<<i)?high[i]:low[i];
         const auto projected=Project(matrix,point);for(int i=0;i<2;++i) {result.min[i]=std::min(result.min[i],projected[i]);result.max[i]=std::max(result.max[i],projected[i]);}
     }
+    if(loader.model.version>=2) {result.min=screen.low;result.max=screen.high;}
     const float floor[]{0,0,.01f};result.floor=Project(matrix,floor);result.lift=frame[offset+54];result.excited=frame[offset+55]>.1f;
     gpu.frame=result;gpu.bucket=bucket;gpu.aspect=aspect;gpu.view=requestedView;++renders;return result;
 }
