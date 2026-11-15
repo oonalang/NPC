@@ -36,11 +36,12 @@ for side in ['L','R']:
     wrist=bpy.data.objects.new('Wrist.'+side,None);scene.collection.objects.link(wrist)
     wrist.location=world@hand.head;wrist.rotation_mode='QUATERNION';wrist.rotation_quaternion=(world@hand.matrix).to_quaternion()
     pole=bpy.data.objects.new('Elbow.'+side,None);scene.collection.objects.link(pole)
-    pole.location=(wrist.location.x+sign*.55,-.85,wrist.location.z+.10)
+    pole.location=(wrist.location.x+sign*.55,.10,wrist.location.z-.25)
     ik=rig.pose.bones['forearm.'+side].constraints.new('IK');ik.target=wrist;ik.pole_target=pole;ik.chain_count=2;ik.use_stretch=False
     follow=hand.constraints.new('COPY_ROTATION');follow.target=wrist;follow.owner_space='WORLD';follow.target_space='WORLD'
     wrist['base']=wrist.location[:];wrist['rest']=wrist.rotation_quaternion[:]
     wrist['shoulder']=(world@rig.pose.bones['upper_arm.'+side].head)[:]
+    wrist['idle']=(Vector((.085*sign,-.07,-.515))+Vector(wrist['shoulder']))[:]
 mesh.data.calc_loop_triangles()
 shapes=mesh.data.shape_keys.key_blocks
 vertices=[];indices=[];ranges=[];lookup={}
@@ -117,18 +118,24 @@ for frame in range(289):
         target=clamp(-lift_accel*.075+.024*math.sin(t*2*math.pi/3.-.4),-.28,.28)
         if 8.50<=t<8.62: breast[side][1]-=1.6
         rotate('breast.'+side,(spring(breast[side],target,dt,2.4,.30,.30),0,0))
-        wrist=bpy.data.objects['Wrist.'+side];base=Vector(wrist['base']);shoulder=Vector(wrist['shoulder'])
+        wrist=bpy.data.objects['Wrist.'+side];base=Vector(wrist['idle']);shoulder=Vector(wrist['shoulder'])
         swing=math.sin((t-3.0)*2*math.pi*1.9)*arm_wave
         if side=='L':
-            wrist.location=(shoulder+Vector((.30+.05*swing,.02,.02)))*arm_wave+base*(1.-arm_wave)
+            idle_offset=base-shoulder
+            wave_offset=Vector((.28+.04*swing,-.03,.40))
+            arc=idle_offset.slerp(wave_offset,arm_wave)
+            if arc.length>1e-6: arc.normalize()
+            wrist.location=shoulder+arc*(idle_offset.length*(1.-arm_wave)+wave_offset.length*arm_wave)
             wrist.location+=Vector((0,0,lift))-Vector((0,0,.020*anticipation))
             wrist.location+=Vector((.016*math.sin(sway_phase+sign),0,.018*breathe))*(1.-arm_wave)
-            rock=Quaternion((1,0,0),2.55*arm_wave)@Quaternion((0,1,0),.38*swing)
+            up=Vector((0,0,1)).to_track_quat('Y','Z')
+            palm=Quaternion((0,1,0),.35+.22*swing)
+            wave_rot=up@palm
+            wrist.rotation_quaternion=Quaternion(wrist['rest']).slerp(wave_rot,arm_wave)
         else:
             wrist.location=base+Vector((0,0,lift))-Vector((0,0,.020*anticipation))
             wrist.location+=Vector((.018*math.sin(sway_phase+sign),0,.020*breathe))
-            rock=Quaternion((0,1,0),sign*.05*math.sin(sway_phase))
-        wrist.rotation_quaternion=Quaternion(wrist['rest'])@rock
+            wrist.rotation_quaternion=Quaternion(wrist['rest'])@Quaternion((0,1,0),sign*.05*math.sin(sway_phase))
         Ankle=bpy.data.objects['Ankle.'+side];Ankle.location=Vector(Ankle['base'])+Vector((0,0,lift))
         for digit in ['f_index.01.','f_middle.01.','f_ring.01.','f_pinky.01.']:
             rotate(digit+side,(.05+.04*math.sin(t*2*math.pi/6.+sign)+.35*arm_wave,0,0))
