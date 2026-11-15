@@ -13,6 +13,7 @@
 #include "System/UI/MiscTab.h"
 #include "System/UI/SkinTab.h"
 #include "System/UI/SettingsTab.h"
+#include "System/UI/MemoryTab.h"
 #include "System/UI/Keyboard.h"
 #include "System/UI/LoadingAnimation.h"
 #include "System/UI/Logo.h"

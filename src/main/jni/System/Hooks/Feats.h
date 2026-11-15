@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include "FrameRate.h"
+#include "SlideFatigue.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -995,6 +996,7 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
+    slide_fatigue::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
     frame_rate::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
 
             //--MP VIEW

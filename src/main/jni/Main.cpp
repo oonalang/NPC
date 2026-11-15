@@ -310,6 +310,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImGui::NewFrame();
     custom::UpdateTouchScroll();
     music_player::Init(VM);
+    slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
     frame_rate::Publish(frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
     if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
         isLogin = false;
@@ -706,7 +707,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             Config.ExtraMenu.CameraPov, Config.ExtraMenu.SmartReload, Config.ExtraMenu.NoSmoke,
                             Config.ExtraMenu.ClearTerrain, Config.ExtraMenu.UnlimitedFly, Config.ExtraMenu.Hit,
                             Config.ExtraMenu.Recoil, Config.ExtraMenu.Spread, Config.ExtraMenu.Shake,
-                            Config.ExtraMenu.Rpd, Config.ExtraMenu.Parachute, Config.ExtraMenu.NoCrouch,
+                            Config.ExtraMenu.Rpd, Config.ExtraMenu.Parachute, Config.ExtraMenu.NoCrouch, Config.ExtraMenu.NoSlideFatigue,
                             Config.ExtraMenu.Flash, Config.ExtraMenu.Fire, Config.ExtraMenu.NoSprintFire,
                             Config.ExtraMenu.Diving, Config.ExtraMenu.Reload, Config.ExtraMenu.Scope,
                             Config.ExtraMenu.Switch, Config.ExtraMenu.Kinetic,
@@ -848,84 +849,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 5)
                         {
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame left = BeginContentChild("MEMORY HACKS", ImVec2(childWidth, childHeight));
-                                custom::Checkbox("Unlock Blueprints", &Config.ExtraMenu.Blueprints);
-                                {
-                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BLUEPRINT UNLOCK FILTER");
-                                    const std::string selectedTiers = BlueprintTierFilter::Preview();
-                                    bool allBlueprints = BlueprintTierFilter::GetMask() == 0;
-                                    bool mythicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Mythic);
-                                    bool legendaryTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Legendary);
-                                    bool epicTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Epic);
-                                    bool commonTier = BlueprintTierFilter::HasSelection(BlueprintTierFilter::Common);
-                                    const auto tierOptions = ImGuiSelectableFlags_DontClosePopups;
-                                    if (custom::BeginCombo("Unlock tiers", selectedTiers.c_str(), 5)) {
-                                        if (custom::Selectable("All blueprints", &allBlueprints, tierOptions, ImVec2(0, 0),
-                                                custom::MenuItemDecoration::Ring(IM_COL32(185, 182, 198, 255))))
-                                            BlueprintTierFilter::SetMask(0);
-                                        if (custom::Selectable("Mythic", &mythicTier, tierOptions, ImVec2(0, 0),
-                                                custom::MenuItemDecoration::Circle(IM_COL32(239, 77, 91, 255))))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Mythic);
-                                        if (custom::Selectable("Legendary", &legendaryTier, tierOptions, ImVec2(0, 0),
-                                                custom::MenuItemDecoration::Circle(IM_COL32(255, 208, 70, 255))))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Legendary);
-                                        if (custom::Selectable("Epic", &epicTier, tierOptions, ImVec2(0, 0),
-                                                custom::MenuItemDecoration::Circle(IM_COL32(181, 119, 245, 255))))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Epic);
-                                        if (custom::Selectable("Common", &commonTier, tierOptions, ImVec2(0, 0),
-                                                custom::MenuItemDecoration::Circle(IM_COL32(74, 222, 128, 255))))
-                                            BlueprintTierFilter::Toggle(BlueprintTierFilter::Common);
-                                        custom::EndCombo();
-                                    }
-                                }
-                                custom::Checkbox("Auto Jump Fire", &Config.ExtraMenu.AutoJumpFire);
-                                custom::Checkbox("Fast Armor Plate", &Config.ExtraMenu.FastArmorPlate);
-								custom::Checkbox("Camera Pov", &Config.ExtraMenu.CameraPov);
-								custom::Checkbox("SmartReload", &Config.ExtraMenu.SmartReload);
-								custom::Checkbox("No Smoke", &Config.ExtraMenu.NoSmoke);
-								custom::Checkbox("ClearTerrain", &Config.ExtraMenu.ClearTerrain);
-								custom::Checkbox("Unlimited Fly", &Config.ExtraMenu.UnlimitedFly);
-                                custom::Checkbox("Hitbox", &Config.ExtraMenu.Hit);
-                                custom::Checkbox("No Recoil", &Config.ExtraMenu.Recoil);
-                                custom::Checkbox("No Spread", &Config.ExtraMenu.Spread);
-                                custom::Checkbox("No Shake", &Config.ExtraMenu.Shake);
-                                custom::Checkbox("No Overheat", &Config.ExtraMenu.Rpd);
-                                custom::Checkbox("No Parachute", &Config.ExtraMenu.Parachute);
-                                custom::Checkbox("No Crouch", &Config.ExtraMenu.NoCrouch);
-                                custom::Checkbox("Anti Flashbang", &Config.ExtraMenu.Flash);
-                                custom::Checkbox("Firerate", &Config.ExtraMenu.Fire);
-                                custom::Checkbox("No Sprint Fire Delay", &Config.ExtraMenu.NoSprintFire);
-                                custom::Checkbox("Fast Dive", &Config.ExtraMenu.Diving);
-                                custom::Checkbox("Fast Reload", &Config.ExtraMenu.Reload);
-                                custom::Checkbox("Fast Scope", &Config.ExtraMenu.Scope);
-                                custom::Checkbox("Quick Switch", &Config.ExtraMenu.Switch);
-                                custom::Checkbox("Weapon Kinetic", &Config.ExtraMenu.Kinetic);
-                                
-								
-                                EndContentChild(left);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, 10.0f);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame right = BeginContentChild("MISC FEATURES", ImVec2(childWidth, childHeight));
-                                   if (Config.ExtraMenu.CameraPov)                              
-                                custom::SliderFloat("CameraPovSize", &Config.ExtraMenu. CameraPovSize, 0.0f, 150.0f, "%.0f");
-                                  if (Config.ExtraMenu.UnlimitedFly)                              
-                                custom::SliderFloat("FlySpeed", &Config.ExtraMenu.FlySpeed, 1.0f, 10.0f, "%.0f");                             
-                                
-                                custom::SliderFloat("Snowboard Speed", &SnowBsize, 0.0f, 100.0f, "%.1f");
-                                custom::SliderFloat("Slide Distance", &SlideRange, 0.0f, 30.0f, "%.1f");
-                                custom::SliderFloat("SpeedHack", &speedHackMultiplier, 0.5f, 2.0f, "%.1fx");
-                                custom::SliderFloat("High Jump", &jumpHeightMultiplier, 0.5f, 5.0f, "%.2fx");
-                                custom::SliderFloat("MP POV", &MpBsize, 0.0f, 150.0f, "%.1f"); 
-                                EndContentChild(right);
-                            }
-                            custom::EndGroup();
+                            memory_tab::Draw(contentRegion);
                         }
 
                         if (runtimeState.activeTab == 6)

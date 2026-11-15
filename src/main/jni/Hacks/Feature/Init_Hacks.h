@@ -188,6 +188,7 @@ sColorsESPBOT sColorsESPBOT{0};
         bool NoWingsuit;
         bool WalkUnderWater;
         bool NoCrouch;
+        bool NoSlideFatigue;
         float FlySpeed = 1.0f;
         bool UnlimitedFly;
         bool Frame;

@@ -10,6 +10,7 @@
 #include "../System/UI/TextureLoader.h"
 #include "../System/UI/Logo.h"
 #include "../System/UI/SkinTab.h"
+#include "../System/UI/MemoryTab.h"
 #include "../Fonts/Icon.h"
 
 #include <cmath>
@@ -311,41 +312,8 @@ inline void RenderAimTab(float childWidth, float childHeight) {
     custom::EndGroup();
 }
 
-inline void RenderMemoryTab(float childWidth, float childHeight) {
-    custom::BeginGroup();
-    {
-        const ChildFrame left = BeginContentChild("MEMORY HACKS##RUNTIME_MEMORY_LEFT", ImVec2(childWidth, childHeight));
-        custom::Checkbox("Hitbox", &Config.ExtraMenu.Hit);
-        custom::Checkbox("No Recoil", &Config.ExtraMenu.Recoil);
-        custom::Checkbox("No Spread", &Config.ExtraMenu.Spread);
-        custom::Checkbox("No Shake", &Config.ExtraMenu.Shake);
-        custom::Checkbox("No Overheat", &Config.ExtraMenu.Rpd);
-        custom::Checkbox("No Parachute", &Config.ExtraMenu.Parachute);
-        custom::Checkbox("No Crouch", &Config.ExtraMenu.NoCrouch);
-        custom::Checkbox("Anti Flashbang", &Config.ExtraMenu.Flash);
-        custom::Checkbox("Firerate", &Config.ExtraMenu.Fire);
-        custom::Checkbox("No Sprint Fire Delay", &Config.ExtraMenu.NoSprintFire);
-        custom::Checkbox("Fast Dive", &Config.ExtraMenu.Diving);
-        custom::Checkbox("Fast Reload", &Config.ExtraMenu.Reload);
-        custom::Checkbox("Fast Scope", &Config.ExtraMenu.Scope);
-        custom::Checkbox("Quick Switch", &Config.ExtraMenu.Switch);
-        custom::Checkbox("Weapon Kinetic", &Config.ExtraMenu.Kinetic);
-        EndContentChild(left);
-    }
-    custom::EndGroup();
-
-    ImGui::SameLine(0.0f, 10.0f);
-
-    custom::BeginGroup();
-    {
-        const ChildFrame right = BeginContentChild("MISC FEATURES##RUNTIME_MEMORY_RIGHT", ImVec2(childWidth, childHeight));
-        custom::SliderFloat("Snowboard Speed", &SnowBsize, 0.0f, 100.0f, "%.1f");
-        custom::SliderFloat("Slide Distance", &SlideRange, 0.0f, 30.0f, "%.1f");
-        custom::SliderFloat("SpeedHack", &speedHackMultiplier, 0.5f, 2.0f, "%.1fx");
-        custom::SliderFloat("High Jump", &jumpHeightMultiplier, 0.5f, 5.0f, "%.2fx");
-        EndContentChild(right);
-    }
-    custom::EndGroup();
+inline void RenderMemoryTab(float childWidth,float childHeight) {
+    memory_tab::Draw({ImMin(ImGui::GetContentRegionAvail().x,childWidth*2.f+10.f),childHeight});
 }
 
 inline void RenderMiscTab(float contentWidth, float contentHeight) {

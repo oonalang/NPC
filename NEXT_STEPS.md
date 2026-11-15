@@ -1,4 +1,8 @@
-# Home library, FPS controls and authenticate flow
+# Memory categories, movement, Home and authenticate flow
+
+Memory now opens on **Movement**, with No Crouch, No Slide Fatigue, No Sprint Fire Delay, No Parachute, Fast Dive and Unlimited Fly together. Movement Tuning holds the fly, snowboard, slide-distance, speed and jump sliders. The other categories are **Weapon handling**, **Protection & view** and **Blueprints**. Wide layouts use two panels; narrower layouts stack related controls in one scrollable panel. Category navigation stays above the panels. `System/UI/MemoryTab.h` is shared by the actual Android menu and runtime preview. All original Memory controls and blueprint-tier colors remain available. Newly displayed slider labels start with their readable theme color.
+
+**No Slide Fatigue** defaults off and saves as optional `ExtraMenu.NoSlideFatigue`; older configs load it as false. `System/Hooks/SlideFatigue.h` validates the 32-byte entry at `0x7C6976C` and the 16-byte recovery-time block at `0x7C69810` against the supplied 1.6.59 dump/library before installing the hook. It checks `SlideTackleComponent.m_IsLocalPlayer` at `0x38`, resets the local fatigue timestamp at `0x170`, and calls the original `LimitSlideTackle` with its original metadata argument. The normal routine recovers slide speed and idle duration. The configured recovery window (`0x44`), normal slide cooldown (`0x6C`) and movement tick remain under the game's control. If the original routine leaves the temporary timestamp unconsumed, the hook restores its previous bytes. Disabled and nonlocal calls pass through unchanged. A profile mismatch keeps the new toggle unavailable.
 
 Home stays first. Its Home banner, frame-time metric and enabled-feature metric are removed. Only FPS and session time sit above the narrower performance graph, leaving music most of the width and the full available height. The song library is always open in a dedicated touch-scroll region, including on short landscape screens. The parent dashboard and music card can scroll without visible bars when necessary; scrolling across songs does not select them. The redundant full-width Drive-folder row is removed; the folder icon still changes the source.
 
@@ -28,6 +32,9 @@ All existing named phase durations stay in `StartupState.h`. The calm interval i
 
 ## Verified
 
+- `tests/run-slide-fatigue-tests.sh /path/to/libunity.so`: local/nonlocal and disabled behavior, repeated-slide recovery, exact timestamp restoration, unchanged cooldown/config bytes, metadata forwarding and both 1.6.59 native anchors under ASan/UBSan.
+- `tests/run-memory-tab-tests.sh`: all four categories at three scales in wide/short/narrow layouts, hidden scrollbars, silent touch panning, category navigation and normal checkbox activation. Native GLES captures cover each category.
+
 - `tests/run-music-library-tests.sh`: full-width input geometry, modal placement, hardware typing, keyboard edits, actual touch opening/key presses, UTF-8 deletion, Drive mode transitions and invalid-link errors, library scanning, snapshots and worker state under ASan/UBSan.
 - `tests/run-home-layout-tests.sh`: Local/Drive/error states and the always-open library across wide, short landscape, portrait and narrow viewports at two UI scales; a 50-song library pans by touch without selecting tracks or emitting a click.
 - `tests/run-weapon-fields-tests.sh`: the name write at `0x68` leaves the camo and description pointers intact, plus compile-time layout assertions.
@@ -43,6 +50,8 @@ All existing named phase durations stay in `StartupState.h`. The calm interval i
 - ARM64 NDK r22 build: `libnets.so`, Android API 21. No explanatory source comments were added.
 
 ## Android checks still required
+
+- In Memory → Movement, enable No Slide Fatigue and repeat slides on level ground in MP and BR, then disable it and confirm normal fatigue returns. Check the actual slide cooldown, normal eligibility rules and PVE behavior. Host/native-byte checks do not verify server correction or on-device movement. Confirm the flag survives config save/load and that all categories stay reachable by touch.
 
 1. Equip ZRG 20mm / Ticket to Hell, leave blueprint selection and Gunsmith, then inspect the loadout and weapon names. Host tests validate the corrected fields, not the game's caches or server state.
 2. Open the folder editor from Home, enter an accessible music folder with the touch keyboard, scan it, play, seek and return to the game. Shared storage access depends on the host app's permissions.

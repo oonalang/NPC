@@ -2682,6 +2682,7 @@ namespace custom
             anim.insert({ id, slider_state() });
             it_anim = anim.find(id);
             it_anim->second.value_alpha = 0.78f;
+            it_anim->second.text = c::text::text;
         }
 
         const bool active_slider = IsItemActive();
