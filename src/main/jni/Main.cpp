@@ -319,6 +319,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         PhantomTrigger::SetSettings(settings);
     }
     auto authFrame=startup_ui::loginTransition.At(startup_ui::Now());
+    static startup_ui::SoundObserver authSounds;
+    static startup_ui::LoadingSoundObserver loadingSounds;
+    const bool soundsVisible=isMenuVisible&&!windowCollapsed;
+    startup_ui::PlaySounds(authSounds.Update(authFrame,soundsVisible));
+    startup_ui::PlaySounds(loadingSounds.Update(ui_loading::IsActive(),ui_loading::GetProgress(),soundsVisible));
     const bool startupScene=!isLogin && isMenuVisible && !windowCollapsed;
     static bool previousStartupScene=false;
     if(startupScene!=previousStartupScene) {
@@ -477,8 +482,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             }
         }
         authFrame=startup_ui::loginTransition.At(startup_ui::Now());
-        static startup_ui::SoundObserver authSounds;
-        if(const auto cue=authSounds.Update(authFrame);cue&&isMenuVisible) ui_sounds::Play(*cue);
+        startup_ui::PlaySounds(authSounds.Update(authFrame,soundsVisible));
         if (!isLogin && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
         if (!isLogin && !ui_loading::IsActive() && (authFrame.loginVisible || startup_ui::loginTransition.active))
         {
@@ -514,7 +518,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     showKeyboard = false;
                     ImGui::ClearActiveID();
                     startup_ui::loginTransition.Start(startup_ui::Now(),startup_ui::ReducedMotionEnabled(VM));
-                    ui_sounds::Play(ui_sounds::Cue::Click);
+                    startup_ui::PlaySounds(authSounds.Update(startup_ui::loginTransition.At(startup_ui::Now()),soundsVisible));
                     auth_input::SetBlocked(true);
                     std::thread([](std::string key) {
                         g_LoginResult = Login(key.c_str());
@@ -528,8 +532,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         else if (!isLogin && ui_loading::IsActive())
         {
             const startup_ui::LoadingReveal reveal{authFrame.loadingVisible?authFrame.loadingReveal:1.f};
+            startup_ui::PlaySounds(loadingSounds.Update(true,ui_loading::GetProgress(),soundsVisible));
             if (ui_loading::RenderWindow(nullptr,&reveal))
             {
+                startup_ui::PlaySounds(loadingSounds.Update(true,1.f,soundsVisible));
                 isLogin = true;
             }
             if(authFrame.ready) startup_ui::loginTransition.Reset();

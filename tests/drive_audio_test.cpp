@@ -61,7 +61,7 @@ int main(int argc,char** argv) {
     std::vector<std::int16_t> sampler;
     for(unsigned i=0;i<static_cast<unsigned>(ui_sounds::Cue::Count);++i) {
         const auto cue=static_cast<ui_sounds::Cue>(i);const auto pcm=ui_sounds::Synthesize(cue);
-        assert(pcm==ui_sounds::Synthesize(cue)&&pcm.size()>=2400&&pcm.size()<=19200&&pcm.front()==0&&pcm.back()==0);
+        assert(pcm==ui_sounds::Synthesize(cue)&&pcm.size()>=2400&&pcm.size()<=144000&&pcm.size()==static_cast<std::size_t>(std::llround(ui_sounds::Duration(cue)*ui_sounds::sampleRate))&&pcm.front()==0&&pcm.back()==0);
         int peak=0,jump=0;long long sum=0;
         for(std::size_t n=0;n<pcm.size();++n) {peak=std::max(peak,std::abs(int(pcm[n])));sum+=pcm[n];if(n) jump=std::max(jump,std::abs(int(pcm[n])-pcm[n-1]));}
         assert(peak>1000&&peak<26000&&jump<5000&&std::abs(double(sum)/pcm.size())<100.);
@@ -76,11 +76,11 @@ int main(int argc,char** argv) {
     assert(ui_sounds::DecodeSettings("UIA2 1 0.2800",enabled,gain)&&enabled&&std::fabs(gain-.28f)<.0001f);
     assert(!ui_sounds::DecodeSettings("UIA2 1 nan",enabled,gain));
     startup_ui::SoundObserver observer;startup_ui::LoginTransitionFrame frame;
-    const auto observe=[&](startup_ui::AuthStage stage,ui_sounds::Cue expected) {frame.stage=stage;assert(observer.Update(frame)==expected);assert(!observer.Update(frame));};
-    observe(startup_ui::AuthStage::Splash,ui_sounds::Cue::Drop);observe(startup_ui::AuthStage::Check,ui_sounds::Cue::Success);
-    observe(startup_ui::AuthStage::Suck,ui_sounds::Cue::Whoosh);observe(startup_ui::AuthStage::Reveal,ui_sounds::Cue::Open);
-    frame.stage=startup_ui::AuthStage::Idle;assert(!observer.Update(frame));observe(startup_ui::AuthStage::Check,ui_sounds::Cue::Success);
-    frame.stage=startup_ui::AuthStage::Loading;assert(!observer.Update(frame));
+    const auto observe=[&](startup_ui::AuthStage stage,ui_sounds::Cue expected) {frame.stage=stage;assert(observer.Update(frame).cue==expected);assert(!observer.Update(frame).cue);};
+    observe(startup_ui::AuthStage::Splash,ui_sounds::Cue::Splash);observe(startup_ui::AuthStage::Check,ui_sounds::Cue::Success);
+    observe(startup_ui::AuthStage::Suck,ui_sounds::Cue::SuckIn);observe(startup_ui::AuthStage::Reveal,ui_sounds::Cue::LoadingReveal);
+    frame.stage=startup_ui::AuthStage::Idle;assert(!observer.Update(frame).cue);observe(startup_ui::AuthStage::Check,ui_sounds::Cue::Success);
+    observe(startup_ui::AuthStage::Loading,ui_sounds::Cue::LoadingReveal);
     if(argc>1) Wave(argv[1],sampler);
     std::puts("Drive link/parser limits, host restrictions, catalog/cache integrity, cancellation, PCM envelopes and one-shot authentication cues passed");
 }
