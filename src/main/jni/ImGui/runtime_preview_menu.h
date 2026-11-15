@@ -5,6 +5,7 @@
 #include "TouchScroll.h"
 #include "AnimePreview.h"
 #include "AnimeArtwork.h"
+#include "PreviewOrbitUi.h"
 #include "imgui_settings.h"
 #include "../System/Core/SaveConfig.h"
 #include "../System/UI/TextureLoader.h"
@@ -493,6 +494,12 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
     drawList->AddText(textFont,8.f,ImVec2(min.x+16.f,max.y-13.f),IM_COL32(185,177,203,180),"Wiz / Glayer3d");
     const ImVec2 viewMin(min.x + 12.0f, min.y + 40.0f);
     const ImVec2 viewMax(max.x - 12.0f, max.y - 12.0f);
+#ifndef CLAY_CPU_PREVIEW
+    static anime_preview::OrbitControl orbit;
+    if(!wiz_model::Failed()) anime_preview::DrawOrbitControls(orbit,drawList,textFont,min,max,viewMin,viewMax);
+    else orbit=anime_preview::OrbitControl{};
+    wiz_model::SetView(orbit.yaw);
+#endif
     drawList->AddRectFilled(viewMin, viewMax, IM_COL32(11, 11, 15, 242), 14.0f);
     drawList->AddRect(viewMin, viewMax, IM_COL32(255, 255, 255, 12), 14.0f, 0, 1.0f);
     drawList->PushClipRect(viewMin, viewMax, true);
@@ -512,6 +519,15 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
 
     const auto model=anime_preview::Draw(drawList,viewMin+ImVec2(4,12),viewMax-ImVec2(4,12),
         ImGui::GetTime(),ImGui::GetIO().DeltaTime);
+    if(model.loading) {
+        const char* label="Loading 3D model";
+        const auto textSize=textFont->CalcTextSizeA(10.f,FLT_MAX,0,label);
+        drawList->AddText(textFont,10.f,(viewMin+viewMax-textSize)*.5f,IM_COL32(185,177,203,180),label);
+        drawList->PopClipRect();return;
+    }
+#ifndef CLAY_CPU_PREVIEW
+    if(!model.native3d) drawList->AddText(textFont,8.f,ImVec2(viewMin.x+8.f,viewMax.y-10.f),IM_COL32(185,177,203,180),"2D compatibility fallback");
+#endif
     const float cx=(model.min.x+model.max.x)*.5f;
     const float modelH=model.height;
     const float feetY=model.feet.y;
