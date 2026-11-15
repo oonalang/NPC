@@ -1,0 +1,14 @@
+{
+  "vertices": 17530,
+  "triangles": 27024,
+  "bones": 98,
+  "frames": 289,
+  "fps": 24,
+  "duration": 12,
+  "frameFloats": 1624,
+  "landmarks": 15,
+  "maximumDiscardedWeight": 0.02882816642522812,
+  "maximumFootDrift": 2.6977779957664673e-05,
+  "packedBytes": 2541277,
+  "rawBytes": 4484608
+}

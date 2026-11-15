@@ -7,6 +7,10 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#ifndef CLAY_CPU_PREVIEW
+#include "WizModel.h"
+#include "AnimeArtwork.h"
+#endif
 
 namespace anime_preview {
 struct Rig {
@@ -210,6 +214,33 @@ inline void Silhouette(ImDrawList* draw,const Transform& transform) {
 inline Bounds Draw(ImDrawList* draw,ImVec2 viewMin,ImVec2 viewMax,double time,float delta) {
     Bounds bounds;
     if(!draw || viewMax.x<=viewMin.x || viewMax.y<=viewMin.y) return bounds;
+#ifndef CLAY_CPU_PREVIEW
+    const auto size=viewMax-viewMin;
+    const auto scene=wiz_model::Render(time,size.x/size.y);
+    if(scene.texture) {
+        const auto point=[&](const std::array<float,2>& p) {return viewMin+ImVec2(p[0]*size.x,p[1]*size.y);};
+        const auto floor=point(scene.floor);
+        const float shadowScale=1.f-scene.lift*2.f;
+        for(int i=0;i<32;++i) {
+            const float angle=i*IM_PI*2.f/32.f;
+            draw->PathLineTo(floor+ImVec2(std::cos(angle)*size.x*.19f*shadowScale,std::sin(angle)*size.y*.012f));
+        }
+        draw->PathFillConvex(ImGui::GetColorU32(ImVec4(.28f,.20f,.42f,.25f*shadowScale)));
+        draw->AddImage(reinterpret_cast<ImTextureID>(scene.texture),viewMin,viewMax,{0,1},{1,0});
+        bounds.min=point(scene.min);bounds.max=point(scene.max);
+        bounds.head=point(scene.points[0]);bounds.neck=point(scene.points[1]);bounds.chest=point(scene.points[2]);bounds.hip=point(scene.points[3]);
+        for(int i=0;i<2;++i) {
+            bounds.shoulder[i]=point(scene.points[4+i]);bounds.elbow[i]=point(scene.points[6+i]);bounds.hand[i]=point(scene.points[8+i]);bounds.knees[i]=point(scene.points[10+i]);bounds.ankle[i]=point(scene.points[12+i]);
+        }
+        bounds.knee=(bounds.knees[0]+bounds.knees[1])*.5f;bounds.feet=point(scene.points[14]);
+        bounds.height=bounds.max.y-bounds.min.y;bounds.jump=scene.lift*size.y*.38f;bounds.excited=scene.excited;
+        return bounds;
+    }
+    if(wiz_model::Failed()) {
+        anime_artwork::Prepare();
+        SetArtwork(anime_artwork::Ensure(),anime_artwork::width,anime_artwork::height);
+    }
+#endif
     BuildWeights();
     const auto& rig=artwork.rig;
     const float contentHeight=ImMax(.1f,rig.contentMax.y-rig.contentMin.y);

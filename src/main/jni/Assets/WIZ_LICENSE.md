@@ -7,13 +7,18 @@
 - Author-provided FBX and textures: https://drive.google.com/drive/folders/1Z9vllyNq5Qg14kL8_oCfwJHarkawPMF0
 - License shown on the model page: **Creative Commons Attribution-NonCommercial 4.0 International** — https://creativecommons.org/licenses/by-nc/4.0/
 
-`wiz-preview.png` is an orthographic transparent render of that model with the author's original painted textures. It replaces the generated original mascot. The preview adds mesh deformation for breathing, hair, a small cheer/jump and secondary motion. The game loads the rendered PNG, not the FBX. The model's noncommercial license applies to this derivative; these files do not grant commercial rights.
+`wiz-model.bin` contains the artist's textured mesh and 98-bone skeleton, a new 12-second animation and the original Blink, Smile and Speak facial shapes. The animation adds planted-foot idle weight shifts, breathing, glances, blinks, an articulated wave, an anticipated hop and a cushioned landing. Hair follows the movement. The runtime uses GPU skinning and a cached offscreen texture; it does not import an FBX or decode an image each frame. The artist's painted textures are retained, reduced to 1024 pixels for body/hair and 512 pixels for the face.
+
+`wiz-preview.png` remains an orthographic render used only as a compatibility fallback if the 3D renderer cannot initialize. Both assets derive from the same original model. The model's noncommercial license applies to these derivatives; these files do not grant commercial rights.
 
 Reproduce with Blender 4.3.2 after downloading the four files from the author's folder:
 
 ```sh
 blender -b -t 2 -P tools/render-wiz-preview.py -- /path/to/WizFiles src/main/jni/Assets/wiz-preview.png
+blender -b -t 2 -P tools/export-wiz-model.py -- /path/to/WizFiles src/main/jni/Assets/wiz-model.bin
 ```
+
+The exporter writes `wiz-model.json` with mesh/animation counts, dropped-weight error and measured foot-target drift. The binary starts with `WIZSKN01`, a little-endian uncompressed-size field and zlib data. The payload contains its version/counts/duration, 80-byte skinned vertices, triangle indices, material PNGs and 24-Hz bone/facial/landmark samples. `WizModel.cpp` validates lengths, indices, joints, weights and finite animation values before upload. The GPU target is 320 × 512, refreshed at most 30 times per second while the ESP panel is visible. ESP overlay anchors use the same sampled skeleton as the displayed frame.
 
 Source SHA-256:
 

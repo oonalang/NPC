@@ -67,6 +67,7 @@ LOCAL_MODULE           := nets
 LOCAL_CFLAGS           := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w
 LOCAL_CFLAGS           += -fno-rtti -fno-exceptions -fpermissive
 LOCAL_ASFLAGS          += -DANIME_ARTWORK_FILE='"$(LOCAL_PATH)/Assets/wiz-preview.png"'
+LOCAL_ASFLAGS          += -DWIZ_MODEL_FILE='"$(LOCAL_PATH)/Assets/wiz-model.bin"'
 LOCAL_ASFLAGS          += -DDRIVE_CA_FILE='"$(LOCAL_PATH)/Assets/drive-ca.pem"'
 LOCAL_CPPFLAGS         := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w -Werror -s -std=c++17
 LOCAL_CPPFLAGS         += -Wno-error=c++11-narrowing -fms-extensions -fno-rtti -fno-exceptions -fpermissive
@@ -98,6 +99,7 @@ LOCAL_SRC_FILES        := $(FILE_LIST:$(LOCAL_PATH)/%=%) \
                               Substrate/And64InlineHook.cpp \
                               AstralPrtctn/md5.cpp \
                               Assets/AnimeArtwork.S \
+                              Assets/WizModel.S \
                               Assets/DriveCA.S
                               
 LOCAL_LDLIBS := -llog -landroid
@@ -120,4 +122,5 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/foxcheats/includes
 
                      
 include $(BUILD_SHARED_LIBRARY)
+$(LOCAL_OBJS_DIR)/Assets/WizModel.o: $(LOCAL_PATH)/Assets/wiz-model.bin
 # ============================================================================

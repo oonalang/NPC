@@ -1,6 +1,7 @@
 #pragma once
 #include "../Audio/UiSounds.h"
 #include "../Hooks/FrameRate.h"
+#include "SettingsControls.h"
 
 #include "ImGui/Call_ImGui.h"
 #include "../Core/SaveConfig.h"
@@ -219,32 +220,6 @@ namespace settings_tab
         ImGui::TextColored(c::text::text_active, "SAV  /  LOD  /  RST");
     }
 
-    inline void RenderEnhancementCard()
-    {
-        custom::Checkbox("Clear Display", &Config.ExtraMenu.ClearDisplay);
-        Config.Aim.FpsLevel1=frame_rate::Fps(Config.Aim.FpsLevel1,60);
-        Config.Aim.FpsLevelUltra1=frame_rate::Fps(Config.Aim.FpsLevelUltra1,240,60);
-#ifdef __ANDROID__
-        ImGui::BeginDisabled(!frame_rate::available.load());
-#endif
-        custom::Checkbox("Unlock frame rates",&Config.ExtraMenu.EnhanceFPS);
-        custom::Checkbox("Custom FPS",&Config.Aim.FpsLevel);
-        if(Config.Aim.FpsLevel) custom::SliderFloat("Frame rate",&Config.Aim.FpsLevel1,30.f,360.f,"%.0f FPS");
-        custom::Checkbox("Ultra FPS override",&Config.Aim.FpsLevelUltra);
-        if(Config.Aim.FpsLevelUltra) custom::SliderFloat("Ultra frame rate",&Config.Aim.FpsLevelUltra1,60.f,360.f,"%.0f FPS");
-        frame_rate::Publish(frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
-#ifdef __ANDROID__
-        ImGui::EndDisabled();
-        if(!frame_rate::available.load()) ImGui::TextDisabled("FPS controls unavailable for this build");
-#endif
-        ImGui::Separator();
-        bool effects=ui_sounds::Enabled();
-        if(custom::Checkbox("Creamy UI sounds",&effects)) ui_sounds::SetEnabled(effects);
-        float effectsVolume=ui_sounds::Gain()*100.f;
-        if(custom::SliderFloat("Effects volume",&effectsVolume,0.f,100.f,"%.0f%%")) ui_sounds::SetGain(effectsVolume*.01f);
-        if(custom::Button("PREVIEW SOUND",ImVec2(ImMax(1.f,ImGui::GetContentRegionAvail().x),40.f))) ui_sounds::Play(ui_sounds::Cue::Success);
-        ImGui::Separator();
-        if (custom::Button("RESET GUEST", ImVec2(ImMax(1.0f, ImGui::GetContentRegionAvail().x), 50.0f)))
-            Config.ExtraMenu.ResetGuest = true;
-    }
+    inline void RenderEnhancementCard() {settings_controls::Draw();}
+
 }

@@ -33,5 +33,5 @@ int main(int argc,char** argv) {
         std::ifstream input(argv[1],std::ios::binary);assert(input);
         for(const auto& target:profile) {std::array<unsigned char,16> bytes{};input.seekg(target.rva-0x4000);input.read(reinterpret_cast<char*>(bytes.data()),bytes.size());assert(Matches(target,bytes.data(),input.gcount()));}
     }
-    std::puts("FPS ranges, override priority, disabled/sentinel passthrough, atomic settings, device-field restoration and seven 1.6.59 method fingerprints passed");
+    std::puts("FPS ranges, override priority, disabled/sentinel passthrough, atomic settings, device-field restoration and six 1.6.59 method fingerprints passed");
 }

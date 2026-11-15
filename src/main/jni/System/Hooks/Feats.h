@@ -201,20 +201,6 @@ inline float get_DelaySprintFire(void * instance) {
     return orig_get_DelaySprintFire(instance);
 }
 
-typedef void (*SetUltraFrameRateDeviceInfo_t)(void* thiz, bool enableUltraFrameRate, int ultraFrameRate, int ultraFrameRateBR, int ultraFrameRateQualityLimit, bool customizedFrameRate);
-SetUltraFrameRateDeviceInfo_t orig_SetUltraFrameRateDeviceInfo;
-
-void hooked_SetUltraFrameRateDeviceInfo(void* thiz, bool enableUltraFrameRate, int ultraFrameRate, int ultraFrameRateBR, int ultraFrameRateQualityLimit, bool customizedFrameRate) {
-    if (thiz != NULL) {
-        enableUltraFrameRate = true;
-        ultraFrameRate = 144;
-        ultraFrameRateBR = 144;
-        ultraFrameRateQualityLimit = 144;
-        customizedFrameRate = true;
-    }
-    orig_SetUltraFrameRateDeviceInfo(thiz, enableUltraFrameRate, ultraFrameRate, ultraFrameRateBR, ultraFrameRateQualityLimit, customizedFrameRate);
-}
-
 //-- High Jump
 inline float (*orig_GetMaxJumpHeight)(void*) = nullptr;
 inline float hook_GetMaxJumpHeight(void* instance) {
@@ -936,21 +922,7 @@ inline void hook_GameObjectSetActive(void *instance, bool value)
     return orig_GameObjectSetActive(instance, value);
 }
 
-/*
-typedef void (*SetUltraFrameRateDeviceInfo_t)(void*, bool, int, int, int, bool);
-inline SetUltraFrameRateDeviceInfo_t orig_SetUltraFrameRateDeviceInfo = nullptr;
 
- void hooked_SetUltraFrameRateDeviceInfo(void* thiz, bool enableUltraFrameRate, int ultraFrameRate, int ultraFrameRateBR, int ultraFrameRateQualityLimit, bool customizedFrameRate) {
-    if (thiz != NULL) {
-        enableUltraFrameRate = true;
-        ultraFrameRate = 240;
-        ultraFrameRateBR = 240;
-        ultraFrameRateQualityLimit = 240;
-        customizedFrameRate = true;
-    }
-    orig_SetUltraFrameRateDeviceInfo(thiz, enableUltraFrameRate, ultraFrameRate, ultraFrameRateBR, ultraFrameRateQualityLimit, customizedFrameRate);
-} 
-*/
    //-- Unlimited Fly
 inline bool (*orig_CheckForwardValid)(void *) = nullptr;
 inline bool hook_CheckForwardValid(void *instance)
@@ -1134,7 +1106,6 @@ inline void InitializeAllHooks() {
           (void *)&hook_SetGrassLODBias,
           (void **)&orig_SetGrassLODBias);         
           
-    DobbyHook((void*)getAbsoluteAddress("libunity.so", 0xAFAB394), (void*)hooked_SetUltraFrameRateDeviceInfo, (void**)&orig_SetUltraFrameRateDeviceInfo);
 
     ///Walk Under Water
     DobbyHook((void *) getAbsoluteAddress("libunity.so", 0x53A5510), (void *)  &Pawn_GetCurrentDistToWaterSurface, (void **) &oPawn_GetCurrentDistToWaterSurface); 

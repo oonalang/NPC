@@ -716,7 +716,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         homeStats.activeFeatures=static_cast<int>(std::count(std::begin(enabledOptions),std::end(enabledOptions),true));
 
                         home_tab::Observe(homeStats,ImGui::GetTime());
-                        anime_artwork::Prepare();
                         if (runtimeState.activeTab == 1)
                         {
                             home_tab::Draw(homeStats,contentRegion);
@@ -1057,7 +1056,18 @@ size_t hook_strlen(const char *thread)
 
 void Init_Thread2()
 {
-
+    static std::atomic<bool> running{false};
+    if(!m_unity||running.exchange(true)) return;
+    std::thread([base=static_cast<std::uintptr_t>(m_unity)] {
+        const auto install=[](void* address,void* replacement,void** original){hook(address,replacement,original);};
+        for(unsigned attempt=0;attempt<80;++attempt) {
+            frame_rate::Install(base,install);
+            slide_fatigue::Install(base,install);
+            if(frame_rate::available.load()&&slide_fatigue::available.load()) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        }
+        running=false;
+    }).detach();
 }
 
 static void RequestTriggerInitialization()
@@ -1092,7 +1102,6 @@ void Init_Thread()
     Patches.NoCrouch = MemoryPatch::createWithHex("libunity.so",0x54A83A4,"00 00 80 D2 C0 03 5F D6");
     Patches.NoWingsuit = MemoryPatch::createWithHex("libunity.so",0x557C6E0,"00 00 80 D2 C0 03 5F D6");
     
-     DobbyHook((void*) getAbsoluteAddress("libunity.so", 0xAFAB394), (void*)&hooked_SetUltraFrameRateDeviceInfo, (void**)&orig_SetUltraFrameRateDeviceInfo);
     DobbyHook((void *)getAbsoluteAddress("libunity.so", 0xD5319D4), (void *)&WeaponFireComponent_Instant_CreateBulletLine, (void **)&oWeaponFireComponent_Instant_CreateBulletLine);
     DobbyHook((void *)getAbsoluteAddress("libunity.so", 0xD53DA64), (void *)&WeaponFireComponent_Instant_CreateBulletProjectile, (void **)&oWeaponFireComponent_Instant_CreateBulletProjectile);
     InstallBRClassEspConfigHook();
@@ -1101,6 +1110,7 @@ void Init_Thread()
         reinterpret_cast<void*>(&AuthTouchCount),reinterpret_cast<void**>(&g_AuthOriginalTouchCount))!=0)
         LOGE("Authentication touch guard could not be installed");
     InitializeAllHooks();
+    Init_Thread2();
     BlueprintEquipment::Install();
             RequestTriggerInitialization();
 MemoryPatch::createWithHex("libanogs.so", 0x202680, "00 00 80 D2 C0 03 5F D6").Modify();

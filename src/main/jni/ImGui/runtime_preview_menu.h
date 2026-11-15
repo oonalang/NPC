@@ -510,7 +510,6 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
     drawList->AddRectFilled(ImVec2(viewMin.x, floorY), ImVec2(viewMax.x, viewMax.y), IM_COL32(15, 15, 21, 245), 0.0f);
     drawList->AddLine(ImVec2(viewMin.x + 6.0f, floorY), ImVec2(viewMax.x - 6.0f, floorY), IM_COL32(150, 145, 175, 40), 1.0f);
 
-    anime_preview::SetArtwork(anime_artwork::Ensure(),anime_artwork::width,anime_artwork::height);
     const auto model=anime_preview::Draw(drawList,viewMin+ImVec2(4,12),viewMax-ImVec2(4,12),
         ImGui::GetTime(),ImGui::GetIO().DeltaTime);
     const float cx=(model.min.x+model.max.x)*.5f;
