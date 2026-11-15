@@ -2,7 +2,7 @@
 
 ## User request
 
-Add the behavior described as antileak, compare the attached `kick.py` with the Eclipse reference, and resolve old reference addresses against the current game dump before porting anything. The outstanding clarification is whether antileak means protecting the active CODM login or preventing mod-license sharing.
+Add the behavior described as antileak, compare the attached `kick.py` with the Eclipse reference, and resolve old reference addresses against the current game dump before porting anything. The user clarified that the goal is preventing another device from replacing the active CODM login. Mod-license sharing is outside this task.
 
 ## What the Python file actually does
 
@@ -48,12 +48,14 @@ ff c3 00 d1 fe 57 01 a9 f4 4f 02 a9 f4 5a 01 b0
 
 The native code is readable in this ELF. Disassembly confirms that it receives the boolean in `w1`, masks it to a boolean, writes an integer state at request-object offset `0x18`, and submits that object through the game's networking path. This follows the static-method receiver slot used by this game; declaring it as a function taking only one boolean would give the wrong ABI.
 
-The dump also defines `CSClientForbidKickOffReq`, an integer `state`, enable/disable enum values and request/response protocol constants. These are corroborating structural clues, not proof that the server grants exclusive login ownership or that Eclipse invokes this method. No network request was sent and no live account state was changed during this review.
+The dump also defines `CSClientForbidKickOffReq`, an integer `state`, enable/disable enum values and request/response protocol constants. Native call sites enable the request in StageManager.LeaveFrontEnd and disable it in BR/DMZ/PVE match-time controllers. This establishes an existing game request and normal callers, not proof that the server grants exclusive login ownership or that Eclipse invokes this method. No live network request was sent and no account state was changed during development.
 
-## Implementation status and next step
+The static `CurrentStat` field is initialized to true by the class constructor but is not updated by this native sender. It is not used as an authoritative server state or a restoration baseline in the implementation.
 
-No antileak toggle, account-session patch or launcher loop has been added. The reference behavior and intended protection must be established before choosing an implementation. Do not implement this by silently suppressing a logout message and claiming that the server session remains valid.
+## Implementation and verification
 
-If the user means CODM login protection, establish the normal lifecycle and server response of the existing session-control mechanism and identify Eclipse's actual invocation, if present. A launcher loop is a separate feature and cannot supply that guarantee. If the user means mod-license sharing, enforcement belongs in the license service with device/session policy rather than game offsets.
+The feature branch now implements an opt-in Protect CODM login setting using the game's existing request. It runs from the authenticated network update, observes whether the typed request was accepted by the original sender, limits retries, preserves disconnect/logout processing, and restores the last observed game request when disabled. If none was observed, disabling sends an explicit disable request. It does not use the Python launcher loop.
 
-The prior hitbox feature remains committed as `c04aa18` on `feature/adjustable-hitboxes`. Both source comments and unrelated functionality remain unchanged by this review.
+See [CODM_SESSION_PROTECTION.md](CODM_SESSION_PROTECTION.md) for the implementation, current addresses, tests and remaining device verification. UI status reports a request rather than promising a protected session. Actual behavior when another device logs in remains unverified without an active account and two devices.
+
+The prior hitbox feature is committed as `c04aa18`; the review notes are committed as `4cc1502`. The session feature is being built on `feature/codm-session-protection`, based on those commits. Reference binaries are not modified or redistributed, and no new source comments are added.

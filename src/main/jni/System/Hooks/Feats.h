@@ -4,6 +4,7 @@
 #include "FrameRate.h"
 #include "SlideFatigue.h"
 #include "Hitbox.h"
+#include "SessionProtection.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -961,6 +962,7 @@ inline void InitializeAllHooks() {
     slide_fatigue::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
     frame_rate::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
     hitbox::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
+    session_protection::Install(getAbsoluteAddress("libunity.so",0),DobbyHook);
 
             //--MP VIEW
     HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);

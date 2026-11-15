@@ -217,6 +217,7 @@ sColorsESPBOT sColorsESPBOT{0};
         bool Flash;
         bool Hit;
         float HitboxScale = 1.f;
+        bool ProtectCodmLogin = false;
         bool Rpd;
         bool Parachute;
 		bool WallHack;

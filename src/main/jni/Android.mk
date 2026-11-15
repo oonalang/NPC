@@ -86,6 +86,7 @@ FILE_LIST              += $(wildcard $(LOCAL_PATH)/*.c*)
 FILE_LIST              += $(LOCAL_PATH)/System/Audio/DriveMusic.cpp
 FILE_LIST              += $(LOCAL_PATH)/System/Audio/UiSounds.cpp
 FILE_LIST              += $(LOCAL_PATH)/System/Hooks/Hitbox.cpp
+FILE_LIST              += $(LOCAL_PATH)/System/Hooks/SessionProtection.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerRuntime.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerCompatibility.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeProfile.cpp

@@ -2,6 +2,7 @@
 #include "../../ImGui/custom_widgets.hpp"
 #include "../Audio/UiSounds.h"
 #include "../Hooks/FrameRate.h"
+#include "../Hooks/SessionProtection.h"
 
 namespace settings_controls {
 inline void Draw() {
@@ -18,6 +19,11 @@ inline void Draw() {
 #ifdef __ANDROID__
     if(options.Active()&&!frame_rate::available.load()) ImGui::TextDisabled("Waiting for compatible FPS hooks");
 #endif
+    ImGui::Separator();
+    custom::Checkbox("Protect CODM login",&Config.ExtraMenu.ProtectCodmLogin);
+    session_protection::Publish(Config.ExtraMenu.ProtectCodmLogin);
+    if(Config.ExtraMenu.ProtectCodmLogin||session_protection::reported.load()!=session_protection::State::Off)
+        ImGui::TextWrapped("%s",session_protection::StatusText());
     ImGui::Separator();
     bool effects=ui_sounds::Enabled();
     if(custom::Checkbox("Creamy UI sounds",&effects)) ui_sounds::SetEnabled(effects);

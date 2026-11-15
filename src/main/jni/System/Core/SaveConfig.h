@@ -11,6 +11,7 @@
 #include "../../BlueprintTierFilter.h"
 #include "../../Trigger/TriggerDotStyle.h"
 #include "../Hooks/Hitbox.h"
+#include "../Hooks/SessionProtection.h"
 
 // Externals defined in Main.cpp
 extern float menu[4];
@@ -56,6 +57,7 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
     config["ExtraMenu"]["HitboxScale"] = hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
+    config["ExtraMenu"]["ProtectCodmLogin"] = Config.ExtraMenu.ProtectCodmLogin;
     config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
     config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
@@ -141,6 +143,8 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
             Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(config["ExtraMenu"].value("HitboxScale",hitbox::defaultScale));
             hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
+            Config.ExtraMenu.ProtectCodmLogin = config["ExtraMenu"].value("ProtectCodmLogin",false);
+            session_protection::Publish(Config.ExtraMenu.ProtectCodmLogin);
             Config.ExtraMenu.Rpd = config["ExtraMenu"]["Rpd"].get<bool>();
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
             Config.ExtraMenu.NoCrouch = config["ExtraMenu"].value("NoCrouch", false);
