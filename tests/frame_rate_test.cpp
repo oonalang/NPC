@@ -5,6 +5,8 @@
 #include <cstdio>
 int main(int argc,char** argv) {
     using namespace frame_rate;
+    const auto defaults=Read();assert(defaults.unlock&&!defaults.custom&&!defaults.ultra&&defaults.regular==60&&defaults.high==240);
+    assert(Configured(false,60,false,240).unlock&&Configured(true,144,true,240).unlock);
     auto value=Normalize(false,false,0,false,std::numeric_limits<float>::quiet_NaN());
     assert(!value.Active()&&value.regular==60&&value.high==240&&value.ForLevel(30,5)==30);
     value=Normalize(true,false,60,false,240);assert(value.Active()&&value.ForLevel(30,5)==30);

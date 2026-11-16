@@ -197,7 +197,6 @@ sColorsESPBOT sColorsESPBOT{0};
         bool FastArmorPlate;
         bool Grap;
         bool Grapss;
-        bool EnhanceFPS;
         bool AutoJumpFire;
         bool Spectatex;
         bool Attachment;

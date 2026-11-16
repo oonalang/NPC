@@ -20,7 +20,10 @@ int main(int argc,char** argv) {
     assert(hitbox::Read().enabled&&std::fabs(hitbox::Read().scale-2.75f)<.0001f);
     nlohmann::json stored;
     {std::ifstream file(androidFilesDir+"configs/hitbox.json");file>>stored;}
+    assert(!stored["FrameRate"].contains("Unlock"));
     auto write=[&] {std::ofstream file(androidFilesDir+"configs/old.json");file<<stored;};
+    stored["FrameRate"]["Unlock"]=false;write();
+    assert(LoadConfiguration("old")&&frame_rate::Read().unlock);
     stored["ExtraMenu"].erase("HitboxScale");write();
     Config.ExtraMenu.HitboxScale=4.f;assert(LoadConfiguration("old"));
     assert(Config.ExtraMenu.HitboxScale==1.f&&Config.ExtraMenu.Hit);

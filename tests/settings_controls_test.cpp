@@ -1,7 +1,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define CLAY_CPU_PREVIEW
 struct SettingsConfig {
-    struct {bool ClearDisplay=false,EnhanceFPS=false,ResetGuest=false;} ExtraMenu;
+    struct {bool ClearDisplay=false,ResetGuest=false;} ExtraMenu;
     struct {bool FpsLevel=false,FpsLevelUltra=false;float FpsLevel1=60.f,FpsLevelUltra1=240.f;} Aim;
 } Config;
 #include "../src/main/jni/System/UI/SettingsControls.h"
@@ -33,11 +33,13 @@ int main() {
     ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.DisplaySize={640,640};io.DeltaTime=1.f/60;
     io.Fonts->AddFontDefault();io.Fonts->Build();c::ApplyTheme();c::scale=1.f;
     frame_rate::available=false;Frame();Frame();
+    assert(frame_rate::Read().unlock);
     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-    for(int index=1;index<=3;++index) {
+    for(int index=1;index<=2;++index) {
         Config={};Frame();Frame();
         Tap(origin+ImVec2(60,row*index+12));
-        assert(index==1?Config.ExtraMenu.EnhanceFPS:index==2?Config.Aim.FpsLevel:Config.Aim.FpsLevelUltra);
+        assert(index==1?Config.Aim.FpsLevel:Config.Aim.FpsLevelUltra);
+        assert(frame_rate::Read().unlock);
     }
     Config={};Frame();Frame();Tap(reset.GetCenter());assert(Config.ExtraMenu.ResetGuest);
     ImGui::DestroyContext();std::puts("FPS preferences stay touch-editable while backends are unavailable; Reset Guest remains reachable and disabled state never leaks");

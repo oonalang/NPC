@@ -320,7 +320,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         lastHitboxProbe=frameTime;
         Init_Thread2();
     }
-    frame_rate::Publish(frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
+    frame_rate::Publish(frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
     const bool authorized=license::Allows(license::Capability::Menu);
     static bool previousAuthorization=false;
     if(previousAuthorization&&!authorized) {

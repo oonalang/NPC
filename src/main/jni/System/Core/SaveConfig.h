@@ -25,8 +25,7 @@ std::string androidFilesDir = "/storage/emulated/0/Android/data/com.garena.game.
 
 void SaveConfiguration(const std::string& filename) {
     nlohmann::json config;
-    const auto frames=frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1);
-    config["FrameRate"]["Unlock"]=frames.unlock;
+    const auto frames=frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1);
     config["FrameRate"]["Custom"]=frames.custom;
     config["FrameRate"]["Regular"]=frames.regular;
     config["FrameRate"]["Ultra"]=frames.ultra;
@@ -179,8 +178,8 @@ bool LoadConfiguration(const std::string& filename) {
 
         if(config.contains("FrameRate")&&config["FrameRate"].is_object()) {
             const auto& stored=config["FrameRate"];
-            auto frames=frame_rate::Normalize(stored.value("Unlock",false),stored.value("Custom",false),stored.value("Regular",60.f),stored.value("Ultra",false),stored.value("High",240.f));
-            Config.ExtraMenu.EnhanceFPS=frames.unlock;Config.Aim.FpsLevel=frames.custom;Config.Aim.FpsLevel1=frames.regular;
+            auto frames=frame_rate::Configured(stored.value("Custom",false),stored.value("Regular",60.f),stored.value("Ultra",false),stored.value("High",240.f));
+            Config.Aim.FpsLevel=frames.custom;Config.Aim.FpsLevel1=frames.regular;
             Config.Aim.FpsLevelUltra=frames.ultra;Config.Aim.FpsLevelUltra1=frames.high;
             frame_rate::Publish(frames);
         }

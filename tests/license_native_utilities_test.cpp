@@ -12,7 +12,10 @@ int main() {
     const int original=60;std::memcpy(object.data()+0x44,&original,4);std::memcpy(object.data()+0x48,&original,4);
     const auto before=object;
     frame_rate::available=true;frame_rate::originalSupported=Supported;
-    frame_rate::Publish({true,false,false,60,240});license_test::allowed=true;
+    assert(frame_rate::Read().unlock);
+    license_test::allowed=false;
+    assert(frame_rate::Supported(object.data(),4,nullptr)==4&&object==before);
+    license_test::allowed=true;
     assert(frame_rate::Supported(object.data(),4,nullptr)==9);
     assert(object[0x40]==1);
     license_test::allowed=false;

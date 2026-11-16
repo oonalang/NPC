@@ -24,6 +24,8 @@ This is the complete updated version of your Claymorphism / 3 Ads / 10 Hours pan
 
 The included native build also extends adjustable-hitbox sizing to the supported sphere and capsule-as-box queries in addition to regular capsules. Direct hits retain native head/body classification and priority; no forced-headshot rule is added. General box queries and the game's broad-phase selection remain unchanged. Static ABI checks, host tests and the ARM64 build passed; these added geometry paths still require an in-game retest.
 
+Game frame-rate options, including Ultra, are unlocked automatically once authorized on a compatible build. The mod no longer has a master unlock toggle, and an older saved disabled value cannot turn the unlock off. The separate numeric FPS overrides remain optional.
+
 The native ESP preview now includes the parented Wiz rig, constrained hair/garment dynamics, articulated gestures and a playback clock that starts when the model is ready. Its artist attribution and noncommercial license are included in `native/WIZ_LICENSE.md`. Host GLES motion captures and source-rig tests passed; Android appearance and performance still require device testing.
 
 Signed authorization raises the cost of panel swaps and response forgery. Software running on an attacker-controlled device can still be patched or rebuilt; this is not an uncrackable binary.

@@ -21,7 +21,10 @@ inline int Fps(float value,int fallback,int minimum=30) {
 inline Options Normalize(bool unlock,bool custom,float regular,bool ultra,float high) {
     return {unlock,custom,ultra,Fps(regular,60),Fps(high,240,60)};
 }
-inline std::atomic<std::uint32_t> settings{0};
+inline Options Configured(bool custom,float regular,bool ultra,float high) {
+    return Normalize(true,custom,regular,ultra,high);
+}
+inline std::atomic<std::uint32_t> settings{1u|(60u<<3)|(240u<<12)};
 inline std::atomic<bool> available{false};
 inline void Publish(Options value) {
     value=Normalize(value.unlock,value.custom,value.regular,value.ultra,value.high);
