@@ -59,6 +59,7 @@ inline void WeaponControl() {
         custom::SliderFloat("Hitbox Size",&Config.ExtraMenu.HitboxScale,hitbox::minimumScale,hitbox::maximumScale,"%.2fx");
         Config.ExtraMenu.HitboxScale=hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
         if(!hitbox::available.load()) ImGui::TextDisabled("%s",hitbox::status.load()==hitbox::Status::Waiting?"Waiting for game hit checks":"Hitbox unavailable for this build");
+        else if(!hitbox::sphereAvailable.load()) ImGui::TextDisabled("%s",hitbox::sphereStatus.load()==hitbox::Status::Waiting?"Sphere scaling pending":"Sphere scaling unavailable for this build");
     }
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     custom::Checkbox("No Recoil",&Config.ExtraMenu.Recoil);

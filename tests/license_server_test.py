@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='shai-license-server-') as folder:
     der=subprocess.check_output(['openssl','pkey','-in',str(private),'-pubout','-outform','DER'])
     kid=hashlib.sha256(der).hexdigest()
     (temp/'config.php').write_text("<?php return ['store'=>'"+str(store)+"','private_key'=>'"+str(private)+"','build'=>1];")
-    (temp/'revoke.php').write_text("<?php require __DIR__.'/lib.php'; $s=licence_store_open(); $v=licence_find($s,'race-key'); $v['revoked']=1; licence_update($s,'race-key',$v); echo 'OK';")
+    (temp/'revoke.php').write_text("<?php require __DIR__.'/lib.php'; $s=licence_store_open(); licence_lock_store($s); $v=licence_find($s,'race-key'); $v['revoked']=1; licence_update($s,'race-key',$v); echo 'OK';")
     def row(expiry=0,seats=1):return dict(expires=expiry,devices=[],seats=seats,revoked=0)
     licenses={'test-key':row(),'race-key':row(),'expired-key':row(int(time.time())-1),'never-key':row()}
     store.write_text(json.dumps(licenses))

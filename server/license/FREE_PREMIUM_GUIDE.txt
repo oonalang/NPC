@@ -1,0 +1,27 @@
+SHAI ETHNIR — FREE AND PREMIUM
+
+The existing Claymorphism admin and public pages are preserved.
+
+Premium keys support custom durations, unlimited duration (0 days), device
+limits, and unlimited devices (0 seats). Existing records without a tier
+continue to be interpreted as Premium.
+
+Manual Free keys must last 1–30 days and allow exactly one device. Admin batch
+creation supports 1–50 keys; leave the custom key and device fields empty for
+batches. Generated keys use 128 bits of randomness.
+
+The public giveaway is separate from manual Free creation. It requires three
+verified Linkvertise checkpoints and issues a Free key valid for exactly ten
+hours from issuance, with one device. See GIVEAWAY_SETUP.txt.
+
+The updated native client uses signed v2 leases with nonce binding. Free and
+Premium status is included in the signed permissions. Old v1 and legacy
+six-field clients must be updated. See UPDATE_README.md before deploying.
+
+Preserve the live data/keys.json, data/giveaway.json and device bindings.
+This ZIP intentionally contains no live data JSON. Its config preserves the
+supplied admin credentials and paths; its signing key/public modulus match
+the included native release and updated Android launcher source.
+
+The complete ZIP contains private configuration and a signing key. Do not
+publish it, upload it as a release asset, or leave it in the web root.

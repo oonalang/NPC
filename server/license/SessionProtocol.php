@@ -30,6 +30,7 @@ function shai_issue(): array
         !preg_match('/^[A-Za-z0-9-]{8,64}$/D', $serial) ||
         !preg_match('/^[0-9a-f]{64}$/D', $nonce)) shai_failure('Malformed request', 400);
     $store = licence_store_open();
+    licence_lock_store($store);
     $licence = licence_find($store, $key);
     if ($licence === null || !empty($licence['revoked'])) shai_failure('Access key rejected');
     $now = time();
@@ -48,8 +49,10 @@ function shai_issue(): array
     if ($der === false) throw new RuntimeException('Signing configuration');
     $keyId = hash('sha256', $der);
     $until = min($now + SHAI_LEASE_SECONDS, $expiry);
+    $tier = licence_tier($licence);
+    $capabilities = $tier === 'premium' ? 7 : 3;
     $payload = implode('|', ['v2','CODMGR',$build,$key,$serial,$nonce,
-        (string)$now,(string)$until,(string)$expiry,'3',$keyId]);
+        (string)$now,(string)$until,(string)$expiry,(string)$capabilities,$keyId]);
     $signature = '';
     if (!openssl_sign($payload, $signature, $private, OPENSSL_ALGO_SHA256)) {
         throw new RuntimeException('Signing configuration');
@@ -59,5 +62,5 @@ function shai_issue(): array
         $licence = licence_apply_devices($licence, $devices);
         if (!licence_update($store, $key, $licence)) throw new RuntimeException('Storage unavailable');
     }
-    return ['status' => true, 'data' => ['payload' => $payload, 'sig' => base64_encode($signature)]];
+    return ['status' => true, 'data' => ['payload' => $payload, 'sig' => base64_encode($signature), 'tier' => $tier]];
 }

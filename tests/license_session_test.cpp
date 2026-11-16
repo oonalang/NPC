@@ -33,7 +33,7 @@ void ClaimsAndSignatures(const LeaseSigner& signer) {
     for(const auto& mutation:std::initializer_list<std::pair<std::size_t,std::string>>{
         {0,"v1"},{1,"OTHER"},{2,"2"},{3,"other-key"},{4,"other-device"},{5,std::string(64,'b')},
         {6,"1900000031"},{6,"01899999999"},{6,"18446744073709551616"},
-        {7,"1900000000"},{7,"1900000181"},{8,"1900000179"},{8,"18446744073709551615"},{9,"0"},{9,"4"},{9,"03"},{10,std::string(64,'b')}}) {
+        {7,"1900000000"},{7,"1900000181"},{8,"1900000179"},{8,"18446744073709551615"},{9,"0"},{9,"8"},{9,"03"},{10,std::string(64,'b')}}) {
         const auto changed=Change(payload,mutation.first,mutation.second);
         assert(!verify(changed,signer.Sign(changed)));
     }
@@ -59,6 +59,7 @@ void GateAndRevocation(const LeaseSigner& signer) {
     Guard<VoidHandler,&originalVoid>::Invoke(seen);assert(seen==7);
     const auto request=Begin(session);const auto payload=signer.Payload(request);
     assert(session.Accept(request,payload,signer.Sign(payload),request.wall,tick));
+    assert(!session.Allows(Capability::Premium,tick));
     assert(Hook::Invoke(8,seen)==16&&seen==16&&handlers==1);
     originalSlot=nullptr;assert(Hook::Invoke(9,seen)==0&&handlers==1);originalSlot=Original;
     assert(!session.Accept(request,payload,signer.Sign(payload),request.wall,tick));
@@ -74,6 +75,12 @@ void GateAndRevocation(const LeaseSigner& signer) {
     assert(session.Accept(menu,menuPayload,signer.Sign(menuPayload),menu.wall,tick));
     assert(session.Allows(Capability::Menu,tick)&&!session.Allows(Capability::Features,tick));
     assert(Hook::Invoke(10,seen)==10&&handlers==1);
+    const auto premium=Begin(session,'e');const auto premiumPayload=signer.Payload(premium,7);
+    assert(session.Accept(premium,premiumPayload,signer.Sign(premiumPayload),premium.wall,tick));
+    assert(session.Allows(Capability::Menu,tick)&&session.Allows(Capability::Features,tick)&&session.Allows(Capability::Premium,tick));
+    const auto free=Begin(session,'f');const auto freePayload=signer.Payload(free,3);
+    assert(session.Accept(free,freePayload,signer.Sign(freePayload),free.wall,tick));
+    assert(session.Allows(Capability::Features,tick)&&!session.Allows(Capability::Premium,tick));
     active=nullptr;tick=100000;
 }
 void StaleResponses(const LeaseSigner& signer) {

@@ -12,7 +12,7 @@ A successful JSON response contains `data.payload` and `data.sig`. The exact sig
 v2|CODMGR|1|key|serial|nonce|issued|lease_until|license_until|capabilities|key_id
 ```
 
-RSA-SHA256 authenticates every field. Decimal values must be canonical. Unknown versions, audiences, builds, keys, devices, nonces, capabilities, key identifiers, invalid lifetimes and signatures fail closed. `key_id` is the SHA-256 fingerprint of the public key's DER SubjectPublicKeyInfo. Capability bit 1 grants menu access; bit 2 grants native features. The panel currently issues both.
+RSA-SHA256 authenticates every field. Decimal values must be canonical. Unknown versions, audiences, builds, keys, devices, nonces, capabilities, key identifiers, invalid lifetimes and signatures fail closed. `key_id` is the SHA-256 fingerprint of the public key's DER SubjectPublicKeyInfo. Capability bit 1 grants menu access, bit 2 grants native features, and bit 4 identifies Premium. Free keys receive mask `3`; Premium keys receive mask `7`. Native UI derives the plan from the signed bit rather than the response's unsigned tier hint. Existing records without a tier retain their Premium interpretation.
 
 Grants last at most 180 seconds, bounded by the license expiry. Revalidation runs on a worker after 60 seconds; transient failures retry after 10 seconds. A rejected or unverifiable renewal revokes the grant. An interrupted connection retains only the previous unexpired grant. Normal revocation is learned at renewal; network failures can delay it until that grant expires. No offline or v1 fallback exists.
 
@@ -40,18 +40,32 @@ The manifest is a release-integrity check, not a session grant or monotonic anti
 
 ## Deploy this build
 
-1. Back up the live panel files, current signing key and license JSON. Keep existing `config.php`, admin credentials, data and device bindings.
-2. The prepared `shai-public-update.zip` contains three PHP files and the native library/manifest. Upload it into the panel's existing web root, replacing `connect.php` and `lib.php`, and adding `SessionProtocol.php` and `native/`.
-3. The separate `shai-private-key.zip` contains the matching private signing key and deny rules. Keep this archive private. Install the key at the path configured by `config.php`'s `private_key`; the supplied panel's default is `private/licence_private.pem`. Prefer a path outside the web root. Restrict the key to the PHP account and verify the browser cannot retrieve it. The current client/public manifest must use this exact key pair.
-4. Check the panel still uses build `1`. Do not replace `config.php` or delete the existing license store. The new `lib.php` supports the existing admin API and serializes POST mutations, including seat allocation and admin changes. It refuses malformed stores and preserves the original store when a temporary write is incomplete.
+1. Back up the live panel files, current signing key, `data/keys.json` and `data/giveaway.json`. Retain the live license records, device bindings and Linkvertise settings.
+2. The current complete archive is `/workspace/license-hardening/artifacts/SHAI-ETHNIR-Updated-Full-Panel.zip`. It supersedes the earlier partial public/private update archives. It contains the user's full Claymorphism panel, updated PHP, protected server signing key, matching native library/manifest and deployment guides. Admin/free-page HTML, CSS and JavaScript are unchanged; `index.php` is byte-identical to the upload. Generated keys now use 128 bits of randomness.
+3. Keep the entire ZIP private because it contains the supplied admin configuration and signing key. Extract locally and upload its contents into the existing panel root. The archive preserves supplied config values except `app_modulus`, which is replaced with the matching uppercase RSA modulus. It replaces the old private key with the RSA3072 key matching both clients. If hosting config changed after the upload was made, carry those path/credential edits forward. No live data JSON is included: do not delete or replace the hosted `data/` directory.
+4. Check build `1` and the configured signing-key path, normally `private/licence_private.pem`. Restrict config/key/data access to the PHP account and verify Apache deny rules work on the host; prefer private paths outside the web root where supported. The new library uses a shared store lock for seat allocation, admin mutations and giveaway issuance, unique atomic temporaries, and rejection of malformed or short-written stores. Slow ad-provider requests do not hold the license-store lock.
 5. Rebuild the launcher APK from this branch using your release signing certificate, then distribute it with the server update. Release builds no longer inherit the debug signing certificate. No production keystore or signed APK was supplied or generated here.
 6. With a test key on an Android device, verify initial login, renewal past one minute, expiry/revocation, seat limits and denial of tampered releases. Both old clients and old panels need upgrading; protocol v1 receives HTTP 426. Uploading source alone does not update installed libraries or APKs.
 
-No private key is stored in git. Public trust roots are in `Security/LicenseRoot.h` and `LicenseRoot.java`. The current generated key is outside the checkout at `/workspace/license-hardening/keys/licence_private.pem`, and deployment archives are under `/workspace/license-hardening/artifacts/`. Back up the private archive securely; losing the private key requires another coordinated rotation.
+Public giveaway keys still require three verified Linkvertise callbacks, last exactly 36,000 seconds from issuance and allow one device. Callback proofs must be distinct; fingerprints of claimed proofs are retained with the issued record to prevent reuse. Unfinished flows retain their 30-minute timeout, while completed claims remain visible until key expiry in the same browser session. The real provider verifier is preserved; test mocks never enter the deployment ZIP.
+
+No private key is stored in git. Public trust roots are in `Security/LicenseRoot.h` and `LicenseRoot.java`. The current generated key is outside the checkout at `/workspace/license-hardening/keys/licence_private.pem`, and deployment archives are under `/workspace/license-hardening/artifacts/`. Back up the complete private archive securely; losing the private key requires another coordinated rotation.
 
 For later rotations, generate a new private key outside the checkout with `python3 tools/license-keys.py --private-out /secure/new-signing-key.pem`, rebuild both native library and launcher, and redeploy the matching panel key. Do not run that command again for the already prepared binary.
 
-For later native releases using the same root:
+To reproduce the complete package from the current uploaded panel using the same root:
+
+```sh
+python3 tools/package-current-panel.py \
+  --source-panel /secure/ETHNIR-Claymorphism-3Ads-10Hours-FULL.zip \
+  --library /path/to/libnets.so \
+  --private-key /secure/signing-key.pem \
+  --out /secure/SHAI-ETHNIR-Updated-Full-Panel.zip
+```
+
+This packager checks the audited UI, preserves config except the public modulus, checks Java/native/key agreement, verifies native hardening, signs/verifies the release, and excludes live databases. It retains the archive's private/data guards and includes no test server or vendor mock. `tests/current_panel_package_test.py` independently verifies the archive against the original ZIP, compiled library and public trust root, including PHP lint and unchanged credentials/settings.
+
+For subsequent native-only releases on an already updated panel:
 
 ```sh
 python3 tools/package-license-release.py \
@@ -60,7 +74,7 @@ python3 tools/package-license-release.py \
   --output-dir /path/outside/the/checkout
 ```
 
-The packager checks the source/binary/key match, verifies ELF hardening and creates separate public and private archives. Never publish the private archive as a downloadable release asset.
+The native-only packager checks the source/binary/key match, verifies ELF hardening and creates separate public and private archives. It is not a full panel migration. Never publish any private archive as a downloadable release asset.
 
 ## Validation
 
@@ -77,9 +91,9 @@ sh tests/run-slide-fatigue-tests.sh
 python3 tools/verify-native-hardening.py /path/to/libnets.so
 ```
 
-The license suite uses ASan/UBSan, fresh test signing keys, the actual C++ verifier, a local PHP HTTP server with four workers, concurrent last-seat attempts, renewal/replay cases, corrupt stores and simulated short writes. Native callbacks use stubbed game functions. Separate tests cover production-runtime forged responses, superseded workers, typed-hook fallback and restoration on authorization loss. Java tests verify an OpenSSL-signed fixture and reject modified manifests, same-size binary modifications and truncation; they use a host Base64 adapter.
+The license suite uses ASan/UBSan, fresh test signing keys, the actual C++ verifier, a local PHP HTTP server with four workers, concurrent last-seat attempts, renewal/replay cases, corrupt stores and simulated short writes. The full panel HTTP tests additionally cover actual admin login/CSRF, Free/Premium batch creation, signed plan bits, legacy records, all three ad callbacks, exact ten-hour/one-device issuance, invalid/failed provider responses, repeated and cross-session proof reuse, retained completed claims and concurrent renewal during slow provider verification. Only the external vendor is mocked, in test-only PHP injected by the fixture. Native callbacks use stubbed game functions. Separate tests cover production-runtime forged responses, superseded workers, typed-hook fallback and restoration on authorization loss. Java tests verify an OpenSSL-signed fixture and reject modified manifests, same-size binary modifications and truncation; they use a host Base64 adapter.
 
-The ARM64 NDK build and compile of all Java sources against Android SDK 29 are checked separately. No Android gameplay session, hosted valid-key login, production APK signature, or real device suspend/network failure was available for end-to-end testing. Do not report those as verified.
+The ARM64 NDK build and compile of all Java sources against Android SDK 29 are checked separately. No Android gameplay session, hosted valid-key login, real Linkvertise completion, production APK signature, or real device suspend/network failure was available for end-to-end testing. Do not report those as verified.
 
 ## Limits
 

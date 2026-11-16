@@ -18,3 +18,4 @@ ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$output/runtime"
 "${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror \
     "$project_dir/tests/lease_verify_cli.cpp" -lcrypto -o "$output/verify"
 python3 "$project_dir/tests/license_server_test.py" --php "${PHP:-php}" --verifier "$output/verify"
+python3 "$project_dir/tests/license_panel_test.py" --php "${PHP:-php}" --verifier "$output/verify"

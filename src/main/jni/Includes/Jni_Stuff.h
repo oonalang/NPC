@@ -23,7 +23,7 @@ std::string EXP = " ";
 std::string usedKey = " ";
 std::string mod_status = " ";
 std::string max_dev = " ";
-std::string userType = "PREMIUM PAID";
+std::string userType = " ";
 int keyUserCount = 0;
 time_t expiryTimestamp = 0;
 

@@ -78,6 +78,7 @@ function licence_all(string $store): array
 
 function licence_save(string $store, array $all): bool
 {
+    licence_lock_store($store);
     $tmp = tempnam(dirname($store), '.licence-');
     if ($tmp === false) return false;
     $bytes = json_encode($all, JSON_PRETTY_PRINT);
@@ -106,6 +107,7 @@ function licence_find(string $store, string $key): ?array
 
 function licence_update(string $store, string $key, array $lic): bool
 {
+    licence_lock_store($store);
     $all = licence_all($store);
     $all[$key] = $lic;
     return licence_save($store, $all);
@@ -154,8 +156,13 @@ function licence_apply_devices(array $lic, array $devices, ?int $seats = null): 
     return $lic;
 }
 
-function licence_create(string $store, string $key, int $days, string $note = '',
-                        array $devices = [], int $seats = 1): array
+function licence_tier(array $lic): string
+{
+    return ($lic['tier'] ?? 'premium') === 'free' ? 'free' : 'premium';
+}
+
+function licence_record(int $days, string $note = '', array $devices = [], int $seats = 1,
+                        string $tier = 'premium'): array
 {
     $lic = [
         'expires' => $days > 0 ? time() + $days * 86400 : 0,
@@ -164,38 +171,61 @@ function licence_create(string $store, string $key, int $days, string $note = ''
         'revoked' => 0,
         'note'    => $note,
         'created' => time(),
+        'tier'    => $tier === 'free' ? 'free' : 'premium',
     ];
-    $lic = licence_apply_devices($lic, $devices, max(0, $seats));
+    return licence_apply_devices($lic, $devices, max(0, $seats));
+}
+
+function licence_create(string $store, string $key, int $days, string $note = '',
+                        array $devices = [], int $seats = 1, string $tier = 'premium'): array
+{
+    licence_lock_store($store);
+    $lic = licence_record($days, $note, $devices, $seats, $tier);
     $all = licence_all($store);
     $all[$key] = $lic;
-    licence_save($store, $all);
+    if (!licence_save($store, $all)) {
+        throw new RuntimeException('Unable to save the licence');
+    }
     return $lic;
 }
 
-
-function licence_request_lock(): void
+function licence_lock_store(string $store): void
 {
-    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') return;
-    $path = licence_store_open() . '.lock';
+    static $locks = [];
+    if (isset($locks[$store])) return;
+    $path = $store . '.lock';
     $lock = @fopen($path, 'c');
-    if ($lock === false) {
-        http_response_code(503);
-        exit;
-    }
+    if ($lock === false) throw new RuntimeException('Licence store unavailable');
     @chmod($path, 0600);
     $deadline = microtime(true) + 1.0;
     while (!flock($lock, LOCK_EX | LOCK_NB)) {
         if (microtime(true) >= $deadline) {
             fclose($lock);
-            http_response_code(503);
-            exit;
+            throw new RuntimeException('Licence store busy');
         }
         usleep(10000);
     }
+    $locks[$store] = $lock;
     register_shutdown_function(static function () use ($lock): void {
         flock($lock, LOCK_UN);
         fclose($lock);
     });
+}
+
+function licence_request_lock(): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' ||
+        basename((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== 'admin.php') return;
+    $action = $_POST['action'] ?? '';
+    if (!is_string($action) || !in_array($action,
+        ['create','delete','revoke','bind','dropdevice','seats','rebind'], true)) return;
+    try {
+        licence_lock_store(licence_store_open());
+    } catch (Throwable $error) {
+        http_response_code(503);
+        header('Retry-After: 1');
+        exit('The licence store is busy. Please retry.');
+    }
 }
 
 licence_request_lock();

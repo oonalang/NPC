@@ -3,8 +3,8 @@
 #include <type_traits>
 
 namespace license {
-enum class Capability : std::uint32_t { Menu = 1, Features = 2 };
-inline constexpr std::uint32_t allCapabilities = 3;
+enum class Capability : std::uint32_t { Menu = 1, Features = 2, Premium = 4 };
+inline constexpr std::uint32_t allCapabilities = 7;
 bool Allows(Capability capability) noexcept;
 std::uint64_t BootMillis() noexcept;
 

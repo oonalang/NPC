@@ -58,6 +58,20 @@ static void Geometry() {
     axis=1.f;radius=0.f;assert(!ExpandCapsule(1.21f,axis,radius)&&axis==1.f);
     axis=FLT_MAX;radius=1.f;assert(!ExpandCapsule(5.f,axis,radius)&&axis==FLT_MAX&&radius==1.f);
     axis=1.f;radius=FLT_MAX;assert(!ExpandCapsule(5.f,axis,radius)&&axis==1.f&&radius==FLT_MAX);
+    for(float scale:{1.f,1.21f,2.f,5.f}) {
+        float sphere=.2f;assert(ExpandSphere(scale,sphere)==(scale>1.f));assert(Near(sphere,.2f*scale));
+    }
+    for(float invalid:{0.f,-1.f,NAN,INFINITY,FLT_MAX}) {
+        float sphere=invalid;assert(!ExpandSphere(5.f,sphere));
+        assert((std::isnan(sphere)&&std::isnan(invalid))||sphere==invalid);
+    }
+    for(float scale:{1.f,1.21f,2.f,5.f}) {
+        Point extent{.2f,.4f,.3f};assert(ExpandExtents(scale,extent)==(scale>1.f));
+        assert(Same(extent,{.2f*scale,.4f*scale,.3f*scale}));
+    }
+    for(Point invalid:{Point{NAN,1,1},Point{-1,1,1},Point{1,INFINITY,1},Point{FLT_MAX,1,1}}) {
+        const Point previous=invalid;assert(!ExpandExtents(5.f,invalid));assert(std::memcmp(&invalid,&previous,sizeof(invalid))==0);
+    }
     assert(primitiveScale==1.f);
     {
         PrimitiveScope outer(1.21f);assert(Near(primitiveScale,1.21f));

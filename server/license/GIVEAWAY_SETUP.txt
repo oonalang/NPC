@@ -1,0 +1,36 @@
+SHAI ETHNIR — THREE ADS / TEN HOURS
+
+1. Sign into admin.php with the existing administrator credentials.
+2. Configure three distinct HTTPS Linkvertise URLs and your publisher's
+   64-character anti-bypass token. The token belongs only on the server.
+3. Configure the three ad destinations to return to these URLs:
+   https://ethnir.x10.mx/get-key.php?checkpoint=1
+   https://ethnir.x10.mx/get-key.php?checkpoint=2
+   https://ethnir.x10.mx/get-key.php?checkpoint=3
+   Use the publisher's anti-bypass callback so it appends the hash parameter.
+   If hosted in a subdirectory, use the corresponding path instead.
+4. Enable the giveaway and open get-key.php in a browser. Keep the same
+   browser session while completing each checkpoint in order.
+
+The server verifies each returned hash through Linkvertise's HTTPS
+anti_bypassing API. Do not fabricate callbacks or disable that verification.
+A proof cannot be used twice in the same flow or claimed for another key.
+
+After three verified checkpoints, a Free key is issued for exactly ten hours
+from issuance, with one device. Its countdown and copy button stay visible
+in that browser session while the key remains valid. Unfinished flows reset
+after 30 minutes. Provider hashes have their own short lifetime; complete
+the return promptly and follow the publisher's current setup instructions.
+
+Back up and retain data/giveaway.json for your live ad settings and
+data/keys.json for issued keys. The update ZIP contains neither JSON file.
+PHP requires OpenSSL, sessions, JSON, HTTPS trust roots, and either cURL or
+an enabled HTTPS stream wrapper for vendor checks. The PHP account must be
+able to write the data directory and its lock/temporary files.
+
+Automated validation uses a local test-only provider mock. Test all three
+real ads on the live host before distributing this update. No vendor mock
+or verification bypass is included in the deployment ZIP.
+
+Deploy the matching server key, native library and rebuilt Android launcher
+together. Read UPDATE_README.md for the required coordinated update.

@@ -25,19 +25,25 @@ struct Module {
         const unsigned char note[]{4,0,0,0,8,0,0,0,3,0,0,0,'G','N','U',0,0x05,0x6d,0x63,0x90,0xcc,0x71,0x28,0x65};
         std::memcpy(bytes+0x100,note,sizeof(note));
         for(const auto& code:hitbox::anchors) std::memcpy(bytes+code.rva,code.bytes.data(),16);
+        for(const auto& code:hitbox::obbAnchors) std::memcpy(bytes+code.rva,code.bytes.data(),16);
+        for(const auto& code:hitbox::sphereAnchors) std::memcpy(bytes+code.rva,code.bytes.data(),16);
+        for(const auto& code:hitbox::sphereEncoded) std::memcpy(bytes+code.rva,code.bytes.data(),16);
         for(const auto& code:hitbox::encoded) std::memcpy(bytes+code.rva,code.bytes.data(),16);
         loaded.dlpi_addr=base();loaded.dlpi_name="/game/lib/arm64/libunity.so";
         loaded.dlpi_phdr=segments.data();loaded.dlpi_phnum=segments.size();
     }
     ~Module(){munmap(bytes,size);}
     std::uintptr_t base() const{return reinterpret_cast<std::uintptr_t>(bytes);}
+    void DecodeSphere() {std::memcpy(bytes+hitbox::sphereEncoded[0].rva,hitbox::sphereAnchors[0].bytes.data(),16);}
     void Decode() {for(const auto& code:hitbox::encoded) std::memcpy(bytes+code.rva,hitbox::anchors[2].bytes.data(),16);}
 };
 void Hook(void* address,void* replacement,void** original) {
     ++hooks;
-    const std::uintptr_t expected[]{0x66F2A78,0x66FCA40,0xC2BE0C8,0xD52E8E4};
-    assert(hooks<=4);
-    assert(address==reinterpret_cast<void*>(loaded.dlpi_addr+expected[hooks-1])&&replacement&&original);
+    const std::uintptr_t expected[]{0x66F2A78,0x66FCA40,0xC2BE0C8,0xD52E8E4,0x66FC548,0x66F82A8,0x66FD9B0,0x66F286C};
+    assert(hooks<=8);
+    const auto rva=reinterpret_cast<std::uintptr_t>(address)-loaded.dlpi_addr;
+    assert(std::find(std::begin(expected),std::end(expected),rva)!=std::end(expected)&&replacement&&original);
+    if(hooks<=4) assert(rva==expected[hooks-1]);
     *original=hooks==failHook?nullptr:reinterpret_cast<void*>(1);
 }
 }
@@ -61,6 +67,19 @@ int main(int argc,char** argv) {
         } else if(std::strcmp(argv[1],"--anchor")==0) {
             module.bytes[hitbox::anchors[0].rva]^=1;
             assert(!hitbox::Install(module.base(),Hook)&&hooks==0&&hitbox::status==hitbox::Status::Unsupported);
+        } else if(std::strcmp(argv[1],"--sphere-anchor")==0) {
+            module.DecodeSphere();module.bytes[hitbox::sphereAnchors[0].rva]^=1;
+            assert(hitbox::Install(module.base(),Hook)&&hooks==6&&hitbox::available&&hitbox::obbAvailable&&!hitbox::sphereAvailable);
+            assert(hitbox::sphereStatus==hitbox::Status::Unsupported&&!hitbox::NeedsProbe());
+        } else if(std::strcmp(argv[1],"--sphere-partial")==0) {
+            module.DecodeSphere();failHook=8;
+            assert(hitbox::Install(module.base(),Hook)&&hooks==8&&hitbox::available&&!hitbox::sphereAvailable);
+            assert(hitbox::sphereStatus==hitbox::Status::HookFailed&&!hitbox::NeedsProbe());
+            assert(hitbox::Install(module.base(),Hook)&&hooks==8);
+        } else if(std::strcmp(argv[1],"--obb-anchor")==0) {
+            module.DecodeSphere();module.bytes[hitbox::obbAnchors[0].rva]^=1;
+            assert(hitbox::Install(module.base(),Hook)&&hooks==6&&hitbox::available&&hitbox::sphereAvailable&&!hitbox::obbAvailable);
+            assert(hitbox::obbStatus==hitbox::Status::Unsupported&&!hitbox::NeedsProbe());
         } else {
             failHook=2;
             assert(!hitbox::Install(module.base(),Hook)&&hooks==2&&!hitbox::available&&hitbox::status==hitbox::Status::HookFailed);
@@ -76,8 +95,11 @@ int main(int argc,char** argv) {
             assert(!hitbox::Install(module.base(),Hook)&&hooks==0&&hitbox::status==hitbox::Status::Waiting);
             std::memcpy(module.bytes+code.rva,hitbox::anchors[2].bytes.data(),16);
         }
-        assert(hitbox::Install(module.base(),Hook)&&hooks==4&&hitbox::available&&hitbox::status==hitbox::Status::Ready);
-        assert(hitbox::Install(module.base(),Hook)&&hooks==4);
+        assert(hitbox::Install(module.base(),Hook)&&hooks==6&&hitbox::available&&hitbox::obbAvailable&&hitbox::status==hitbox::Status::Ready);
+        assert(hitbox::Install(module.base(),Hook)&&hooks==6&&!hitbox::sphereAvailable&&hitbox::NeedsProbe());
+        module.DecodeSphere();
+        assert(hitbox::Install(module.base(),Hook)&&hooks==8&&hitbox::sphereAvailable&&!hitbox::NeedsProbe());
+        assert(hitbox::Install(module.base(),Hook)&&hooks==8);
     }
     std::printf("Hitbox profile %s passed\n",argc==2?argv[1]:"loader/decode retry and one-time installation");
 }

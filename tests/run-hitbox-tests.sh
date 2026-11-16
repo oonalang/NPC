@@ -14,7 +14,7 @@ ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary" "$config_dir"
     -D__ANDROID__ -D__aarch64__ "$project_dir/tests/hitbox_profile_test.cpp" \
     "$project_dir/src/main/jni/System/Hooks/Hitbox.cpp" \
     "$project_dir/src/main/jni/Trigger/NativeProfile.cpp" "$project_dir/tests/license_gate_stub.cpp" -lpthread -o "$test_binary"
-for mode in '' --build --anchor --partial; do
+for mode in '' --build --anchor --partial --sphere-anchor --sphere-partial --obb-anchor; do
     ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary" $mode
 done
 "${CXX:-c++}" -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \

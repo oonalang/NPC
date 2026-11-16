@@ -316,7 +316,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     session_protection::Publish(Config.ExtraMenu.ProtectCodmLogin);
     static auto lastHitboxProbe=frameTime;
-    if(((Config.ExtraMenu.Hit&&!hitbox::available.load()&&hitbox::status.load()==hitbox::Status::Waiting)||
+    if(((Config.ExtraMenu.Hit&&hitbox::NeedsProbe())||
         (Config.ExtraMenu.ProtectCodmLogin&&session_protection::backend.load()==session_protection::Backend::Waiting))&&
        frameTime-lastHitboxProbe>=std::chrono::seconds(1)) {
         lastHitboxProbe=frameTime;
@@ -334,6 +334,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     }
     previousAuthorization=authorized;
     bool menuReady=authorized&&g_PresentationComplete;
+    if(authorized) userType=license::Allows(license::Capability::Premium)?"PREMIUM PAID":"FREE";
     const auto licenseExpiry=license::LicenseUntil();
     if(licenseExpiry>0&&licenseExpiry!=static_cast<std::uint64_t>(expiryTimestamp)) {
         expiryTimestamp=static_cast<time_t>(licenseExpiry);

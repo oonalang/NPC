@@ -53,6 +53,23 @@ inline bool ExpandCapsule(float scale, float& axisLength, float& radius) noexcep
     radius = expandedRadius;
     return true;
 }
+inline bool ExpandSphere(float scale, float& radius) noexcept {
+    scale = NormalizeScale(scale);
+    if (scale <= 1.f || !std::isfinite(radius) || radius <= 0.f) return false;
+    const float expanded = radius * scale;
+    if (!std::isfinite(expanded)) return false;
+    radius = expanded;
+    return true;
+}
+inline bool ExpandExtents(float scale, Point& extent) noexcept {
+    scale = NormalizeScale(scale);
+    if (scale <= 1.f || !std::isfinite(extent.x) || !std::isfinite(extent.y) || !std::isfinite(extent.z) ||
+        extent.x < 0.f || extent.y < 0.f || extent.z < 0.f) return false;
+    const Point expanded{extent.x*scale,extent.y*scale,extent.z*scale};
+    if (!std::isfinite(expanded.x) || !std::isfinite(expanded.y) || !std::isfinite(expanded.z)) return false;
+    extent = expanded;
+    return true;
+}
 inline thread_local float primitiveScale = 1.f;
 class PrimitiveScope {
     float previous_;
@@ -114,7 +131,13 @@ inline bool CopyList(const void* list, const void** output, std::size_t capacity
 }
 
 enum class Status { Waiting, Ready, Unsupported, HookFailed };
-inline std::atomic<Status> status{Status::Waiting};
+inline std::atomic<Status> status{Status::Waiting}, sphereStatus{Status::Waiting}, obbStatus{Status::Waiting};
+inline std::atomic<bool> sphereAvailable{false}, obbAvailable{false};
+inline bool NeedsProbe() noexcept {
+    return !available.load(std::memory_order_acquire) ? status.load() == Status::Waiting :
+        (!sphereAvailable.load(std::memory_order_acquire) && sphereStatus.load() == Status::Waiting) ||
+        (!obbAvailable.load(std::memory_order_acquire) && obbStatus.load() == Status::Waiting);
+}
 using HookInstaller = void(*)(void*, void*, void**);
 bool Install(std::uintptr_t base, HookInstaller hook) noexcept;
 }
