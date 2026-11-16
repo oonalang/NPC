@@ -9,6 +9,7 @@
 #include <string>
 #include <sys/mman.h>
 #include <vector>
+#include "license_gate_stub.h"
 
 using namespace session_protection;
 namespace {
@@ -138,6 +139,11 @@ int main(int argc,char** argv) {
         std::printf("Session native %s preserves unknown outcomes\n",mode.c_str());return 0;
     }
     assert(reported==State::Requested);step();assert(requested.size()==1);
+    if(mode=="--license-expired") {
+        license_test::allowed=false;step();
+        assert(requested.size()==2&&!requested.back()&&reported==State::Restored);
+        std::puts("Session native: license revocation restores the observed game policy");return 0;
+    }
     if(mode=="--stock-on") {
         Publish(false);step();assert(requested.size()==1&&reported==State::Off);
         std::puts("Session native preserves the game's enabled stock policy");return 0;

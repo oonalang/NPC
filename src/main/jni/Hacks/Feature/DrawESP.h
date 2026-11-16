@@ -1,4 +1,5 @@
 #include "../../Trigger/NativeDriver.h"
+#include "../../Security/Access.h"
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCDFAInspection"
 #pragma once
@@ -100,7 +101,7 @@ bool isEspReady;
 
 static inline void ApplySpeedhack() {
     static float lastAppliedScale = 1.0f;
-    const float targetScale = (speedHackMultiplier <= 0.0f) ? 1.0f : speedHackMultiplier;
+    const float targetScale = !license::Allows(license::Capability::Features) || speedHackMultiplier <= 0.0f ? 1.0f : speedHackMultiplier;
     if (fabsf(targetScale - lastAppliedScale) <= 0.001f) return;
 
     auto Time_set_timeScale = reinterpret_cast<void (*)(float)>(Class_Time_set_timeScale);
@@ -696,6 +697,7 @@ static inline void DrawVehicleESP(ImDrawList *draw, int sWidth, int sHeight) {
 
 void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
     ApplySpeedhack();
+    if (!license::Allows(license::Capability::Features)) return;
     ApplyNoGravityRuntime();
 
     BaseGame *get_MatchGame = GamePlay::get_MatchGame();

@@ -1,4 +1,5 @@
 #pragma once
+#include "../../Security/Access.h"
 
 namespace NoGravityCfg
 {
@@ -14,7 +15,7 @@ namespace NoGravityCfg
 
 inline bool NoGravityOn()
 {
-    return Config.ExtraMenu.NoGravity;
+    return license::Allows(license::Capability::Features) && Config.ExtraMenu.NoGravity;
 }
 
 inline float NoGravityScale()
@@ -31,8 +32,13 @@ inline void ApplyNoGravityRuntime()
 {
     static Pawn* lastPawn = nullptr;
     static bool wasOn = false;
+    static float originalGravity=1.f,originalAirControl=1.f;
 
     if (!NoGravityOn()) {
+        if(wasOn && lastPawn && lastPawn==GamePlay::get_LocalPawn() && Tools::IsPtrValid(lastPawn) && lastPawn->m_IsAlive()) {
+            *(float*)((uintptr_t)lastPawn+NoGravityCfg::LocalGravity)=originalGravity;
+            *(float*)((uintptr_t)lastPawn+NoGravityCfg::AirControl)=originalAirControl;
+        }
         lastPawn = nullptr;
         wasOn = false;
         return;
@@ -45,6 +51,8 @@ inline void ApplyNoGravityRuntime()
     }
 
     if (pawn != lastPawn || !wasOn) {
+        originalGravity=*(float*)((uintptr_t)pawn+NoGravityCfg::LocalGravity);
+        originalAirControl=*(float*)((uintptr_t)pawn+NoGravityCfg::AirControl);
         lastPawn = pawn;
     }
 

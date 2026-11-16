@@ -46,6 +46,7 @@
 #include "System/UI/AuthenticateInput.h"
 
 static void RequestTriggerInitialization();
+static void RequestLicensedFeatures();
 void Init_Thread2();
 
 
@@ -175,7 +176,7 @@ static float tabAdd = 0.0f;
 static int page = 1;
 static int activeTab = 1;
 bool g_LogoPreviewMode = false;
-static bool isLogin = false;
+static bool g_PresentationComplete = false;
 static std::string err;
 static std::string storedKey = "";
 static char s[256];
@@ -322,12 +323,22 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Init_Thread2();
     }
     frame_rate::Publish(frame_rate::Normalize(Config.ExtraMenu.EnhanceFPS,Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
-    if (isLogin && expiryTimestamp > 0 && time(nullptr) >= expiryTimestamp) {
-        isLogin = false;
-        err = "License expired";
-        auto settings = PhantomTrigger::GetSettings();
-        settings.enabled = false;
-        PhantomTrigger::SetSettings(settings);
+    const bool authorized=license::Allows(license::Capability::Menu);
+    static bool previousAuthorization=false;
+    if(previousAuthorization&&!authorized) {
+        err=license::LastError();
+        if(err.empty()) err="Session expired. Authenticate again.";
+        startup_ui::loginTransition.Reset();
+        Patches.A1.Restore();Patches.NoCrouch.Restore();
+        ApplySpeedhack();ApplyNoGravityRuntime();ApplyWorldVisualsRuntime();
+    }
+    previousAuthorization=authorized;
+    bool menuReady=authorized&&g_PresentationComplete;
+    const auto licenseExpiry=license::LicenseUntil();
+    if(licenseExpiry>0&&licenseExpiry!=static_cast<std::uint64_t>(expiryTimestamp)) {
+        expiryTimestamp=static_cast<time_t>(licenseExpiry);
+        std::tm date{};char label[40]{};
+        if(gmtime_r(&expiryTimestamp,&date)&&std::strftime(label,sizeof(label),"%Y-%m-%d %H:%M UTC",&date)) EXP=label;
     }
     auto authFrame=startup_ui::loginTransition.At(startup_ui::Now());
     static startup_ui::SoundObserver authSounds;
@@ -335,7 +346,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     const bool soundsVisible=isMenuVisible&&!windowCollapsed;
     startup_ui::PlaySounds(authSounds.Update(authFrame,soundsVisible));
     startup_ui::PlaySounds(loadingSounds.Update(ui_loading::IsActive(),ui_loading::GetProgress(),soundsVisible));
-    const bool startupScene=!isLogin && isMenuVisible && !windowCollapsed;
+    const bool startupScene=!menuReady && isMenuVisible && !windowCollapsed;
     static bool previousStartupScene=false;
     if(startupScene!=previousStartupScene) {
         clay::captureSchedule.Reset();
@@ -349,9 +360,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
-    if (isLogin)
+    if (menuReady)
         DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
-    if(isLogin) {
+    if(menuReady) {
         PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
         floating_info::Render(draw, screenWidth, screenHeight);
     }
@@ -473,11 +484,13 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         ImVec2 displaySize = ImGui::GetIO().DisplaySize;
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 
-        if (!isLogin && !ui_loading::IsActive() && g_LoginPending && g_LoginFinished.load(std::memory_order_acquire)) {
+        if (!menuReady && !ui_loading::IsActive() && g_LoginPending && g_LoginFinished.load(std::memory_order_acquire)) {
             g_LoginPending = false;
             g_LoginFinished.store(false, std::memory_order_relaxed);
             err = g_LoginResult;
-            if (err == "OK" && bValid) {
+            if (err == "OK" && license::Allows(license::Capability::Menu)) {
+                usedKey=g_SubmittedKey;
+                RequestLicensedFeatures();
                 showKeyboard = false;
                 strncpy(logintext, g_SubmittedKey.c_str(), sizeof(logintext) - 1);
                 logintext[sizeof(logintext) - 1] = '\0';
@@ -494,8 +507,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         }
         authFrame=startup_ui::loginTransition.At(startup_ui::Now());
         startup_ui::PlaySounds(authSounds.Update(authFrame,soundsVisible));
-        if (!isLogin && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
-        if (!isLogin && !ui_loading::IsActive() && (authFrame.loginVisible || startup_ui::loginTransition.active))
+        if (!menuReady && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
+        if (!menuReady && !ui_loading::IsActive() && (authFrame.loginVisible || startup_ui::loginTransition.active))
         {
             const auto actions = startup_ui::RenderLogin(s, sizeof(s), g_LoginPending, err.c_str(),
                 g_LoginTextLoaded, showKeyboard,
@@ -523,6 +536,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             if (actions.submit && !g_LoginPending && !startup_ui::loginTransition.active) {
                 if (s[0] == '\0') err = "Enter a key first.";
                 else {
+                    g_PresentationComplete=false;
                     g_SubmittedKey = s;
                     g_LoginPending = true;
                     err.clear();
@@ -540,18 +554,19 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
             if (showKeyboard)
                 RenderVirtualKeyboard("##VirtualKeyboardLogin", s, sizeof(s), &showKeyboard);
         }
-        else if (!isLogin && ui_loading::IsActive())
+        else if (!menuReady && ui_loading::IsActive())
         {
             const startup_ui::LoadingReveal reveal{authFrame.loadingVisible?authFrame.loadingReveal:1.f};
             startup_ui::PlaySounds(loadingSounds.Update(true,ui_loading::GetProgress(),soundsVisible));
             if (ui_loading::RenderWindow(nullptr,&reveal))
             {
                 startup_ui::PlaySounds(loadingSounds.Update(true,1.f,soundsVisible));
-                isLogin = true;
+                g_PresentationComplete=license::Allows(license::Capability::Menu);
+                menuReady=g_PresentationComplete;
             }
             if(authFrame.ready) startup_ui::loginTransition.Reset();
         }
-        else if(isLogin)
+        else if(menuReady && license::Allows(license::Capability::Menu))
         {
             uncollapseOpenAnim = ImClamp(uncollapseOpenAnim + ImGui::GetIO().DeltaTime * 5.0f, 0.0f, 1.0f);
             float openEase = uncollapseOpenAnim * uncollapseOpenAnim * (3.0f - 2.0f * uncollapseOpenAnim);
@@ -922,12 +937,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                 }
 
-                if (Config.ExtraMenu.WallHack) {
+                if (license::Allows(license::Capability::Features) && Config.ExtraMenu.WallHack) {
                     Patches.A1.Modify();
                 } else {
                     Patches.A1.Restore();
                 }
-                if (Config.ExtraMenu.NoCrouch) {
+                if (license::Allows(license::Capability::Features) && Config.ExtraMenu.NoCrouch) {
                     Patches.NoCrouch.Modify();
                 } else {
                     Patches.NoCrouch.Restore();
@@ -1067,7 +1082,7 @@ size_t hook_strlen(const char *thread)
 void Init_Thread2()
 {
     static std::atomic<bool> running{false};
-    if(!m_unity||running.exchange(true)) return;
+    if(!license::Allows(license::Capability::Features)||!m_unity||running.exchange(true)) return;
     std::thread([base=static_cast<std::uintptr_t>(m_unity)] {
         const auto install=[](void* address,void* replacement,void** original){hook(address,replacement,original);};
         for(unsigned attempt=0;attempt<80;++attempt) {
@@ -1085,7 +1100,7 @@ void Init_Thread2()
 static void RequestTriggerInitialization()
 {
     static std::atomic<bool> running{false};
-    if (!m_unity || running.exchange(true, std::memory_order_acq_rel)) return;
+    if (!license::Allows(license::Capability::Features) || !m_unity || running.exchange(true, std::memory_order_acq_rel)) return;
     std::thread([base = static_cast<std::uintptr_t>(m_unity)] {
         for (unsigned attempt = 0; attempt < 40; ++attempt) {
             if (PhantomTrigger::InitializeNativeTrigger(base)) break;
@@ -1097,6 +1112,21 @@ static void RequestTriggerInitialization()
 
 void Init_SwapHook()
 {
+}
+
+static void RequestLicensedFeatures() {
+    static std::atomic<bool> started{false};
+    if(!license::Allows(license::Capability::Features)||started.exchange(true)) return;
+    std::thread([] {
+        DobbyHook((void*)getAbsoluteAddress("libunity.so",0xD5319D4),
+            reinterpret_cast<void*>(&license::Guard<WeaponFireComponent_Instant_CreateBulletLine,&oWeaponFireComponent_Instant_CreateBulletLine>::Invoke),
+            reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletLine));
+        DobbyHook((void*)getAbsoluteAddress("libunity.so",0xD53DA64),
+            reinterpret_cast<void*>(&license::Guard<WeaponFireComponent_Instant_CreateBulletProjectile,&oWeaponFireComponent_Instant_CreateBulletProjectile>::Invoke),
+            reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletProjectile));
+        InstallBRClassEspConfigHook();InitializeAllHooks();BlueprintEquipment::Install();
+        Init_Thread2();RequestTriggerInitialization();
+    }).detach();
 }
 
 void Init_Thread()
@@ -1114,17 +1144,9 @@ void Init_Thread()
     Patches.NoCrouch = MemoryPatch::createWithHex("libunity.so",0x54A83A4,"00 00 80 D2 C0 03 5F D6");
     Patches.NoWingsuit = MemoryPatch::createWithHex("libunity.so",0x557C6E0,"00 00 80 D2 C0 03 5F D6");
     
-    DobbyHook((void *)getAbsoluteAddress("libunity.so", 0xD5319D4), (void *)&WeaponFireComponent_Instant_CreateBulletLine, (void **)&oWeaponFireComponent_Instant_CreateBulletLine);
-    DobbyHook((void *)getAbsoluteAddress("libunity.so", 0xD53DA64), (void *)&WeaponFireComponent_Instant_CreateBulletProjectile, (void **)&oWeaponFireComponent_Instant_CreateBulletProjectile);
-    InstallBRClassEspConfigHook();
-
     if(!g_AuthOriginalTouchCount && DobbyHook(reinterpret_cast<void*>(Class_Input_get_touchCount),
         reinterpret_cast<void*>(&AuthTouchCount),reinterpret_cast<void**>(&g_AuthOriginalTouchCount))!=0)
         LOGE("Authentication touch guard could not be installed");
-    InitializeAllHooks();
-    Init_Thread2();
-    BlueprintEquipment::Install();
-            RequestTriggerInitialization();
 MemoryPatch::createWithHex("libanogs.so", 0x202680, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x204218, "00 00 80 D2 C0 03 5F D6").Modify();
 MemoryPatch::createWithHex("libanogs.so", 0x35140C, "00 00 80 D2 C0 03 5F D6").Modify();
@@ -1154,6 +1176,7 @@ void native_Init(JNIEnv *env, jclass clazz, jobject mContext) {
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
 {
+    if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK) return JNI_ERR;
     jvm = vm;
     VM = vm;
     ZEL_SetVM(vm);

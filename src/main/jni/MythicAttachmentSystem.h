@@ -1,3 +1,4 @@
+#include "Security/Access.h"
 ///-- offset updator
 ///--@Npc00000000000000000000000000000
 ///--date 2026-11-06
@@ -1162,29 +1163,29 @@ inline bool InstallMythicAttachmentRuntimeFresh(uintptr_t unityBase) {
     // Runtime-mutating hooks are intentionally deferred until SkinHax is opened.
     // This keeps the logo/login critical path capture-only while still preserving
     // the constructors needed to build the skin/attachment database immediately.
-    hookRva(AttachmentGroupNewCtorAddress, (void*)hook_AttachmentGroupNew_Ctor,
+    hookRva(AttachmentGroupNewCtorAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachmentGroupNew_Ctor,&orig_AttachmentGroupNew_Ctor>::Invoke),
             (void**)&orig_AttachmentGroupNew_Ctor);
-    hookRva(AttachmentGroupNewItemCtorAddress, (void*)hook_AttachmentGroupNew_ItemCtor,
+    hookRva(AttachmentGroupNewItemCtorAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachmentGroupNew_ItemCtor,&orig_AttachmentGroupNew_ItemCtor>::Invoke),
             (void**)&orig_AttachmentGroupNew_ItemCtor);
-    hookRva(AttachmentGroupNewGetColorIdAddress, (void*)hook_AttachmentGroupNew_GetColorId,
+    hookRva(AttachmentGroupNewGetColorIdAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachmentGroupNew_GetColorId,&orig_AttachmentGroupNew_GetColorId>::Invoke),
             (void**)&orig_AttachmentGroupNew_GetColorId);
-    hookRva(BRWeaponAttachItemDataCtorAddress, (void*)hook_BRWeaponAttachItemData_Ctor,
+    hookRva(BRWeaponAttachItemDataCtorAddress, reinterpret_cast<void*>(&license::Guard<hook_BRWeaponAttachItemData_Ctor,&orig_BRWeaponAttachItemData_Ctor>::Invoke),
             (void**)&orig_BRWeaponAttachItemData_Ctor);
-    hookRva(AttachItemCtorAddress, (void*)hook_AttachItem_Ctor,
+    hookRva(AttachItemCtorAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachItem_Ctor,&orig_AttachItem_Ctor>::Invoke),
             (void**)&orig_AttachItem_Ctor);
-    hookRva(AttachItemSetDataAddress, (void*)hook_AttachItem_SetData,
+    hookRva(AttachItemSetDataAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachItem_SetData,&orig_AttachItem_SetData>::Invoke),
             (void**)&orig_AttachItem_SetData);
-    hookRva(AttachItemSetMythicSkinIdAddress, (void*)hook_AttachItem_SetMythicSkinID,
+    hookRva(AttachItemSetMythicSkinIdAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachItem_SetMythicSkinID,&orig_AttachItem_SetMythicSkinID>::Invoke),
             (void**)&orig_AttachItem_SetMythicSkinID);
-    hookRva(AttachItemCopyEquippedAddress, (void*)hook_AttachItem_CopyEquipped,
+    hookRva(AttachItemCopyEquippedAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachItem_CopyEquipped,&orig_AttachItem_CopyEquipped>::Invoke),
             (void**)&orig_AttachItem_CopyEquipped);
-    hookRva(AttachItemGetModelAttachIdAddress, (void*)hook_AttachItem_GetModelAttachId,
+    hookRva(AttachItemGetModelAttachIdAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachItem_GetModelAttachId,&orig_AttachItem_GetModelAttachId>::Invoke),
             (void**)&orig_AttachItem_GetModelAttachId);
-    hookRva(AttachSkinDataCtorAddress, (void*)hook_AttachSkinData_Ctor,
+    hookRva(AttachSkinDataCtorAddress, reinterpret_cast<void*>(&license::Guard<hook_AttachSkinData_Ctor,&orig_AttachSkinData_Ctor>::Invoke),
             (void**)&orig_AttachSkinData_Ctor);
-    hookRva(LoadoutAttachItemSetDataAddress, (void*)hook_LoadoutAttachItem_SetData,
+    hookRva(LoadoutAttachItemSetDataAddress, reinterpret_cast<void*>(&license::Guard<hook_LoadoutAttachItem_SetData,&orig_LoadoutAttachItem_SetData>::Invoke),
             (void**)&orig_LoadoutAttachItem_SetData);
-    hookRva(WeaponInitPartAddress, (void*)hook_Weapon_InitPart,
+    hookRva(WeaponInitPartAddress, reinterpret_cast<void*>(&license::Guard<hook_Weapon_InitPart,&orig_Weapon_InitPart>::Invoke),
             (void**)&orig_Weapon_InitPart);
 
     mythicRuntimeInstalled.store(true, std::memory_order_release);

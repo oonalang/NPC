@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <mutex>
+#include "../../Security/Access.h"
 
 namespace frame_rate {
 struct Options {
@@ -67,8 +68,8 @@ namespace frame_rate {
 inline DeviceState device;
 inline std::mutex deviceMutex;
 inline thread_local bool configuring=false;
-inline Options Current() {return available.load()?Read():Options{};}
-inline void Apply(void* instance) {if(configuring||!available.load()) return;std::lock_guard<std::mutex> lock(deviceMutex);device.Apply(instance,Read());}
+inline Options Current() {return available.load()&&license::Allows(license::Capability::Features)?Read():Options{};}
+inline void Apply(void* instance) {if(configuring||!available.load()) return;std::lock_guard<std::mutex> lock(deviceMutex);device.Apply(instance,Current());}
 inline int (*originalSupported)(void*,int,const void*)=nullptr;
 inline int (*originalDevice)(void*,const void*)=nullptr;
 inline int (*originalMaximum)(void*,int,const void*)=nullptr;
@@ -84,7 +85,7 @@ inline void Info(void* instance,bool enabled,int mp,int br,int quality,bool cust
     const bool nested=configuring;configuring=true;
     if(originalInfo) originalInfo(instance,enabled,mp,br,quality,customized,info);
     configuring=nested;
-    if(!nested&&available.load()) {std::lock_guard<std::mutex> lock(deviceMutex);device.Reset(instance);device.Apply(instance,Read());}
+    if(!nested&&available.load()) {std::lock_guard<std::mutex> lock(deviceMutex);device.Reset(instance);device.Apply(instance,Current());}
 }
 inline bool Executable(std::uintptr_t address,std::size_t size) {
     struct Query {std::uintptr_t address;std::size_t size;bool found=false;} query{address,size};

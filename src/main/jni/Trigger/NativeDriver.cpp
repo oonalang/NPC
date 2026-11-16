@@ -1,4 +1,5 @@
 #include "NativeDriver.h"
+#include "../Security/Access.h"
 #include "NativeCancellation.h"
 #include "NativeProfile.h"
 #include "NativeReadiness.h"
@@ -176,6 +177,12 @@ void Buttons(void* unit, void* param, Metadata metadata) {
     local.manualActive = PhysicalFire(reinterpret_cast<std::uintptr_t>(param));
 }
 
+Settings AuthorizedSettings() noexcept {
+    auto settings = GetSettings();
+    settings.enabled = settings.enabled && license::Allows(license::Capability::Features);
+    return settings;
+}
+
 void DecidePreparedInput(void* owner, void* param) {
     if (installation.load(std::memory_order_acquire) != 2 ||
         !local.scope || local.depth != 1 || local.seen || !local.buttonsSampled ||
@@ -183,7 +190,7 @@ void DecidePreparedInput(void* owner, void* param) {
         !param || param != local.sampledParam) return;
     const auto controller = local.scope;
     local.seen = true;
-    const auto settings = GetSettings();
+    const auto settings = AuthorizedSettings();
     if (!settings.enabled && !local.controller.HasOwnedInput() &&
         !local.controller.HasPendingShot() &&
         !local.cancellation.HasPendingCleanup()) {
@@ -220,7 +227,7 @@ void DecidePreparedInput(void* owner, void* param) {
             stopped.updateId = local.update;
             stopped.contextValid = false;
             stopped.manualActive = local.manualActive;
-            const auto revoke = local.controller.Step(GetSettings(),stopped);
+            const auto revoke = local.controller.Step(AuthorizedSettings(),stopped);
 
 
             local.stopAfterUpdate = !revoke.passthrough && revoke.up;

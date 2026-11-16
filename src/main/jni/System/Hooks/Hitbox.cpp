@@ -1,4 +1,5 @@
 #include "Hitbox.h"
+#include "../../Security/Access.h"
 #include "HitboxProfile.h"
 #include "../../Trigger/NativeProfile.h"
 #include <mutex>
@@ -37,7 +38,7 @@ bool Weapon(WeaponTrace original, void* instance, int type, void* target, void* 
     if (!original) return false;
     const auto invoke = [&] { return original(instance, type, target, collider, start, direction, impact, info); };
     const auto options = Read();
-    if (currentTrace || !available.load(std::memory_order_acquire) || !options.enabled ||
+    if (!license::Allows(license::Capability::Features) || currentTrace || !available.load(std::memory_order_acquire) || !options.enabled ||
         options.scale <= 1.f || !instance || !target || !impact || type != 1 || !Enemy(instance, target))
         return invoke();
     TraceContext context;

@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include "FrameRate.h"
+#include "../../Security/Access.h"
+#define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
 #include "SlideFatigue.h"
 #include "Hitbox.h"
 #include "SessionProtection.h"
@@ -56,7 +58,7 @@ inline void SmartReloadRequestChangeClip(Pawn *local)
 
 inline void SmartReloadMarkShotFired()
 {
-    if (!Config.ExtraMenu.SmartReload)
+    if (!license::Allows(license::Capability::Features) || !Config.ExtraMenu.SmartReload)
         return;
 
     Pawn *local = GamePlay::get_LocalPawn();
@@ -68,7 +70,7 @@ inline void SmartReloadMarkShotFired()
 
 inline bool SmartReloadCanRequestForPawn(Pawn *local)
 {
-    if (!Config.ExtraMenu.SmartReload || !g_SmartReloadPending)
+    if (!license::Allows(license::Capability::Features) || !Config.ExtraMenu.SmartReload || !g_SmartReloadPending)
         return false;
 
     if (!Tools::IsPtrValid(local) || !local->m_IsAlive()) {
@@ -136,7 +138,7 @@ inline void hook_SetGrassLODBias(float lodBias, float midLodBias, bool showGrass
 inline void ApplyWorldVisualsRuntime()
 {
     static bool lastClearTerrain = false;
-    if (Config.ExtraMenu.ClearTerrain) {
+    if (license::Allows(license::Capability::Features) && Config.ExtraMenu.ClearTerrain) {
         if (orig_SetGrassShowState)
             orig_SetGrassShowState(false);
         if (orig_SetGrassLODBias)
@@ -147,7 +149,7 @@ inline void ApplyWorldVisualsRuntime()
         if (orig_SetGrassLODBias)
             orig_SetGrassLODBias(1.0f, 1.0f, true);
     }
-    lastClearTerrain = Config.ExtraMenu.ClearTerrain;
+    lastClearTerrain = license::Allows(license::Capability::Features) && Config.ExtraMenu.ClearTerrain;
 }
 
 //-- Aim Assist
@@ -355,7 +357,8 @@ float GetAccDistance(void *instance) {
 }
 
 //-- Skip Tutorial
-inline bool IsTutorialEnabled() {
+inline bool (*orig_IsTutorialEnabled)(void*, const void*) = nullptr;
+inline bool IsTutorialEnabled(void*, const void*) {
     return false;
 }
 
@@ -548,7 +551,7 @@ inline bool AutoJumpFireJumpingActive(Pawn *instance)
 
 inline void TryAutoJumpFire(Pawn *instance, bool force)
 {
-    if (!Config.ExtraMenu.AutoJumpFire || !Tools::IsPtrValid(instance) || !instance->m_IsAlive())
+    if (!license::Allows(license::Capability::Features) || !Config.ExtraMenu.AutoJumpFire || !Tools::IsPtrValid(instance) || !instance->m_IsAlive())
         return;
 
     Pawn *local = GamePlay::get_LocalPawn();
@@ -573,7 +576,7 @@ inline void TryAutoJumpFire(Pawn *instance, bool force)
 inline void ApplyAutoJumpFireRuntime()
 {
     Pawn *local = GamePlay::get_LocalPawn();
-    if (!Config.ExtraMenu.AutoJumpFire || !Tools::IsPtrValid(local) || !local->m_IsAlive()) {
+    if (!license::Allows(license::Capability::Features) || !Config.ExtraMenu.AutoJumpFire || !Tools::IsPtrValid(local) || !local->m_IsAlive()) {
         g_AutoJumpFireWaitingLand = false;
         g_AutoJumpFireSawJumpActive = false;
         return;
@@ -959,16 +962,12 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
-    slide_fatigue::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
-    frame_rate::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
-    hitbox::Install(getAbsoluteAddress("libunity.so",0),[](void* address,void* replacement,void** original){hook(address,replacement,original);});
-    session_protection::Install(getAbsoluteAddress("libunity.so",0),DobbyHook);
 
             //--MP VIEW
-    HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);
+    LICENSE_HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);
     
    //-- Auto Jump Fire
-   HOOK_LIB("libunity.so", "0x5439550", hook_Pawn_StartFire, orig_Pawn_StartFire);
+   LICENSE_HOOK_LIB("libunity.so", "0x5439550", hook_Pawn_StartFire, orig_Pawn_StartFire);
 
     
    //-- Fast Armor
@@ -976,27 +975,27 @@ inline void InitializeAllHooks() {
     //HOOK_LIB("libunity.so", "0x6D9B670", hook_BRUseItemArmorPlate_Tick, orig_BRUseItemArmorPlate_Tick);
 
    //-- Unlimited Fly
-    HOOK_LIB("libunity.so", "0x5AB9BA0", hook_CheckForwardValid, orig_CheckForwardValid);
-   HOOK_LIB("libunity.so", "0x5AB6D70", hook_UpdateVelocityGravity, orig_UpdateVelocityGravity);
-    HOOK_LIB("libunity.so", "0x5AB9EF4", hook_Move, orig_Move);
+    LICENSE_HOOK_LIB("libunity.so", "0x5AB9BA0", hook_CheckForwardValid, orig_CheckForwardValid);
+   LICENSE_HOOK_LIB("libunity.so", "0x5AB6D70", hook_UpdateVelocityGravity, orig_UpdateVelocityGravity);
+    LICENSE_HOOK_LIB("libunity.so", "0x5AB9EF4", hook_Move, orig_Move);
 
     //-- Smart Reload
-    HOOK_LIB("libunity.so", "0x5439674", hook_Pawn_StopFire, orig_Pawn_StopFire);
+    LICENSE_HOOK_LIB("libunity.so", "0x5439674", hook_Pawn_StopFire, orig_Pawn_StopFire);
 
 
     //-- Aim Assist
-    HOOK_LIB("libunity.so", "0x66BD7F0", GetAssitAimSpeed, orig_GetAssitAimSpeed);
+    LICENSE_HOOK_LIB("libunity.so", "0x66BD7F0", GetAssitAimSpeed, orig_GetAssitAimSpeed);
 
     //-- Anti Flashbang
-    HOOK_LIB("libunity.so", "0x53BC2E8", hook_OnFlashBangExplode, orig_OnFlashBangExplode);
+    LICENSE_HOOK_LIB("libunity.so", "0x53BC2E8", hook_OnFlashBangExplode, orig_OnFlashBangExplode);
     
     //-- Firerate Speed
-    HOOK_LIB("libunity.so", "0x54AC7A0", get_FireBoltTime, orig_get_FireBoltTime);
-    HOOK_LIB("libunity.so", "0x548DF60", get_FireInterval, orig_get_FireInterval);
-    HOOK_LIB("libunity.so", "0x54C9924", get_DelaySprintFire, orig_get_DelaySprintFire);
+    LICENSE_HOOK_LIB("libunity.so", "0x54AC7A0", get_FireBoltTime, orig_get_FireBoltTime);
+    LICENSE_HOOK_LIB("libunity.so", "0x548DF60", get_FireInterval, orig_get_FireInterval);
+    LICENSE_HOOK_LIB("libunity.so", "0x54C9924", get_DelaySprintFire, orig_get_DelaySprintFire);
 
     //-- High Jump
-    HOOK_LIB("libunity.so", "0x53F7E7C", hook_GetMaxJumpHeight, orig_GetMaxJumpHeight);
+    LICENSE_HOOK_LIB("libunity.so", "0x53F7E7C", hook_GetMaxJumpHeight, orig_GetMaxJumpHeight);
 
 /*
     //-- Long Slide
@@ -1010,49 +1009,49 @@ inline void InitializeAllHooks() {
     // HOOK_LIB("libunity.so", "0xC2B7A30", get_AddHotTime, orig_get_AddHotTime);
 
     //-- No Parachute
-    HOOK_LIB("libunity.so", "0x89A3BB0", OpenParachute, orig_OpenParachute);
+    LICENSE_HOOK_LIB("libunity.so", "0x89A3BB0", OpenParachute, orig_OpenParachute);
 
     //-- Quick Reload
-    HOOK_LIB("libunity.so", "0x54752F8", get_ChangeClipTime, orig_get_ChangeClipTime);
+    LICENSE_HOOK_LIB("libunity.so", "0x54752F8", get_ChangeClipTime, orig_get_ChangeClipTime);
 
     //-- Quick Scope
-    HOOK_LIB("libunity.so", "0x5474160", get_AimingTime, orig_get_AimingTime);
+    LICENSE_HOOK_LIB("libunity.so", "0x5474160", get_AimingTime, orig_get_AimingTime);
 
     //-- Quick Switch
-    HOOK_LIB("libunity.so", "0x54760F0", get_EquipTime, orig_get_EquipTime);
+    LICENSE_HOOK_LIB("libunity.so", "0x54760F0", get_EquipTime, orig_get_EquipTime);
 
     //-- Red Wallhack
-    HOOK_LIB("libunity.so", "0xA0B6018", get_IsInEM3Eye, orig_IsInEM3Eye); 
-    HOOK_LIB("libunity.so", "0xB1A2814", GetAccDistance, orig_GetAccDistance);
+    LICENSE_HOOK_LIB("libunity.so", "0xA0B6018", get_IsInEM3Eye, orig_IsInEM3Eye);
+    LICENSE_HOOK_LIB("libunity.so", "0xB1A2814", GetAccDistance, orig_GetAccDistance);
 
     //-- Skip Tutorial
-    HOOK_LIB_NO_ORIG("libunity.so", "0xCCC3240", IsTutorialEnabled);
+    LICENSE_HOOK_LIB("libunity.so", "0xCCC3240", IsTutorialEnabled, orig_IsTutorialEnabled);
     
     //-- Sky Diving Speed
-    HOOK_LIB("libunity.so", "0x5AB2784", get_AccelerationForwardSpeedUp, orig_get_AccelerationForwardSpeedUp);
-    HOOK_LIB("libunity.so", "0x5AB27E8", get_MaxVelocityForwardSpeedUp, orig_get_MaxVelocityForwardSpeedUp);
+    LICENSE_HOOK_LIB("libunity.so", "0x5AB2784", get_AccelerationForwardSpeedUp, orig_get_AccelerationForwardSpeedUp);
+    LICENSE_HOOK_LIB("libunity.so", "0x5AB27E8", get_MaxVelocityForwardSpeedUp, orig_get_MaxVelocityForwardSpeedUp);
 
     //-- Snowboard Boost
-    HOOK_LIB("libunity.so", "0x53FE7FC", hooked_get_m_PhysSkisMaxSpeed, get_m_PhysSkisMaxSpeed);
+    LICENSE_HOOK_LIB("libunity.so", "0x53FE7FC", hooked_get_m_PhysSkisMaxSpeed, get_m_PhysSkisMaxSpeed);
 
     //-- Speed Hack
-    HOOK_LIB("libunity.so", "0x53A5280", hooked_CalcFinalMoveScale, original_CalcFinalMoveScale);
+    LICENSE_HOOK_LIB("libunity.so", "0x53A5280", hooked_CalcFinalMoveScale, original_CalcFinalMoveScale);
 
     //-- Weapon Kinetic
-    HOOK_LIB("libunity.so", "0x5385AC8", get_IsKineticArmor, orig_get_IsKineticArmor);
+    LICENSE_HOOK_LIB("libunity.so", "0x5385AC8", get_IsKineticArmor, orig_get_IsKineticArmor);
 
     //-- Zero Recoil
-    HOOK_LIB("libunity.so", "0xD535A6C", GetScaleRecoil, orig_GetScaleRecoil);
+    LICENSE_HOOK_LIB("libunity.so", "0xD535A6C", GetScaleRecoil, orig_GetScaleRecoil);
 
     //-- Zero Spread
-    HOOK_LIB("libunity.so", "0xD5339F8", MinInaccuracy, orig_MinInaccuracy);
-    HOOK_LIB("libunity.so", "0xC2C6060", MaxInaccuracy, orig_MaxInaccuracy);
-    HOOK_LIB("libunity.so", "0xD541D2C", DisperseBase, orig_DisperseBase);
+    LICENSE_HOOK_LIB("libunity.so", "0xD5339F8", MinInaccuracy, orig_MinInaccuracy);
+    LICENSE_HOOK_LIB("libunity.so", "0xC2C6060", MaxInaccuracy, orig_MaxInaccuracy);
+    LICENSE_HOOK_LIB("libunity.so", "0xD541D2C", DisperseBase, orig_DisperseBase);
     
     //-- Spectate
-    HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);
-    HOOK_LIB("libunity.so", "0x5366558", h_NeedDelayProcess, o_NeedDelayProcess);
-    HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);  
+    LICENSE_HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);
+    LICENSE_HOOK_LIB("libunity.so", "0x5366558", h_NeedDelayProcess, o_NeedDelayProcess);
+    LICENSE_HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);
 
 /*
     //-- Unlimited Bullets
@@ -1106,7 +1105,9 @@ inline void InitializeAllHooks() {
   DobbyHook((void *) getAbsoluteAddress("libunity.so", 0xC0B4584), (void *)  &InputSettingConfig_Instant_GetMainCameraFov_3p, (void **) &oInputSettingConfig_Instant_GetMainCameraFov_3p); 
 
     //-- Unlock Blueprints
-    HOOK_LIB("libunity.so", "0x97CC1D0", IsUnlocked, orig_IsUnlocked);
+    LICENSE_HOOK_LIB("libunity.so", "0x97CC1D0", IsUnlocked, orig_IsUnlocked);
     
-    HOOK_LIB("libunity.so", "0x9829E28", IsWeaponAttachmentUnlock, orig_IsWeaponAttachmentUnlock);
+    LICENSE_HOOK_LIB("libunity.so", "0x9829E28", IsWeaponAttachmentUnlock, orig_IsWeaponAttachmentUnlock);
 }
+
+#undef LICENSE_HOOK_LIB

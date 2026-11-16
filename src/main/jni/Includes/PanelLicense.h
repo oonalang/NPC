@@ -2,6 +2,7 @@
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include "../Security/LicenseRoot.h"
 
 #include <cstdint>
 #include <limits>
@@ -9,18 +10,6 @@
 #include <vector>
 
 namespace PanelLicense {
-
-// Public verification key corresponding to the supplied panel's signing key.
-constexpr char kPublicKey[] =
-    "-----BEGIN PUBLIC KEY-----\n"
-    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxhAQ9NVfZYbVQ+5YW6CI\n"
-    "Tmh/z8bDlzFmZOTrSD9gLUEwT2C8e7N9plBGUiZj156BAS+ESSoXIf/qoj/TKvmg\n"
-    "x3YhgvRwi2Rnq6zlbTuZBvbwuuMV3gTw0SvmZKZGpdlcnPW1OABhedjDjQMhY4CD\n"
-    "RROwqfjoVGbdjv0L6tQ2XSh1CwQwdJ4XgwSHTOUOw551X3cr9zVoOEfvn0/YGxF/\n"
-    "ygjTwUbIcE3gblQbZ5kHcouzYysWjnUbIwi3NirC1O8cEWi4nhaNxMFp2BqiiiO1\n"
-    "OsPPUUInoYTjyTwZg9N9+/Jqrg/+yodcrhj6irALEoBsAJ0iupPGpRtZKg+ypn+l\n"
-    "KwIDAQAB\n"
-    "-----END PUBLIC KEY-----\n";
 
 enum class Verification {
     Valid, InvalidInput, InvalidPayload, Expired, InvalidSignature, CryptoFailure
@@ -68,6 +57,26 @@ inline bool DecodeSignature(const std::string& value, std::vector<unsigned char>
            value.compare(0, value.size(), reinterpret_cast<const char*>(canonical.data()),
                          static_cast<std::size_t>(written)) == 0;
 }
+inline Verification VerifySignature(const std::string& payload, const std::string& signatureBase64,
+                                    const char* publicKey) {
+    std::vector<unsigned char> signature;
+    if (!detail::DecodeSignature(signatureBase64, signature)) return Verification::InvalidSignature;
+    BIO* bio = BIO_new_mem_buf(publicKey, -1);
+    if (!bio) return Verification::CryptoFailure;
+    EVP_PKEY* key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+    BIO_free(bio);
+    if (!key) return Verification::CryptoFailure;
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) { EVP_PKEY_free(key); return Verification::CryptoFailure; }
+    const int initialized = EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, key);
+    const int updated = initialized == 1 ? EVP_DigestVerifyUpdate(ctx, payload.data(), payload.size()) : 0;
+    const int verified = updated == 1 ? EVP_DigestVerifyFinal(ctx, signature.data(), signature.size()) : 0;
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(key);
+    if (initialized != 1 || updated != 1) return Verification::CryptoFailure;
+    return verified == 1 ? Verification::Valid : Verification::InvalidSignature;
+}
+
 }
 
 // A valid signature authenticates the exact expected key, device, expiry and build.
@@ -100,21 +109,6 @@ inline Verification Verify(const std::string& payload, const std::string& signat
         return Verification::InvalidPayload;
     if (expires <= now) return Verification::Expired;
 
-    std::vector<unsigned char> signature;
-    if (!detail::DecodeSignature(signatureBase64, signature)) return Verification::InvalidSignature;
-    BIO* bio = BIO_new_mem_buf(publicKey, -1);
-    if (!bio) return Verification::CryptoFailure;
-    EVP_PKEY* key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
-    BIO_free(bio);
-    if (!key) return Verification::CryptoFailure;
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    if (!ctx) { EVP_PKEY_free(key); return Verification::CryptoFailure; }
-    const int initialized = EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, key);
-    const int updated = initialized == 1 ? EVP_DigestVerifyUpdate(ctx, payload.data(), payload.size()) : 0;
-    const int verified = updated == 1 ? EVP_DigestVerifyFinal(ctx, signature.data(), signature.size()) : 0;
-    EVP_MD_CTX_free(ctx);
-    EVP_PKEY_free(key);
-    if (initialized != 1 || updated != 1) return Verification::CryptoFailure;
-    return verified == 1 ? Verification::Valid : Verification::InvalidSignature;
+    return detail::VerifySignature(payload, signatureBase64, publicKey);
 }
 }

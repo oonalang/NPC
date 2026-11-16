@@ -9,8 +9,11 @@
 #include <vector>
 #include <chrono>
 #include "BlueprintTierFilter.h"
+#include "Security/Access.h"
 
 namespace BlueprintEquipment {
+
+inline bool Enabled() {return license::Allows(license::Capability::Features) && Config.ExtraMenu.Blueprints;}
 
 struct EquippedBlueprint {
     uint32_t blueprintId;
@@ -118,7 +121,7 @@ inline bool SelectBlueprint(void* controller, uint32_t& blueprintId, int& diyInd
 }
 
 inline bool QueueSelected(void* controller) {
-    if (!Config.ExtraMenu.Blueprints) return false;
+    if (!Enabled()) return false;
     uint32_t id = 0;
     int diy = -1;
     if (!SelectBlueprint(controller, id, diy) || !CatalogContains(id) || !loadskinhack) return false;
@@ -155,7 +158,7 @@ inline bool OnItemClick(void* controller, void* list, void* item,
 
 inline bool IsEquipped(void* controller, uint32_t baseId, uint32_t blueprintId,
                        int diyIndex, void* method) {
-    if (Config.ExtraMenu.Blueprints && BlueprintTierFilter::Allows(blueprintId)) {
+    if (Enabled() && BlueprintTierFilter::Allows(blueprintId)) {
         std::lock_guard<std::mutex> lock(equippedMutex);
         const auto found = equipped.find(baseId);
         if (found != equipped.end())
@@ -168,7 +171,7 @@ inline bool IsEquipped(void* controller, uint32_t baseId, uint32_t blueprintId,
 }
 
 inline bool IsInfoEquipped(void* info, bool& result) {
-    if (!Config.ExtraMenu.Blueprints || !info || !Tools::IsPtrValid(info)) return false;
+    if (!Enabled() || !info || !Tools::IsPtrValid(info)) return false;
     uint32_t baseId = 0;
     uint32_t blueprintId = 0;
     int diyIndex = -1;
@@ -206,7 +209,7 @@ inline bool IsQuickItemEquipped(void* view, void* info, void* method) {
 }
 
 inline void ApplyPending() {
-    if (!Config.ExtraMenu.Blueprints) return;
+    if (!Enabled()) return;
     RefreshTierCatalog();
     if (!loadskinhack) return;
     const uint32_t blueprintId = pendingId.exchange(0, std::memory_order_acq_rel);

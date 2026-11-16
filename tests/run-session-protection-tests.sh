@@ -10,7 +10,8 @@ ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary"
 "${CXX:-c++}" -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
     -D__ANDROID__ -D__aarch64__ "$project_dir/tests/session_protection_native_test.cpp" \
     "$project_dir/src/main/jni/System/Hooks/SessionProtection.cpp" \
+    "$project_dir/tests/license_gate_stub.cpp" \
     "$project_dir/src/main/jni/Trigger/NativeProfile.cpp" -lpthread -o "$test_binary"
-for mode in normal --stock-on --cold --mismatch --throw --build --prefix --partial; do
+for mode in normal --license-expired --stock-on --cold --mismatch --throw --build --prefix --partial; do
     ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary" "$mode"
 done

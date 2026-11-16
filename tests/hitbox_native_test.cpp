@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <vector>
+#include "license_gate_stub.h"
 
 using namespace hitbox;
 
@@ -144,6 +145,7 @@ void ScopeGating() {
     const auto stock=[&] {assert(!f.Shot() && f.weaponCalls==1 && f.mathCalls==1 && Near(f.scales[0],1.f));};
     Publish(false,1.21f);stock();Publish(true,1.f);stock();Publish(true,1.21f);
     available=false;stock();available=true;
+    license_test::allowed=false;stock();license_test::allowed=true;
     Put(f.fire,0x28,f.other.data());stock();Put(f.fire,0x28,f.local.data());
     Put(f.local,0x550,std::uint8_t{0});stock();Put(f.local,0x550,std::uint8_t{1});
     Put(f.target,0x550,std::uint8_t{0});stock();Put(f.target,0x550,std::uint8_t{1});

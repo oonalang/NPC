@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../AstralPrtctn/json.hpp"
-#include "AntiChangePanel.h"
+#include "../Security/LicenseRuntime.h"
 #include "PanelLicense.h"
 #include <limits>
 #include <jni.h>
@@ -19,8 +19,6 @@
 
 using json = nlohmann::json;
 extern JavaVM* jvm;
-std::string g_Token, g_Auth;
-bool bValid = false;
 std::string EXP = " ";
 std::string usedKey = " ";
 std::string mod_status = " ";
@@ -380,112 +378,75 @@ inline CURLcode LoadAndroidTrustStore(CURL * /*curl*/, void *sslContext, void * 
     return loaded > 0 ? CURLE_OK : CURLE_SSL_CACERT;
 }
 
-std::string Login(const char *user_key) {
-    bValid = false;
-    g_Token.clear();
-    g_Auth.clear();
-    EXP.clear();
-    expiryTimestamp = 0;
-    usedKey.clear();
-    if (!user_key || !*user_key) return "Enter a license key";
-    // Match PHP's default trim() for pasted license keys before computing the
-    // serial, constructing the request and verifying the signed claims.
-    const std::string input(user_key);
-    const char *trimCharacters = " \t\n\r\v";
-    const auto first = input.find_first_not_of(trimCharacters);
-    if (first == std::string::npos) return "Enter a license key";
-    const auto last = input.find_last_not_of(trimCharacters);
-    const std::string key = input.substr(first, last - first + 1);
-    std::string serial;
-    if (!BuildLicenseSerial(key.c_str(), serial)) return "Unable to identify this device";
-
+static license::Response FetchLicense(const license::Request& request) {
+    license::Response response;
     MemoryStruct chunk{};
-    chunk.memory = static_cast<char *>(malloc(1));
-    if (!chunk.memory) return "Out of memory";
-    chunk.memory[0] = '\0';
-    CURL *curl = curl_easy_init();
-    if (!curl) { free(chunk.memory); return "Unable to initialize connection"; }
-    curl_slist *headers = curl_slist_append(nullptr, "Content-Type: application/x-www-form-urlencoded");
-    char *encodedKey = curl_easy_escape(curl, key.c_str(), 0);
-    char *encodedSerial = curl_easy_escape(curl, serial.c_str(), 0);
-    if (!encodedKey || !encodedSerial || !headers) {
-        if (encodedKey) curl_free(encodedKey);
-        if (encodedSerial) curl_free(encodedSerial);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-        free(chunk.memory);
-        return "Unable to prepare license request";
+    chunk.memory=static_cast<char*>(malloc(1));
+    if(!chunk.memory) {response.error="Out of memory";return response;}
+    chunk.memory[0]='\0';
+    CURL* curl=curl_easy_init();
+    if(!curl) {free(chunk.memory);response.error="Unable to initialize connection";return response;}
+    curl_slist* headers=curl_slist_append(nullptr,"Content-Type: application/x-www-form-urlencoded");
+    char* key=curl_easy_escape(curl,request.key.c_str(),0);
+    char* serial=curl_easy_escape(curl,request.serial.c_str(),0);
+    if(!headers||!key||!serial) {
+        if(key) curl_free(key);
+        if(serial) curl_free(serial);
+        curl_slist_free_all(headers);curl_easy_cleanup(curl);free(chunk.memory);
+        response.error="Unable to prepare license request";return response;
     }
-    const std::string data = std::string("game=CODMGR&user_key=") + encodedKey + "&serial=" + encodedSerial;
-    curl_free(encodedKey);
-    curl_free(encodedSerial);
-    const std::string apiUrl = "https://ethnir.x10.mx/connect.php";
-    curl_easy_setopt(curl, CURLOPT_URL, apiUrl.c_str());
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str());
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(data.size()));
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &chunk);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    // The bundled OpenSSL ships without roots and Android has no /etc/ssl/certs,
-    // so without this a valid key still fails with a connection error.
-    curl_easy_setopt(curl, CURLOPT_SSL_CTX_FUNCTION, LoadAndroidTrustStore);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 25L);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
-    const CURLcode result = curl_easy_perform(curl);
-    long statusCode = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
-    std::string error;
-    if (result != CURLE_OK) {
-        error = std::string("License connection failed: ") + curl_easy_strerror(result);
-    } else if (statusCode != 200) {
-        error = "License server returned HTTP " + std::to_string(statusCode);
+    const std::string body=std::string("protocol=2&game=CODMGR&build=")+license::build+
+        "&user_key="+key+"&serial="+serial+"&nonce="+request.nonce;
+    curl_free(key);curl_free(serial);
+    curl_easy_setopt(curl,CURLOPT_URL,"https://ethnir.x10.mx/connect.php");
+    curl_easy_setopt(curl,CURLOPT_PROTOCOLS,CURLPROTO_HTTPS);
+    curl_easy_setopt(curl,CURLOPT_POST,1L);
+    curl_easy_setopt(curl,CURLOPT_POSTFIELDS,body.c_str());
+    curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,static_cast<long>(body.size()));
+    curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
+    curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,WriteMemoryCallback);
+    curl_easy_setopt(curl,CURLOPT_WRITEDATA,&chunk);
+    curl_easy_setopt(curl,CURLOPT_SSL_VERIFYPEER,1L);
+    curl_easy_setopt(curl,CURLOPT_SSL_VERIFYHOST,2L);
+    curl_easy_setopt(curl,CURLOPT_SSL_CTX_FUNCTION,LoadAndroidTrustStore);
+    curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,10L);
+    curl_easy_setopt(curl,CURLOPT_TIMEOUT,25L);
+    curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);
+    curl_easy_setopt(curl,CURLOPT_FOLLOWLOCATION,0L);
+    const auto result=curl_easy_perform(curl);
+    long status=0;curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
+    if(result!=CURLE_OK||status>=500) {
+        response.failure=license::Failure::Transient;response.error="License connection unavailable";
+    } else if(status!=200) {
+        response.error="License server rejected the request";
     } else {
-        try {
-            const json response = json::parse(chunk.memory, chunk.memory + chunk.size);
-            if (!response.value("status", false)) {
-                error = response.value("reason", std::string("License rejected"));
-            } else {
-                const auto &data = response.at("data");
-                const auto &expiresJson = data.at("expires");
-                if (!expiresJson.is_number_integer() ||
-                    (!expiresJson.is_number_unsigned() && expiresJson.get<std::int64_t>() < 0)) {
-                    error = "Invalid license server response";
-                } else {
-                    const auto expires = expiresJson.get<std::uint64_t>();
-                    const std::time_t current = std::time(nullptr);
-                    const auto verification = current > 0
-                        ? PanelLicense::Verify(data.at("payload").get<std::string>(),
-                            data.at("sig").get<std::string>(), key, serial, expires,
-                            static_cast<std::uint64_t>(current))
-                        : PanelLicense::Verification::InvalidInput;
-                    if (verification == PanelLicense::Verification::Valid &&
-                        expires <= static_cast<std::uint64_t>(std::numeric_limits<time_t>::max())) {
-                        expiryTimestamp = static_cast<time_t>(expires);
-                        std::tm expiration{};
-                        if (gmtime_r(&expiryTimestamp, &expiration)) {
-                            char label[32]{};
-                            if (std::strftime(label, sizeof(label), "%Y-%m-%d %H:%M UTC", &expiration)) EXP = label;
-                        }
-                        usedKey = key;
-                        userType = "PREMIUM PAID";
-                        bValid = true;
-                    } else if (verification == PanelLicense::Verification::Expired) {
-                        error = "License expired";
-                    } else {
-                        error = "License response verification failed";
-                    }
-                }
-            }
-        } catch (const json::exception &) {
-            error = "Invalid license server response";
-        }
+        const auto value=json::parse(chunk.memory,chunk.memory+chunk.size,nullptr,false);
+        if(!value.is_object()||!value.contains("status")||!value["status"].is_boolean()) {
+            response.error="Invalid license response";
+        } else if(!value["status"].get<bool>()) {
+            response.error=value.contains("reason")&&value["reason"].is_string()?value["reason"].get<std::string>():"License rejected";
+            if(response.error.size()>256) response.error="License rejected";
+        } else if(value.contains("data")&&value["data"].is_object()) {
+            const auto& data=value["data"];
+            if(data.contains("payload")&&data["payload"].is_string()&&data.contains("sig")&&data["sig"].is_string()) {
+                response.payload=data["payload"].get<std::string>();response.signature=data["sig"].get<std::string>();
+                response.failure=license::Failure::None;
+            } else response.error="Client and license panel must both support session protocol v2";
+        } else response.error="Invalid license response";
     }
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-    free(chunk.memory);
-    return PanelLicense::OutcomeText(bValid, error);
+    curl_slist_free_all(headers);curl_easy_cleanup(curl);free(chunk.memory);
+    return response;
+}
+
+std::string Login(const char* userKey) {
+    if(!userKey||!*userKey) return "Enter a license key";
+    const std::string input(userKey);
+    const char* whitespace=" \t\n\r\v";
+    const auto first=input.find_first_not_of(whitespace);
+    if(first==std::string::npos) return "Enter a license key";
+    const auto last=input.find_last_not_of(whitespace);
+    const auto key=input.substr(first,last-first+1);
+    std::string serial;
+    if(!BuildLicenseSerial(key.c_str(),serial)) return "Unable to identify this device";
+    return license::Authenticate(key,serial,FetchLicense);
 }

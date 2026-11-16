@@ -1,4 +1,5 @@
 #include "SessionProtection.h"
+#include "../../Security/Access.h"
 #include "SessionProtectionProfile.h"
 #include "../../Trigger/TriggerCompatibility.h"
 #include <chrono>
@@ -28,6 +29,13 @@ std::atomic<bool> attention{false};
 std::atomic<std::uint64_t> appliedRevision{std::numeric_limits<std::uint64_t>::max()};
 thread_local unsigned forwarding = 0, ticking = 0;
 
+Preference NativeOptions() noexcept {
+    auto options = Read();
+    const bool allowed = license::Allows(license::Capability::Features);
+    options.enabled = options.enabled && allowed;
+    options.revision = (options.revision << 1) | (allowed ? 1u : 0u);
+    return options;
+}
 std::uint64_t Now() noexcept {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -83,7 +91,7 @@ void Forbid(void* instance, bool value, Metadata info) {
     if (!originalForbid) return;
     if (!available.load(std::memory_order_acquire) || forwarding) { originalForbid(instance, value, info); return; }
     std::lock_guard<std::recursive_mutex> lock(stateMutex);
-    const auto setting = Read();
+    const auto setting = NativeOptions();
     const bool live = Live();
     if (live) controller.ObserveGameRequest(value);
     const bool effective = setting.enabled && live ? true : value;
@@ -103,11 +111,11 @@ void Tick(void* instance, float deltaTime, Metadata info) {
     if (ticking) { originalTick(instance, deltaTime, info); return; }
     struct Scope { Scope() { ++ticking; } ~Scope() { --ticking; } } scope;
     originalTick(instance, deltaTime, info);
-    const auto preference = Read();
+    const auto preference = NativeOptions();
     if (!available.load(std::memory_order_acquire) ||
         (!preference.enabled && !attention.load() && appliedRevision.load() == preference.revision)) return;
     std::lock_guard<std::recursive_mutex> lock(stateMutex);
-    const auto setting = Read();
+    const auto setting = NativeOptions();
     const auto now = Now();
     const auto connector = Field<std::uintptr_t>(instance, 0x38);
     const Identity identity{reinterpret_cast<std::uintptr_t>(instance), connector, generation};
@@ -123,7 +131,7 @@ void Tick(void* instance, float deltaTime, Metadata info) {
 void Invalidate() noexcept {
     std::lock_guard<std::recursive_mutex> lock(stateMutex);
     ++generation;
-    controller.Disconnected(Read().enabled);
+    controller.Disconnected(NativeOptions().enabled);
     Report();
 }
 void Disconnect(void* instance, Metadata info) {

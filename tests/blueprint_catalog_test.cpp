@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cassert>
+#include "license_gate_stub.h"
 namespace Tools { bool IsPtrValid(void* p) { return p!=nullptr; } }
 bool loadskinhack=false;
 std::mutex g_dataMutex;
@@ -48,6 +49,8 @@ int main() {
     itemData.push_back({"Mythic",{1,5,101,0,0}});
     itemData.push_back({"Legendary",{2,4,102,0,0}});
     loadskinhack=true;
+    license_test::allowed=false;BlueprintEquipment::ApplyPending();assert(applied==0);
+    license_test::allowed=true;
     BlueprintEquipment::ApplyPending();
     assert(applied==101 && BlueprintEquipment::IsEquipped(nullptr,1,101,-1,nullptr));
     BlueprintEquipment::pendingId.store(102);

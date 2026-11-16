@@ -1,3 +1,4 @@
+#include "Security/Access.h"
 ///-- offset updator
 ///--@Npc00000000000000000000000000000
 ///--date 2026-11-06
@@ -1389,10 +1390,10 @@ void Skins_Thread()
     
     sleep(5);
     
-    Tools::Hook((void*)(m_unity + 0x982A098), (void*)_GetCurrentWeaponKillEffect, (void**)&orig_GetCurrentWeaponKillEffect);
-    Tools::Hook((void*)(m_unity + 0x9829ED0), (void*)_GetCurrentWeaponFireEffect, (void**)&orig_GetCurrentWeaponFireEffect);
-    Tools::Hook((void*)(m_unity + 0x9829FB4), (void*)_GetCurrentBulletTrackEffect, (void**)&orig_GetCurrentBulletTrackEffect);
-    Tools::Hook((void*)(m_unity + 0x982A224), (void*)_GetCurrentWeaponBrocast, (void**)&orig_GetCurrentWeaponBrocast);
+    Tools::Hook((void*)(m_unity + 0x982A098), reinterpret_cast<void*>(&license::Guard<_GetCurrentWeaponKillEffect,&orig_GetCurrentWeaponKillEffect>::Invoke), (void**)&orig_GetCurrentWeaponKillEffect);
+    Tools::Hook((void*)(m_unity + 0x9829ED0), reinterpret_cast<void*>(&license::Guard<_GetCurrentWeaponFireEffect,&orig_GetCurrentWeaponFireEffect>::Invoke), (void**)&orig_GetCurrentWeaponFireEffect);
+    Tools::Hook((void*)(m_unity + 0x9829FB4), reinterpret_cast<void*>(&license::Guard<_GetCurrentBulletTrackEffect,&orig_GetCurrentBulletTrackEffect>::Invoke), (void**)&orig_GetCurrentBulletTrackEffect);
+    Tools::Hook((void*)(m_unity + 0x982A224), reinterpret_cast<void*>(&license::Guard<_GetCurrentWeaponBrocast,&orig_GetCurrentWeaponBrocast>::Invoke), (void**)&orig_GetCurrentWeaponBrocast);
 
     // VehicleSkis hooks
     auto hookVehicleRva = [&](uintptr_t rva, void* hook, void** orig) {
@@ -1400,11 +1401,11 @@ void Skins_Thread()
         if (addr != 0 && Tools::IsPtrValid((void*)addr))
             Tools::Hook((void*)addr, hook, orig);
     };
-    hookVehicleRva(VehicleSkisSetupSkinAddress,       (void*)hook_VehicleSkis_SetupSkin,       (void**)&orig_VehicleSkis_SetupSkin);
-    hookVehicleRva(VehicleSkisChangeSkinIdAddress,    (void*)hook_VehicleSkis_ChangeSkinId,    (void**)&orig_VehicleSkis_ChangeSkinId);
-    hookVehicleRva(VehicleSkisChangeSkinConfAddress,  (void*)hook_VehicleSkis_ChangeSkinConf,  (void**)&orig_VehicleSkis_ChangeSkinConf);
-    hookVehicleRva(VehicleSkisBuildVehicleModelAddress,(void*)hook_VehicleSkis_BuildVehicleModel,(void**)&orig_VehicleSkis_BuildVehicleModel);
-    hookVehicleRva(VehicleSkisLoadModelCompleteAddress,(void*)hook_VehicleSkis_LoadModelComplete,(void**)&orig_VehicleSkis_LoadModelComplete);
+    hookVehicleRva(VehicleSkisSetupSkinAddress,       reinterpret_cast<void*>(&license::Guard<hook_VehicleSkis_SetupSkin,&orig_VehicleSkis_SetupSkin>::Invoke), (void**)&orig_VehicleSkis_SetupSkin);
+    hookVehicleRva(VehicleSkisChangeSkinIdAddress,    reinterpret_cast<void*>(&license::Guard<hook_VehicleSkis_ChangeSkinId,&orig_VehicleSkis_ChangeSkinId>::Invoke), (void**)&orig_VehicleSkis_ChangeSkinId);
+    hookVehicleRva(VehicleSkisChangeSkinConfAddress,  reinterpret_cast<void*>(&license::Guard<hook_VehicleSkis_ChangeSkinConf,&orig_VehicleSkis_ChangeSkinConf>::Invoke), (void**)&orig_VehicleSkis_ChangeSkinConf);
+    hookVehicleRva(VehicleSkisBuildVehicleModelAddress,reinterpret_cast<void*>(&license::Guard<hook_VehicleSkis_BuildVehicleModel,&orig_VehicleSkis_BuildVehicleModel>::Invoke), (void**)&orig_VehicleSkis_BuildVehicleModel);
+    hookVehicleRva(VehicleSkisLoadModelCompleteAddress,reinterpret_cast<void*>(&license::Guard<hook_VehicleSkis_LoadModelComplete,&orig_VehicleSkis_LoadModelComplete>::Invoke), (void**)&orig_VehicleSkis_LoadModelComplete);
 
     uintptr_t vehicleSkinHelperIdAddr = KittyMemory::getAbsoluteAddress("libunity.so", VehicleSkinHelperChangeVehicleSkinIdAddress);
     if (vehicleSkinHelperIdAddr != 0 && Tools::IsPtrValid((void*)vehicleSkinHelperIdAddr))

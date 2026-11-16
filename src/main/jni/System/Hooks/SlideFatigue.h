@@ -1,5 +1,6 @@
 #pragma once
 #include "FrameRate.h"
+#include "../../Security/Access.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -36,7 +37,7 @@ inline bool Matches(const unsigned char* entry,std::size_t entrySize,const unsig
 #ifdef __ANDROID__
 inline void (*originalLimit)(void*,const void*)=nullptr;
 inline void Limit(void* instance,const void* info) {
-    if(originalLimit) Invoke(instance,info,available.load()&&enabled.load(),originalLimit);
+    if(originalLimit) Invoke(instance,info,available.load()&&enabled.load()&&license::Allows(license::Capability::Features),originalLimit);
 }
 template<class Hook> inline bool Install(std::uintptr_t base,Hook hook) {
     if(available.load()) return true;
