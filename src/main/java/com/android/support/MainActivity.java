@@ -70,31 +70,35 @@ public class MainActivity extends Activity {
             try {
                 HttpsURLConnection metadata = open(MANIFEST_URL);
                 byte[] bytes;
-                try (InputStream input = metadata.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-                    byte[] buffer = new byte[1024];
-                    int read;
-                    while ((read = input.read(buffer)) != -1) {
-                        if (output.size()+read > VerifiedLibrary.MAX_MANIFEST) throw new IOException("Manifest too large");
-                        output.write(buffer,0,read);
+                try {
+                    try (InputStream input = metadata.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                        byte[] buffer = new byte[1024];
+                        int read;
+                        while ((read = input.read(buffer)) != -1) {
+                            if (output.size()+read > VerifiedLibrary.MAX_MANIFEST) throw new IOException("Manifest too large");
+                            output.write(buffer,0,read);
+                        }
+                        bytes = output.toByteArray();
                     }
-                    bytes = output.toByteArray();
                 } finally { metadata.disconnect(); }
                 manifest = VerifiedLibrary.read(bytes);
                 if (manifest.matches(library)) return true;
                 if (pending.exists() && !pending.delete()) throw new IOException("Cannot prepare download");
                 HttpsURLConnection binary = open(downloadurl);
-                try (InputStream input = binary.getInputStream(); FileOutputStream output = new FileOutputStream(pending)) {
-                    if (!pending.setReadOnly()) throw new IOException("Cannot protect download");
-                    byte[] buffer = new byte[16384];
-                    long count = 0;
-                    int read;
-                    while ((read = input.read(buffer)) != -1) {
-                        count += read;
-                        if (count > manifest.length) throw new IOException("Library too large");
-                        output.write(buffer,0,read);
-                        publishProgress((int)(count*100/manifest.length));
+                try {
+                    try (InputStream input = binary.getInputStream(); FileOutputStream output = new FileOutputStream(pending)) {
+                        if (!pending.setReadOnly()) throw new IOException("Cannot protect download");
+                        byte[] buffer = new byte[16384];
+                        long count = 0;
+                        int read;
+                        while ((read = input.read(buffer)) != -1) {
+                            count += read;
+                            if (count > manifest.length) throw new IOException("Library too large");
+                            output.write(buffer,0,read);
+                            publishProgress((int)(count*100/manifest.length));
+                        }
+                        output.getFD().sync();
                     }
-                    output.getFD().sync();
                 } finally { binary.disconnect(); }
                 if (!manifest.matches(pending)) throw new GeneralSecurityException("Library digest rejected");
                 if (!pending.renameTo(library)) throw new IOException("Cannot install verified library");

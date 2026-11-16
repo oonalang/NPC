@@ -38,6 +38,8 @@ v1|SHAI_ETHNIR|1|libZANEV1.so|byte_length|sha256|key_id
 
 The manifest is a release-integrity check, not a session grant or monotonic anti-rollback counter. Native session authorization remains mandatory. Existing installed launchers keep their old behavior until their APK is replaced.
 
+The launcher wraps resource-managed reads in ordinary outer `try/finally` blocks for connection disconnection. AIDE reported two unexpected-`finally` errors when cleanup was attached directly to the resource-managed form, although standard Java accepts it. Keep that separation when editing the downloader. All launcher Java sources were compiled against the official Android 29 SDK with Java 8 source/target settings; the phone's AIDE parser itself was not available for verification.
+
 ## Deploy this build
 
 1. Back up the live panel files, current signing key, `data/keys.json` and `data/giveaway.json`. Retain the live license records, device bindings and Linkvertise settings.
