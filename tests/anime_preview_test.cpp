@@ -1,6 +1,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define CLAY_CPU_PREVIEW
 #include "../src/main/jni/ImGui/AnimePreview.h"
+#include "../src/main/jni/ImGui/PreviewOrbitUi.h"
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -47,9 +48,50 @@ Drawn RenderFrame(double time,float delta,bool textured,const ImVec2& viewMin,co
     ImGui::Render();
     return result;
 }
+void OrbitTouchTest() {
+    anime_preview::OrbitControl orbit;ImGuiWindow* child=nullptr;ImVec2 button{},center{};
+    const auto frame=[&] {
+        ImGui::NewFrame();custom::touch::Update();
+        ImGui::SetNextWindowPos({0,0});ImGui::SetNextWindowSize({360,500});
+        ImGui::Begin("Orbit touch host",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoMove);
+        ImGui::BeginChild("Preview scroll region",{330,360},false,ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoMove);
+        child=ImGui::GetCurrentWindow();const auto min=ImGui::GetCursorScreenPos(),max=min+ImVec2(310,330);
+        button={max.x-51,min.y+20};center=min+ImVec2(140,180);
+        anime_preview::DrawOrbitControls(orbit,ImGui::GetWindowDrawList(),ImGui::GetFont(),min,max,min+ImVec2(12,40),max-ImVec2(12,12));
+        ImGui::Dummy({300,800});ImGui::EndChild();ImGui::End();ImGui::Render();
+    };
+    auto& io=ImGui::GetIO();io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);frame();frame();
+    const auto tap=[&](ImVec2 point) {
+        io.AddMousePosEvent(point.x,point.y);frame();io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);frame();frame();
+    };
+    tap(button);assert(orbit.enabled);
+    const auto drag=[&](ImVec2 from,ImVec2 to) {
+        io.AddMousePosEvent(from.x,from.y);frame();io.AddMouseButtonEvent(0,true);frame();
+        io.AddMousePosEvent(to.x,to.y);frame();io.AddMouseButtonEvent(0,false);frame();frame();
+    };
+    drag(center,center+ImVec2(70,2));assert(orbit.yaw>.5f&&child->Scroll.y==0);
+    const auto yaw=orbit.yaw;drag(center,center-ImVec2(0,100));assert(child->Scroll.y>50&&orbit.yaw==yaw);
+    child->Scroll.y=0;child->ScrollTarget.y=FLT_MAX;frame();frame();tap(button);assert(!orbit.enabled&&orbit.yaw==0);
+    std::puts("Native ImGui touch: Orbit/Front taps, horizontal camera drag and vertical content scrolling coexist without changing yaw during a scroll");
+}
 }
 
 int main() {
+    {
+        anime_preview::PreviewClock playback;
+        assert(playback.Update(900,1,false).seconds==0);
+        assert(playback.Update(900.1,2,false).seconds==0);
+        assert(playback.Update(900.2,3,true).seconds==0);
+        const auto first=playback.Update(900.3,4,true);
+        assert(!first.reset&&std::fabs(first.seconds-.1)<1e-9);
+        assert(playback.Update(900.31,4,true).seconds==first.seconds);
+        assert(std::fabs(playback.Update(900.4,5,true).seconds-.2)<1e-9);
+        assert(playback.Update(900.5,7,true).reset&&playback.Update(900.5,7,true).seconds==0);
+        assert(playback.Update(901.5,8,true).seconds==0);
+        assert(playback.Update(0,9,true).seconds==0);
+        assert(playback.Update(std::nan(""),10,true).seconds==0);
+        std::puts("Preview playback starts when ready, advances once per UI frame, and restarts its gesture demonstration after hiding, clock reversal or long suspension");
+    }
     ImGui::CreateContext();
     auto& io=ImGui::GetIO();
     io.IniFilename=nullptr;
@@ -121,6 +163,7 @@ int main() {
         if(textured) assert(drawn.addedVertices>=kMeshVertices);
         else assert(drawn.addedVertices>0);
         assert(Finite(bounds.min) && Finite(bounds.max));
+        assert(!bounds.native3d&&!bounds.loading);
         assert(bounds.max.x>bounds.min.x && bounds.max.y>bounds.min.y);
         assert(bounds.height>0.f && std::isfinite(bounds.height));
         assert(bounds.min.x>=viewMin.x-40.f && bounds.max.x<=viewMax.x+40.f);
@@ -139,6 +182,7 @@ int main() {
         }
     }
 
+    OrbitTouchTest();
     ImGui::DestroyContext();
     std::puts("ESP preview breathing, jumps, hair and skirt springs, blink, mesh indices, subtree weights and animated bounds stay finite, stable and inside the preview view");
 }

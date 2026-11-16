@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include "WizMotion.h"
 
 namespace wiz_model {
 struct Vertex {
@@ -18,13 +19,15 @@ struct Material {
     std::vector<unsigned char> png,rgba;
 };
 struct Model {
+    std::uint32_t version=1;
     std::uint32_t bones=0,frames=0,fps=0;
     float duration=0;
     std::vector<Vertex> vertices;
     std::vector<std::uint32_t> indices;
     std::vector<Material> materials;
     std::vector<float> animation;
-    std::size_t Stride() const { return bones*16+56; }
+    Rig rig;
+    std::size_t Stride() const { return version>=2?bones*10+5:bones*16+56; }
 };
 bool Decode(const unsigned char* bytes,std::size_t size,Model& model);
 bool DecodeTextures(Model& model);
@@ -43,4 +46,11 @@ Frame Render(double seconds,float aspect);
 unsigned RenderCount();
 unsigned UploadCount();
 void Release();
+void ResetMotion();
+void SetDynamics(Dynamics mode);
+MotionStats PhysicsStats();
+void SetView(float yaw,float pitch=0);
+std::array<float,2> View();
+struct ResourceUsage {std::size_t cpuBytes=0,gpuBytes=0,assetBytes=0;unsigned bones=0,springs=0;};
+ResourceUsage Resources();
 }

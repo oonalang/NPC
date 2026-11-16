@@ -73,7 +73,7 @@ void NoteParsing(Module& module) {
     Require(NativeProfileDetail::MatchesBuildIdNote(note, 24), "pinned GNU build ID matches");
     Require(!NativeProfileDetail::MatchesBuildIdNote(note, 23), "truncated GNU note rejected");
     std::array<unsigned char, 40> combined{};
-    combined[0] = 1; // A one-byte unknown name, padded to four bytes.
+    combined[0] = 1;
     combined[8] = 1;
     combined[12] = 'X';
     std::memcpy(combined.data() + 16, note, 24);

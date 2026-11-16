@@ -1,6 +1,6 @@
 # License and release protection
 
-The hardened client is on `feature/license-session-hardening`, based on main `fdd0c16`. It requires matching PHP files and a rebuilt launcher. The existing hosted installation has not been changed.
+The client on `main` includes signed authorization and the corrected native character preview. It requires matching PHP files and a rebuilt launcher. The hosted installation has not been changed.
 
 ## Protocol
 
@@ -22,9 +22,9 @@ Acceptance also records a deadline against `CLOCK_BOOTTIME`, including device su
 
 `Security/Lease.h` constructs immutable grants only after verifying the signature and claims. `Security/LicenseRuntime.cpp` owns the active session and renewal worker. Native entry points consult authorization independently of menu presentation. Preferences remain separate from authorization.
 
-Legacy memory hooks and the bullet/cosmetic runtime hooks use typed wrappers that forward arguments to the original function when authorization is absent. Hitbox, trigger input, slide fatigue, frame-rate overrides and session protection also enforce authorization within their native paths. Feature installation is deferred until signed login; capture-only skin/config collectors remain available during startup so existing catalog behavior is preserved.
+Legacy memory hooks and the bullet/cosmetic runtime hooks use typed wrappers that forward arguments to the original function when authorization is absent. Hitbox, trigger input, slide fatigue and frame-rate overrides also enforce authorization within their native paths. Feature installation is deferred until signed login; capture-only skin/config collectors remain available during startup so existing catalog behavior is preserved.
 
-Expired/revoked grants stop new overrides. FPS device fields, owned gravity/air-control values, active patches and the observed CODM session-protection policy have restoration paths. In-flight calls may finish. Already spawned/applied cosmetics and every legacy persistent game-state change cannot all be reconstructed; this does not promise complete rollback of prior actions.
+Expired/revoked grants stop new overrides. FPS device fields, owned gravity/air-control values and active patches have restoration paths. In-flight calls may finish. Already spawned/applied cosmetics and every legacy persistent game-state change cannot all be reconstructed; this does not promise complete rollback of prior actions.
 
 ## Native download verification
 
@@ -84,7 +84,6 @@ Run with a PHP CLI that has OpenSSL and a JDK compiler:
 sh tests/run-license-security-tests.sh
 python3 tests/run-release-verifier-tests.py
 sh tests/run-hitbox-tests.sh
-sh tests/run-session-protection-tests.sh
 sh tests/run-trigger-tests.sh
 sh tests/run-frame-rate-tests.sh
 sh tests/run-slide-fatigue-tests.sh

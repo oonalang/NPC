@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <vector>
+#include "PreviewClock.h"
 #ifndef CLAY_CPU_PREVIEW
 #include "WizModel.h"
 #include "AnimeArtwork.h"
@@ -28,6 +29,7 @@ struct Bounds {
     std::array<ImVec2,2> shoulder,elbow,hand,knees,ankle;
     float height=0.f,jump=0.f;
     bool excited=false;
+    bool loading=false,native3d=false;
 };
 struct Spring {
     float position=0.f,velocity=0.f;
@@ -216,7 +218,10 @@ inline Bounds Draw(ImDrawList* draw,ImVec2 viewMin,ImVec2 viewMax,double time,fl
     if(!draw || viewMax.x<=viewMin.x || viewMax.y<=viewMin.y) return bounds;
 #ifndef CLAY_CPU_PREVIEW
     const auto size=viewMax-viewMin;
-    const auto scene=wiz_model::Render(time,size.x/size.y);
+    static PreviewClock playback;
+    const auto tick=playback.Update(time,ImGui::GetFrameCount(),wiz_model::Ready());
+    if(tick.reset) wiz_model::ResetMotion();
+    const auto scene=wiz_model::Render(tick.seconds,size.x/size.y);
     if(scene.texture) {
         const auto point=[&](const std::array<float,2>& p) {return viewMin+ImVec2(p[0]*size.x,p[1]*size.y);};
         const auto floor=point(scene.floor);
@@ -234,12 +239,13 @@ inline Bounds Draw(ImDrawList* draw,ImVec2 viewMin,ImVec2 viewMax,double time,fl
         }
         bounds.knee=(bounds.knees[0]+bounds.knees[1])*.5f;bounds.feet=point(scene.points[14]);
         bounds.height=bounds.max.y-bounds.min.y;bounds.jump=scene.lift*size.y*.38f;bounds.excited=scene.excited;
+        bounds.native3d=true;
         return bounds;
     }
     if(wiz_model::Failed()) {
         anime_artwork::Prepare();
         SetArtwork(anime_artwork::Ensure(),anime_artwork::width,anime_artwork::height);
-    }
+    } else {bounds.loading=true;return bounds;}
 #endif
     BuildWeights();
     const auto& rig=artwork.rig;

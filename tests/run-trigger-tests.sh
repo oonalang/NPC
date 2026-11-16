@@ -11,7 +11,7 @@ run_test() {
     "${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -pedantic \
         -fsanitize=address,undefined -fno-omit-frame-pointer \
         "$@" -o "$test_binary"
-    # LeakSanitizer cannot inspect threads in ptrace-based build sandboxes.
+
     ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary"
     printf '%s passed\n' "$suite_name"
 }
@@ -21,8 +21,8 @@ run_test 'Trigger runtime' \
     "$project_dir/src/main/jni/Trigger/TriggerRuntime.cpp"
 run_test 'Trigger dot appearance' "$project_dir/tests/trigger_dot_style_test.cpp"
 run_test 'Prepared sniper input' "$project_dir/tests/sniper_input_test.cpp"
-# This binary stubs the loader and driver to exercise the Android initialization
-# policy on the host; the actual Android hook implementation is not linked.
+
+
 run_test 'Native profile' \
     -D__ANDROID__ -D__aarch64__ -Wl,--wrap=open \
     "$project_dir/tests/native_profile_tests.cpp" \

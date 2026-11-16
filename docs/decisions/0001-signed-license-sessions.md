@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented on `feature/license-session-hardening`; hosted rollout pending.
+Implemented and authorized for publication to `main`; hosted rollout pending.
 
 ## Context
 
@@ -12,7 +12,7 @@ The user identified panel swapping and patching a login boolean as common bypass
 
 Require protocol v2 on both client and panel. Every request has a 256-bit OpenSSL random nonce. The RSA-SHA256 signature binds audience, build, key, serial, nonce, issuance, session expiry, license expiry, capabilities and public-key identifier. A grant lasts at most 180 seconds; renewal occurs after 60 seconds, with 10-second retries for transient failures. Rejected or unverifiable responses revoke access. Transient errors retain only the unexpired prior grant.
 
-An immutable verified session, bounded by `CLOCK_BOOTTIME`, authorizes native feature callbacks separately from the menu. Loading-animation completion grants no authority. Native gates delegate to originals after revocation; FPS fields, owned gravity/air-control fields and session-protection policy have restoration paths. Existing preference values remain intact.
+An immutable verified session, bounded by `CLOCK_BOOTTIME`, authorizes native feature callbacks separately from the menu. Loading-animation completion grants no authority. Native gates delegate to originals after revocation; FPS fields and owned gravity/air-control fields have restoration paths. Existing preference values remain intact.
 
 Require a signed SHA-256 release manifest before downloading/loading the native library. The launcher and native client share the same public trust root; the private signing key stays outside the repository. Distribution moves to the user's existing `ethnir.x10.mx` host. Native builds restrict exports to JNI entry points and use RELRO, immediate binding, a non-executable stack, stack protection and FORTIFY. Release APKs no longer automatically inherit the debug certificate.
 

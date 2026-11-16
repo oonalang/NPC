@@ -66,7 +66,7 @@ def verify(library, source):
 
     checks = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\}\}',
                         (source / "NativeProfileChecks.inc").read_text())
-    # The live comparison flag does not change offline disk verification.
+
     probes = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\},\s*(?:true|false)\}',
                         (source / "TriggerCompatibility.cpp").read_text())
     if len(checks) != 45 or len(probes) != 7:

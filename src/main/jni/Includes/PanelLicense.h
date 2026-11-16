@@ -50,7 +50,7 @@ inline bool DecodeSignature(const std::string& value, std::vector<unsigned char>
         reinterpret_cast<const unsigned char*>(value.data()), static_cast<int>(value.size()));
     if (len < 0 || static_cast<std::size_t>(len) < padding) return false;
     out.resize(static_cast<std::size_t>(len) - padding);
-    // EVP_DecodeBlock accepts noncanonical padding bits. Require one encoding.
+
     std::vector<unsigned char> canonical((out.size() + 2) / 3 * 4 + 1);
     const int written = EVP_EncodeBlock(canonical.data(), out.data(), static_cast<int>(out.size()));
     return written >= 0 && static_cast<std::size_t>(written) == value.size() &&
@@ -79,8 +79,8 @@ inline Verification VerifySignature(const std::string& payload, const std::strin
 
 }
 
-// A valid signature authenticates the exact expected key, device, expiry and build.
-// now and responseExpires are Unix seconds; the caller must obtain now from a valid clock.
+
+
 inline Verification Verify(const std::string& payload, const std::string& signatureBase64,
                            const std::string& expectedKey, const std::string& expectedSerial,
                            std::uint64_t responseExpires, std::uint64_t now,

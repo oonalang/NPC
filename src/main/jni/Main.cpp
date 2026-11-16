@@ -181,7 +181,7 @@ static std::string err;
 static std::string storedKey = "";
 static char s[256];
 static bool g_LoginTextLoaded = false;
-// The worker publishes its result before the render thread consumes it.
+
 static std::atomic<bool> g_LoginFinished{false};
 static bool g_LoginPending = false;
 static std::string g_LoginResult;
@@ -314,10 +314,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-    session_protection::Publish(Config.ExtraMenu.ProtectCodmLogin);
     static auto lastHitboxProbe=frameTime;
-    if(((Config.ExtraMenu.Hit&&hitbox::NeedsProbe())||
-        (Config.ExtraMenu.ProtectCodmLogin&&session_protection::backend.load()==session_protection::Backend::Waiting))&&
+    if(Config.ExtraMenu.Hit&&hitbox::NeedsProbe()&&
        frameTime-lastHitboxProbe>=std::chrono::seconds(1)) {
         lastHitboxProbe=frameTime;
         Init_Thread2();
@@ -1090,8 +1088,7 @@ void Init_Thread2()
             frame_rate::Install(base,install);
             slide_fatigue::Install(base,install);
             hitbox::Install(base,install);
-            session_protection::Install(base,DobbyHook);
-            if(frame_rate::available.load()&&slide_fatigue::available.load()&&hitbox::available.load()&&session_protection::available.load()) break;
+            if(frame_rate::available.load()&&slide_fatigue::available.load()&&hitbox::available.load()) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         running=false;

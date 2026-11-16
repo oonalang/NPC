@@ -271,8 +271,8 @@ std::string getClipboard() {
     return result.c_str();
 }
 
-// Reproduce the existing device identifier while keeping all JNI references
-// and thread attachment scoped to this request.
+
+
 static bool BuildLicenseSerial(const char *userKey, std::string &serial) {
     if (!jvm || !userKey) return false;
     JNIEnv *env = nullptr;
@@ -346,16 +346,15 @@ static bool BuildLicenseSerial(const char *userKey, std::string &serial) {
     return success;
 }
 
-// OpenSSL looks CA files up by its own SHA-1 subject hash while Android names the
-// system certificates with the legacy MD5 hash, so CURLOPT_CAPATH cannot use the
-// platform store. Load the certificates into the SSL context instead.
-inline CURLcode LoadAndroidTrustStore(CURL * /*curl*/, void *sslContext, void * /*user*/
+
+
+inline CURLcode LoadAndroidTrustStore(CURL *  , void *sslContext, void *
 ) {
     auto *context = static_cast<SSL_CTX *>(sslContext);
     X509_STORE *store = context ? SSL_CTX_get_cert_store(context) : nullptr;
     if (!store) return CURLE_SSL_CACERT;
-    // Android 14 moved the updatable store into the Conscrypt APEX; the system
-    // directory remains as the fallback location.
+
+
     const char *directories[] = {"/apex/com.android.conscrypt/cacerts",
                                  "/system/etc/security/cacerts"};
     std::size_t loaded = 0;

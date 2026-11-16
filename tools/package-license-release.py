@@ -37,6 +37,7 @@ with tempfile.TemporaryDirectory(prefix='shai-release-') as folder:
         directory=zipfile.ZipInfo('native/');directory.external_attr=0o40755<<16;archive.writestr(directory,b'')
         public_file('native/libZANEV1.so',a.library.read_bytes())
         public_file('native/libZANEV1.manifest',manifest.read_bytes())
+        public_file('native/WIZ_LICENSE.md',(root/'src/main/jni/Assets/WIZ_LICENSE.md').read_bytes())
     manifestBytes=manifest.read_bytes()
     (output/'libZANEV1.manifest').write_bytes(manifestBytes)
     with zipfile.ZipFile(output/'shai-private-key.zip','w',zipfile.ZIP_DEFLATED) as archive:

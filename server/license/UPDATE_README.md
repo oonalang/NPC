@@ -1,6 +1,6 @@
 # SHAI ETHNIR full panel update
 
-This is the complete updated version of your Claymorphism / 3 Ads / 10 Hours panel. Its admin interface, free-key page, credentials, license-store path and build setting are retained. The signing key and its public modulus have been updated together to match the included native library and the client source on `feature/license-session-hardening` in `oonalang/NPC`.
+This is the complete updated version of your Claymorphism / 3 Ads / 10 Hours panel. Its admin interface, free-key page, credentials, license-store path and build setting are retained. The signing key and its public modulus have been updated together to match the included native library and the client source on `main` in `oonalang/NPC`.
 
 **Keep this ZIP private. It contains your admin configuration and server signing key.** Extract it locally and upload the extracted files. Never leave the ZIP, backups, private keys or database downloads accessible through the website.
 
@@ -23,5 +23,7 @@ This is the complete updated version of your Claymorphism / 3 Ads / 10 Hours pan
 - The rebuilt launcher verifies the signed native manifest and SHA-256 before loading the library. Both Java and native source must match the supplied signing root.
 
 The included native build also extends adjustable-hitbox sizing to the supported sphere and capsule-as-box queries in addition to regular capsules. Direct hits retain native head/body classification and priority; no forced-headshot rule is added. General box queries and the game's broad-phase selection remain unchanged. Static ABI checks, host tests and the ARM64 build passed; these added geometry paths still require an in-game retest.
+
+The native ESP preview now includes the parented Wiz rig, constrained hair/garment dynamics, articulated gestures and a playback clock that starts when the model is ready. Its artist attribution and noncommercial license are included in `native/WIZ_LICENSE.md`. Host GLES motion captures and source-rig tests passed; Android appearance and performance still require device testing.
 
 Signed authorization raises the cost of panel swaps and response forgery. Software running on an attacker-controlled device can still be patched or rebuilt; this is not an uncrackable binary.

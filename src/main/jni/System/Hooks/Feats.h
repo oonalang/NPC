@@ -6,7 +6,6 @@
 #define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
 #include "SlideFatigue.h"
 #include "Hitbox.h"
-#include "SessionProtection.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -1053,26 +1052,10 @@ inline void InitializeAllHooks() {
     LICENSE_HOOK_LIB("libunity.so", "0x5366558", h_NeedDelayProcess, o_NeedDelayProcess);
     LICENSE_HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);
 
-/*
-    //-- Unlimited Bullets
-    HOOK_LIB("libunity.so", "0x6AE86B0", IsInfiniteBullet, orig_IsInfiniteBullet);
-    HOOK_LIB("libunity.so", "0xADE82D8", IsNoCostAmmo, orig_IsNoCostAmmo);
-
-	//-- Unli Ammo (Functions)
-	HOOK_LIB("libunity.so", "0x5473F58", hk_AmmoCanFire, orig_AmmoCanFire);          // AmmoCanFire - RVA: 0x5473F58
-    HOOK_LIB("libunity.so", "0x548FDD8", hk_HasAmmo, orig_HasAmmo);                  // HasAmmo - RVA: 0x548FDD8
-    HOOK_LIB("libunity.so", "0xC2BAC9C", hk_HasAmmo_IgnoreInfinite, orig_HasAmmo_IgnoreInfinite); // HasAmmo_IgnoreInfinite - RVA: 0xC2BAC9C
-    HOOK_LIB("libunity.so", "0xC2B9D40", hk_ServerStopFire, orig_ServerStopFire);    // ServerStopFire - RVA: 0xC2B9D40
-    HOOK_LIB("libunity.so", "0x5474FB0", hk_get_ShotCost, orig_get_ShotCost);        // get_ShotCost - RVA: 0x5474FB0
-    HOOK_LIB("libunity.so", "0x54952AC", hk_IsAmmoFree, orig_IsAmmoFree);            // IsAmmoFree - RVA: 0x54952AC
- 
-     //-- Long Execute
-    HOOK_LIB("libunity.so", "0x6AA932C", CheckTargetIsValid_DyingInAzurGameMode_Hook, orig_CheckTargetIsValid_DyingInAzurGameMode);
-    HOOK_LIB("libunity.so", "0x6AA93E0", CheckTargetIsValid_PhysState_Hook, orig_CheckTargetIsValid_PhysState);
-    HOOK_LIB("libunity.so", "0x6AA9634", CheckTargetIsValid_ManualParameter_Hook, orig_CheckTargetIsValid_ManualParameter);
 
 
-*/
+
+
     //-- No smoke
     UnityObject_get_name = reinterpret_cast<String *(*)(void *)>(
           getAbsoluteAddress("libunity.so", 0x5302EA4));

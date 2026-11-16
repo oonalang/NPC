@@ -10,7 +10,6 @@
 #include "../../BlueprintTierFilter.h"
 #include "../../Trigger/TriggerDotStyle.h"
 #include "../Hooks/Hitbox.h"
-#include "../Hooks/SessionProtection.h"
 
 extern JavaVM* VM;
 
@@ -24,7 +23,6 @@ void LoadConfig() {
 
     std::string line;
     Config.ExtraMenu.HitboxScale = hitbox::defaultScale;
-    Config.ExtraMenu.ProtectCodmLogin = false;
     while (std::getline(file, line)) {
         if (line.empty()) {
             continue;
@@ -69,7 +67,6 @@ void LoadConfig() {
         else if (key == "ExtraMenu.Rpd") Config.ExtraMenu.Rpd = (valueStr == "1");
         else if (key == "ExtraMenu.Hit") Config.ExtraMenu.Hit = (valueStr == "1");
         else if (key == "ExtraMenu.HitboxScale") Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(std::stof(valueStr));
-        else if (key == "ExtraMenu.ProtectCodmLogin") Config.ExtraMenu.ProtectCodmLogin = (valueStr == "1");
         else if (key == "ExtraMenu.Fire") Config.ExtraMenu.Fire = (valueStr == "1");
         else if (key == "ExtraMenu.NoSprintFire") Config.ExtraMenu.NoSprintFire = (valueStr == "1");
         else if (key == "ExtraMenu.Parachute") Config.ExtraMenu.Parachute = (valueStr == "1");
@@ -88,7 +85,6 @@ void LoadConfig() {
     file.close();
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-    session_protection::Publish(Config.ExtraMenu.ProtectCodmLogin);
 }
 
 void SaveConfig() {
@@ -130,7 +126,6 @@ void SaveConfig() {
     file << "ExtraMenu.Rpd " << Config.ExtraMenu.Rpd << "\n";
     file << "ExtraMenu.Hit " << Config.ExtraMenu.Hit << "\n";
     file << "ExtraMenu.HitboxScale " << hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale) << "\n";
-    file << "ExtraMenu.ProtectCodmLogin " << Config.ExtraMenu.ProtectCodmLogin << "\n";
     file << "ExtraMenu.Fire " << Config.ExtraMenu.Fire << "\n";
     file << "ExtraMenu.NoSprintFire " << Config.ExtraMenu.NoSprintFire << "\n";
     file << "ExtraMenu.Parachute " << Config.ExtraMenu.Parachute << "\n";
