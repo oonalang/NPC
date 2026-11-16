@@ -13,7 +13,7 @@ so this change repairs NPC's existing path.
 - NPC base: `bd3fb7187311d2e2abfa7306aca425954f176771`
 - Purple reference: `fd895e5f1023712a331fcdf530371e1332e557cc`
 
-All 45 pinned entry fingerprints and seven diagnostic probes match the supplied
+All 46 pinned code fingerprints and seven diagnostic probes match the supplied
 ELF when virtual addresses are mapped through its program headers. The checked
 trigger RVAs map to file offsets at `RVA - 0x4000` in this image.
 
@@ -25,7 +25,7 @@ also use the ARM64 indirect aggregate return convention. Preserve these bindings
 Eight method bodies in the disk image are encoded. Their disk fingerprints are
 checked by the offline verifier rather than compared with the loaded bodies.
 Runtime validation requires the pinned build ID, readable executable ranges for
-all 45 methods, and exact prefixes for the 37 stable methods, including all five
+all 46 code locations, and exact prefixes for the 38 stable locations, including all five
 input hook entry points. The encoded methods must be readable and no longer
 match their known encoded disk prefixes before hooks can be installed. Unknown
 builds and changed stable entry points leave automatic input disabled. Live
@@ -77,13 +77,61 @@ A prepared release input follows the native release/up flags regardless of the
 weapon's ordinary single-shot flag. Release input requires completed ADS in either trigger
 setting. An eligible frame arms the press; a later freshly validated frame
 commits its release while the weapon can fire. The controller then waits for
-shot acknowledgement and rearming before another press. Loss of the target,
+shot acknowledgement and rearming before another press. A verified decrease in
+the owning fire component's native clip count can acknowledge a shot whose
+callback was missed. If neither acknowledgement source changes, a named
+500 ms deadline clears the owned input neutrally and permits a new attempt
+only after a fresh target query and the original readiness checks. This
+deadline starts after submission; it adds no delay before initial acquisition. Loss of the target,
 smoke/world obstruction, incomplete ADS, disabled trigger or a blocked weapon
 cancels an armed press without generating a shooting release edge. One neutral
 cleanup frame precedes any new press. Physical user input always takes priority.
 
 Press-to-fire rifles, shotguns and single-shot weapons retain their existing
 controller behavior. Live sniper firing still requires device validation.
+
+## Reaction and input-work revision
+
+The user reports intermittent frame drops, delayed shots and occasional missed
+shots with snipers in Both mode. No recording or device profiler capture has
+been received yet, so these edits address reproducible source-level faults
+rather than claiming a device diagnosis.
+
+- A committed release previously waited forever if its callback never arrived.
+  It also kept tracing targets while waiting, although it could not submit input.
+  The native clip count at component offset `0xA8` now supplies a second shot
+  acknowledgement. The dump declaration and the getter
+  `WeaponFireComponent.get_ClipAmmoCount` were checked against the pinned ELF;
+  the native load at `0xC2B4B98` is the added 16-byte compatibility anchor.
+- `Controller::shotAcknowledgementTimeoutMillis` is 500 ms. Missing evidence
+  leads to neutral cleanup for release-fire, or an ordinary owned release for
+  press-fire. It does not replay a shooting up-edge. Manual ownership,
+  weapon/match changes, ammo, native cooldown, completed ADS, world geometry
+  and smoke still control whether a fresh attempt may fire.
+- Waiting-confirmation, rejection-cleanup and duplicate updates skip body,
+  world and smoke traces. Ordinary target acquisition and every committed
+  sniper release still use a fresh exact ray, detailed body hit and obstruction
+  checks. Target results are not cached across updates.
+- The five periodic input fingerprints now read current bytes through already
+  verified executable ranges. They retain the 64-update cadence and fail-closed
+  behavior, without repeated loader-list walks or proc-file fallbacks on the
+  input thread. Only segment bounds are cached; instruction contents are read
+  anew.
+- Physical fire takes a fast passthrough after compatibility/context checks.
+  Hidden dot overlays skip viewport-to-screen conversion; screen validity and
+  fresh camera rays are preserved. No managed impact object is retained between
+  queries.
+- The Trigger tab reports useful decision status: full-aim wait, weapon
+  recovery, cover/smoke rejection, owned press, confirmation wait and input
+  recovery. These are input states, not claims of server-registered hits.
+
+Host scenarios at 30, 60 and 120 updates/sec verify an owned press on the first
+eligible update, a release on the next freshly checked update, and time-based
+recovery with missing callbacks. The release path deliberately keeps distinct
+press/up updates and native weapon timing. This is not a forced fire-rate
+change. Current test/build logs are under
+`/workspace/license-hardening/logs/trigger-latency-*.log`. Actual reaction time
+and frame-time improvement still require phone/video verification.
 
 ## Validation
 

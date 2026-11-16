@@ -8,6 +8,7 @@ namespace PhantomTrigger {
 bool InstallNativeDriver(std::uintptr_t base) noexcept;
 RuntimeStatus NativeStatus() noexcept;
 FireMode NativeDetectedMode() noexcept;
+DecisionStatus NativeDecisionStatus() noexcept;
 bool NativeViewportCenter(float& x, float& y) noexcept;
 
 void NativeDriverFailure() noexcept;

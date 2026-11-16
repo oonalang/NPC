@@ -18,6 +18,7 @@ namespace PhantomTrigger {
 namespace {
 std::atomic<RuntimeStatus> status{RuntimeStatus::WaitingForBinaryVerification};
 std::atomic<FireMode> detected{FireMode::Unsupported};
+std::atomic<DecisionStatus> decisionStatus{DecisionStatus::Setup};
 std::atomic<std::uint64_t> viewport{0};
 std::atomic<bool> viewportValid{false};
 std::atomic<std::uintptr_t> observedComponent{0};
@@ -92,7 +93,7 @@ bool InputHotfixActive() noexcept {
     };
     for (const auto& guard : guards) {
         unsigned char actual[8]{};
-        if (!CompatibilityDetail::ReadSelf(library + guard.rva, actual, sizeof(actual)) ||
+        if (!ReadVerifiedExecutable(library + guard.rva, actual, sizeof(actual)) ||
             std::memcmp(actual, guard.bytes, sizeof(actual)) != 0) {
             changed.store(true, std::memory_order_release);
             return true;
@@ -153,15 +154,15 @@ void Merge(void* param, const Intent& intent) noexcept {
         });
 }
 
-bool PrepareViewRay(bool needed, ViewRay& ray) noexcept {
+bool PrepareViewRay(bool needed, bool sampleViewport, ViewRay& ray) noexcept {
     float centerX = .5f, centerY = .5f;
-    const bool ready = needed && BuildNativeRay(library,ray,centerX,centerY);
-    if (ready) {
+    const bool ready = needed && BuildNativeRay(library,ray,centerX,centerY,sampleViewport);
+    if (ready && sampleViewport) {
         std::uint32_t x = 0, y = 0;
         std::memcpy(&x,&centerX,sizeof(x)); std::memcpy(&y,&centerY,sizeof(y));
         viewport.store((static_cast<std::uint64_t>(x)<<32)|y,std::memory_order_relaxed);
     }
-    viewportValid.store(ready,std::memory_order_release);
+    viewportValid.store(ready && sampleViewport,std::memory_order_release);
     return ready;
 }
 
@@ -197,10 +198,11 @@ void DecidePreparedInput(void* owner, void* param) {
         local.controller.Reset();
         local.hasFrame = false;
         status.store(RuntimeStatus::Disabled,std::memory_order_release);
+        decisionStatus.store(DecisionStatus::Disabled,std::memory_order_release);
         detected.store(FireMode::Unsupported,std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         ViewRay ray;
-        PrepareViewRay(settings.showDot,ray);
+        PrepareViewRay(settings.showDot,settings.showDot,ray);
         return;
     }
     const auto pawn = Field<std::uintptr_t>(controller, 0x70);
@@ -212,6 +214,7 @@ void DecidePreparedInput(void* owner, void* param) {
         local.cancellation.Reset();
         detected.store(FireMode::Unsupported, std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext, std::memory_order_release);
+        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
         viewportValid.store(false, std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         return;
@@ -236,6 +239,17 @@ void DecidePreparedInput(void* owner, void* param) {
         NativeDriverFailure();
         return;
     }
+    if (local.manualActive) {
+        local.controller.Reset();
+        local.cancellation.Reset();
+        local.hasFrame = false;
+        observedComponent.store(0,std::memory_order_release);
+        status.store(RuntimeStatus::Ready,std::memory_order_release);
+        decisionStatus.store(DecisionStatus::Manual,std::memory_order_release);
+        ViewRay ray;
+        PrepareViewRay(settings.showDot,settings.showDot,ray);
+        return;
+    }
     const auto stateMachine = Field<std::uintptr_t>(weapon,0x170);
     if (!stateMachine || !Field<std::uintptr_t>(stateMachine,0x18)) {
         local.controller.Reset();
@@ -243,6 +257,7 @@ void DecidePreparedInput(void* owner, void* param) {
         observedComponent.store(0,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
+        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
         return;
     }
     const auto component = At<ObjectGetter>(0x5472E48)(weapon, nullptr);
@@ -252,6 +267,7 @@ void DecidePreparedInput(void* owner, void* param) {
         observedComponent.store(0,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
+        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
         return;
     }
     observedComponent.store(component,std::memory_order_release);
@@ -279,6 +295,8 @@ void DecidePreparedInput(void* owner, void* param) {
 
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
+    frame.nowMillis = license::BootMillis();
+    frame.clipAmmo = Field<int>(component,0xA8);
     const bool burst = At<BoolGetter>(0x5474344)(weapon,nullptr);
     const bool preparedRelease = Field<bool>(reinterpret_cast<std::uintptr_t>(param), 0x14) &&
         At<BoolGetter>(0xC916900)(controller,nullptr);
@@ -295,8 +313,8 @@ void DecidePreparedInput(void* owner, void* param) {
     status.store(RuntimeStatus::Ready,std::memory_order_release);
     ViewRay ray;
     const bool needTarget = NeedsTargetQuery(settings,frame,local.controller);
-    const bool rayReady = PrepareViewRay(settings.showDot || needTarget,ray);
-    frame.contextValid = frame.contextValid && rayReady;
+    const bool rayReady = PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
+    frame.contextValid = frame.contextValid && (!needTarget || rayReady);
     NativeTargetQueries queries(library,match,pawn);
     TargetResult target = TargetResult::InvalidRay;
     frame.targetValid = false;
@@ -308,8 +326,11 @@ void DecidePreparedInput(void* owner, void* param) {
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,
                                                      allowReleaseSequence);
     if (decision.resetController) local.controller.Reset();
+    decisionStatus.store(decision.resetController ? DecisionStatus::Recovering :
+        ExplainDecision(settings,frame,target,decision.input,local.controller),std::memory_order_release);
     local.stopAfterUpdate = decision.stopResult;
-    local.syntheticInput = !decision.input.passthrough;
+    local.syntheticInput = !decision.input.passthrough &&
+        (decision.input.held || decision.input.down || decision.input.up);
     local.releaseSequence = allowReleaseSequence;
     local.committedRelease = !decision.input.passthrough && decision.input.up &&
         decision.input.commitRelease;
@@ -392,12 +413,14 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         detected.store(FireMode::Unsupported,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
+        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
     }
     --local.depth;
 }
 void Start(void* controller, void* match, Metadata metadata) {
     lifecycle.fetch_add(1,std::memory_order_acq_rel);
     observedComponent.store(0,std::memory_order_release);
+    decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
     originalStart(controller,match,metadata);
 }
 void End(void* controller, Metadata metadata) {
@@ -405,6 +428,7 @@ void End(void* controller, Metadata metadata) {
     viewportValid.store(false,std::memory_order_release);
     observedComponent.store(0,std::memory_order_release);
     detected.store(FireMode::Unsupported,std::memory_order_release);
+    decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
     if (installation.load(std::memory_order_acquire) == 2)
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
     originalEnd(controller,metadata);
@@ -447,6 +471,7 @@ bool InstallNativeDriver(std::uintptr_t base) noexcept {
 }
 RuntimeStatus NativeStatus() noexcept { return status.load(std::memory_order_acquire); }
 FireMode NativeDetectedMode() noexcept { return detected.load(std::memory_order_acquire); }
+DecisionStatus NativeDecisionStatus() noexcept { return decisionStatus.load(std::memory_order_acquire); }
 bool NativeViewportCenter(float& x, float& y) noexcept {
     x = y = .5f;
     if (!viewportValid.load(std::memory_order_acquire)) return false;
@@ -461,12 +486,14 @@ void NativeDriverFailure() noexcept {
     installation.store(3,std::memory_order_release);
 #endif
     status.store(RuntimeStatus::InvalidNativeState,std::memory_order_release);
+    decisionStatus.store(DecisionStatus::QueryUnavailable,std::memory_order_release);
     detected.store(FireMode::Unsupported,std::memory_order_release);
     viewportValid.store(false,std::memory_order_release);
     observedComponent.store(0,std::memory_order_release);
 }
 void NativeDriverPending() noexcept {
     status.store(RuntimeStatus::WaitingForBinaryVerification,std::memory_order_release);
+    decisionStatus.store(DecisionStatus::Setup,std::memory_order_release);
 }
 void NotifyNativeShot(std::uintptr_t component) noexcept {
     if (component && component == observedComponent.load(std::memory_order_acquire))

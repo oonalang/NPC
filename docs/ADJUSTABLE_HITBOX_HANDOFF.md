@@ -83,7 +83,7 @@ The hitbox suite runs with AddressSanitizer and UndefinedBehaviorSanitizer. It c
 
 `hitbox_native_test.cpp` exercises the actual C++ replacement callbacks with stubbed game methods. It covers the reported 1.21× side-shot path for base and instant fire, direct hits without retry, destroyed/missing parents, inactive/shield/unselected regions, local ownership and live-enemy gating, unchanged rays/result pointers/metadata, and reentry/unwind restoration. These tests do not execute the game library or native hook trampolines. The previous inverse-ray-only geometry tests were removed with that implementation.
 
-Current extension results: expanded hitbox suite and ARM64 Android 21 NDK r22 build passed. Offline verification matched all 17 hitbox records plus 45 trigger fingerprints and seven compatibility probes. Current Memory-tab layout/input and trigger regression suites also passed; results are recorded in the task logs. Existing custom-widget compiler warnings remain in the UI tests.
+Current extension results: expanded hitbox suite and ARM64 Android 21 NDK r22 build passed. Offline verification now matches all 17 hitbox records plus 46 trigger fingerprints and seven compatibility probes, including the trigger's read-only clip-count anchor. Current Memory-tab layout/input and trigger regression suites also passed; results are recorded in the task logs. Existing custom-widget compiler warnings remain in the UI tests.
 
 Current ARM64 build command, from the worktree root:
 

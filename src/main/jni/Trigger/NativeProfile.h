@@ -9,6 +9,7 @@ namespace PhantomTrigger {
 
 bool InitializeNativeTrigger(std::uintptr_t base) noexcept;
 bool IsVerifiedExecutableAddress(std::uintptr_t address) noexcept;
+bool ReadVerifiedExecutable(std::uintptr_t address, void* output, std::size_t size) noexcept;
 namespace NativeProfileDetail {
 struct CodeCheck {
     const char* failure;

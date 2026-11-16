@@ -8,7 +8,7 @@ namespace PhantomTrigger {
 
 
 bool BuildNativeRay(std::uintptr_t base, ViewRay& ray,
-                    float& normalizedX, float& normalizedY) noexcept;
+                    float& normalizedX, float& normalizedY, bool sampleViewport = true) noexcept;
 
 
 

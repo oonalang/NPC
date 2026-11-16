@@ -57,6 +57,8 @@ struct Frame {
     bool shotReady = false;
     std::uint64_t shotSerial = 0;
     FireMode fireMode = FireMode::Unsupported;
+    std::uint64_t nowMillis = 0;
+    int clipAmmo = -1;
 };
 
 struct Intent {
@@ -72,8 +74,15 @@ struct Intent {
 
 class Controller {
 public:
+    static constexpr std::uint64_t shotAcknowledgementTimeoutMillis = 500;
     bool HasOwnedInput() const noexcept { return phase_ == Phase::Held; }
     bool HasPendingShot() const noexcept { return phase_ == Phase::AwaitShot; }
+    bool IsRearming() const noexcept { return phase_ == Phase::Rearm || phase_ == Phase::RejectedRelease; }
+    bool NeedsFreshTarget(const Frame& frame) const noexcept {
+        if (!hasContext_ || identity_ != frame.identity) return true;
+        if (hasUpdate_ && frame.updateId <= lastUpdate_) return false;
+        return phase_ != Phase::AwaitShot && phase_ != Phase::RejectedRelease;
+    }
     void RejectPendingShot() noexcept {
         if (phase_ == Phase::AwaitShot) phase_ = Phase::RejectedRelease;
     }
@@ -114,8 +123,12 @@ public:
         }
 
         if (phase_ == Phase::AwaitShot) {
-            if (frame.shotSerial != submittedShotSerial_)
+            if (ShotObserved(frame)) {
                 phase_ = Phase::Rearm;
+            } else if (AcknowledgementExpired(frame)) {
+                phase_ = Phase::Rearm;
+                return {false, false, false, false};
+            }
             return {};
         }
 
@@ -134,13 +147,13 @@ public:
         if (frame.fireMode == FireMode::SingleRelease && phase_ == Phase::Held) {
             if (!frame.shotReady)
                 return {true, false, false, false};
-            submittedShotSerial_ = frame.shotSerial;
+            RememberSubmission(frame);
             phase_ = Phase::AwaitShot;
             return {false, false, true, false, true};
         }
 
         if (phase_ == Phase::Held) {
-            if (frame.shotSerial == submittedShotSerial_) {
+            if (!ShotObserved(frame) && !AcknowledgementExpired(frame)) {
                 return {true, false, false, false};
             }
             phase_ = Phase::Rearm;
@@ -156,13 +169,27 @@ public:
             return {};
         }
 
-        submittedShotSerial_ = frame.shotSerial;
+        RememberSubmission(frame);
         phase_ = Phase::Held;
         return {true, true, false, false};
     }
 
 private:
     enum class Phase : std::uint8_t { Idle, Held, AwaitShot, RejectedRelease, Rearm };
+
+    bool ShotObserved(const Frame& frame) const noexcept {
+        return frame.shotSerial != submittedShotSerial_ ||
+            (submittedClipAmmo_ >= 0 && frame.clipAmmo >= 0 && frame.clipAmmo < submittedClipAmmo_);
+    }
+    bool AcknowledgementExpired(const Frame& frame) const noexcept {
+        return frame.nowMillis >= submittedMillis_ &&
+            frame.nowMillis - submittedMillis_ >= shotAcknowledgementTimeoutMillis;
+    }
+    void RememberSubmission(const Frame& frame) noexcept {
+        submittedShotSerial_ = frame.shotSerial;
+        submittedMillis_ = frame.nowMillis;
+        submittedClipAmmo_ = frame.clipAmmo;
+    }
 
     static bool IsAutomatic(FireMode mode) noexcept {
         return mode == FireMode::Automatic || mode == FireMode::BurstAutomatic;
@@ -198,6 +225,8 @@ private:
     ContextIdentity identity_{};
     std::uint64_t lastUpdate_ = 0;
     std::uint64_t submittedShotSerial_ = 0;
+    std::uint64_t submittedMillis_ = 0;
+    int submittedClipAmmo_ = -1;
     Mode mode_ = Mode::Both;
     FireMode fireMode_ = FireMode::Unsupported;
     Phase phase_ = Phase::Idle;

@@ -76,7 +76,7 @@ bool BodyGroup(int group, bool avatar) noexcept {
 }
 
 bool BuildNativeRay(Address base, ViewRay& ray,
-                    float& normalizedX, float& normalizedY) noexcept {
+                    float& normalizedX, float& normalizedY, bool sampleViewport) noexcept {
     normalizedX = normalizedY = 0.5f;
     ray.maxDistance = 0.f;
     if (!base) return false;
@@ -94,14 +94,17 @@ bool BuildNativeRay(Address base, ViewRay& ray,
                                  static_cast<double>(native.direction.y) * native.direction.y +
                                  static_cast<double>(native.direction.z) * native.direction.z;
     if (!std::isfinite(lengthSquared) || lengthSquared < 0.5 || lengthSquared > 1.5) return false;
-    const auto screenCenter = Bind<Point3(*)(Object, Point3, Method)>(base, 0x52D5AC8)(camera, center, nullptr);
     const int width = Bind<int(*)(Object, Method)>(base, 0x530005C)(nullptr, nullptr);
     const int height = Bind<int(*)(Object, Method)>(base, 0x53000C0)(nullptr, nullptr);
-    if (!Finite(screenCenter) || width <= 0 || height <= 0) return false;
-    normalizedX = screenCenter.x / static_cast<float>(width);
-    normalizedY = 1.0f - screenCenter.y / static_cast<float>(height);
-    if (!std::isfinite(normalizedX) || !std::isfinite(normalizedY) ||
-        normalizedX < 0 || normalizedX > 1 || normalizedY < 0 || normalizedY > 1) return false;
+    if (width <= 0 || height <= 0) return false;
+    if (sampleViewport) {
+        const auto screenCenter = Bind<Point3(*)(Object, Point3, Method)>(base, 0x52D5AC8)(camera, center, nullptr);
+        if (!Finite(screenCenter)) return false;
+        normalizedX = screenCenter.x / static_cast<float>(width);
+        normalizedY = 1.0f - screenCenter.y / static_cast<float>(height);
+        if (!std::isfinite(normalizedX) || !std::isfinite(normalizedY) ||
+            normalizedX < 0 || normalizedX > 1 || normalizedY < 0 || normalizedY > 1) return false;
+    }
     const float inverseLength = static_cast<float>(1.0 / std::sqrt(lengthSquared));
     ray.origin = native.origin;
     ray.maxDistance = detectionDistance;

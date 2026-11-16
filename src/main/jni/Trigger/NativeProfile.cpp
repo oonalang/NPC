@@ -130,6 +130,19 @@ bool IsVerifiedExecutableAddress(std::uintptr_t address) noexcept {
     return false;
 }
 
+bool ReadVerifiedExecutable(std::uintptr_t address, void* output, std::size_t size) noexcept {
+    if (!address || (address & 3u) != 0 || !output || size == 0 || size > 256) return false;
+    const auto count = verifiedRangeCount.load(std::memory_order_acquire);
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto& range = verifiedRanges[i];
+        if (address >= range.begin && address < range.end && size <= range.end - address) {
+            std::memcpy(output, reinterpret_cast<const void*>(address), size);
+            return true;
+        }
+    }
+    return false;
+}
+
 NativeProfileDetail::ValidationResult NativeProfileDetail::ValidateModule(
         std::uintptr_t base, const ElfW(Phdr)* segments, std::size_t segmentCount,
         const CodeCheck* requested, std::size_t count, const char*& failure) noexcept {

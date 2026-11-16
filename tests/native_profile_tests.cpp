@@ -22,6 +22,7 @@ int installs = 0;
 int failures = 0;
 int pending = 0;
 int blockedOpens = 0;
+int loaderWalks = 0;
 bool loaderReady = true;
 dl_phdr_info loaded{};
 
@@ -179,6 +180,25 @@ void RetryAndPublish(Module& module) {
     Require(InitializeNativeTrigger(module.base()) && installs == 1 && failures == 0,
             "retry installs once after the loader becomes available");
     Require(IsVerifiedExecutableAddress(address), "validated decoded method is executable");
+    std::array<unsigned char,8> code{};
+    const auto walks = loaderWalks;
+    for (unsigned i = 0; i < 1000; ++i)
+        Require(ReadVerifiedExecutable(module.base()+0xC914698,code.data(),code.size()),
+                "hot-path code reads use the verified executable cache");
+    Require(loaderWalks == walks && blockedOpens == 1,
+            "cached code reads perform no loader walks or proc opens");
+    Require(std::memcmp(code.data(),module.bytes+0xC914698,code.size())==0,
+            "cached code read returns current live bytes");
+    module.bytes[0xC914698]^=1;
+    Require(ReadVerifiedExecutable(module.base()+0xC914698,code.data(),code.size())&&
+            code[0]==module.bytes[0xC914698],"cached ranges never cache instruction contents");
+    module.bytes[0xC914698]^=1;
+    Require(!ReadVerifiedExecutable(module.base()+Module::size-4,code.data(),code.size())&&
+            !ReadVerifiedExecutable(module.base()+0x100,code.data(),code.size())&&
+            !ReadVerifiedExecutable(address+1,code.data(),code.size())&&
+            !ReadVerifiedExecutable(address,nullptr,code.size())&&
+            !ReadVerifiedExecutable(address,code.data(),0),
+            "cached code reads reject boundaries, data pages and invalid requests");
     Require(!IsVerifiedExecutableAddress(0) && !IsVerifiedExecutableAddress(address + 1),
             "null and unaligned virtual methods rejected");
     Require(!IsVerifiedExecutableAddress(module.base() + 0x100),
@@ -203,6 +223,7 @@ void PermanentFailure(Module& module) {
 }
 
 extern "C" int dl_iterate_phdr(int (*callback)(dl_phdr_info*, std::size_t, void*), void* data) {
+    ++loaderWalks;
     return loaderReady ? callback(&loaded, sizeof(loaded), data) : 0;
 }
 

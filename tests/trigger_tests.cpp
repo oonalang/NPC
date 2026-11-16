@@ -133,6 +133,137 @@ void SingleShotAcknowledgement() {
     Require(intent.down && intent.held, "ready single shot rearms after release");
 }
 
+Frame ReleaseReady();
+
+void MissingAcknowledgementRecovery() {
+    for (const auto mode : {FireMode::Single,FireMode::SingleRelease}) {
+        Controller controller;
+        Queries queries;
+        auto frame = mode==FireMode::SingleRelease?ReleaseReady():Ready(mode);
+        frame.nowMillis=1000;frame.clipAmmo=5;
+        Require(EvaluateInput(enabled,frame,centerRay,queries,controller).down,"recovery sequence starts with a press");
+        if(mode==FireMode::SingleRelease) {
+            ++frame.updateId;frame.nowMillis=1010;
+            Require(EvaluateInput(enabled,frame,centerRay,queries,controller).commitRelease,"recovery test commits one release");
+        }
+        const auto submitted=frame.nowMillis;
+        for(unsigned i=1;i<500;++i) {
+            ++frame.updateId;frame.nowMillis=submitted+i;
+            const auto intent=EvaluateInput(enabled,frame,centerRay,queries,controller);
+            Require(!intent.down&&!intent.up,"missing callback cannot replay a firing edge before its deadline");
+        }
+        const auto calls=queries.bodyCalls;
+        if(mode==FireMode::SingleRelease) Require(calls==2,"pending release does no repeated body/world/smoke scans");
+        ++frame.updateId;frame.nowMillis=submitted+Controller::shotAcknowledgementTimeoutMillis;
+        auto intent=EvaluateInput(enabled,frame,centerRay,queries,controller);
+        Require(!intent.passthrough&&!intent.down&&!intent.held&&!intent.commitRelease,
+                "expired acknowledgement clears synthetic input without committing a release");
+        Require(intent.up==(mode==FireMode::Single),"only a press-fire weapon gets a safe release on timeout");
+        Require(!controller.HasOwnedInput()&&!controller.HasPendingShot(),"missing callback cannot deadlock the controller");
+        Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough,"timeout cleanup is not repeated in the same update");
+        ++frame.updateId;++frame.nowMillis;
+        Require(EvaluateInput(enabled,frame,centerRay,queries,controller).down,"ready weapon reacquires using a fresh target after neutral recovery");
+    }
+}
+
+void AmmoAcknowledgementAndQueryBudget() {
+    Controller controller;
+    Queries queries;
+    auto frame=ReleaseReady();frame.clipAmmo=6;frame.nowMillis=5000;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);
+    const auto first=queries.bodyCalls;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);
+    Require(queries.bodyCalls==first,"duplicate input update performs no duplicate target scan");
+    ++frame.updateId;++frame.nowMillis;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);
+    const auto calls=queries.bodyCalls;
+    ++frame.updateId;++frame.nowMillis;frame.clipAmmo=5;
+    const auto acknowledged=EvaluateInput(enabled,frame,centerRay,queries,controller);
+    Require(acknowledged.passthrough&&!controller.HasPendingShot()&&queries.bodyCalls==calls,
+            "native clip consumption confirms a missing callback without a target scan or firing edge");
+    ++frame.updateId;++frame.nowMillis;frame.shotReady=false;
+    Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough&&queries.bodyCalls==calls,
+            "ammo acknowledgement still respects the weapon cooldown");
+    ++frame.updateId;++frame.nowMillis;frame.shotReady=true;queries.body.alive=false;
+    Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough&&queries.bodyCalls==calls+1,
+            "rearming never reuses an earlier enemy result");
+    controller.Reset();queries=Queries{};frame=ReleaseReady();frame.clipAmmo=5;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);++frame.updateId;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);++frame.updateId;frame.clipAmmo=6;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);
+    Require(controller.HasPendingShot(),"an ammo increase is not mistaken for a shot confirmation");
+    ++frame.updateId;frame.clipAmmo=-1;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);
+    Require(controller.HasPendingShot(),"invalid ammo does not acknowledge a shot");
+}
+
+void SniperReactionCadence() {
+    for (const auto rate : {30u,60u,120u}) {
+        Controller controller;
+        Queries queries;
+        auto frame=ReleaseReady();frame.nowMillis=10000;frame.clipAmmo=5;
+        queries.body.alive=false;
+        Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough,
+                "sniper does not prearm without an eligible enemy");
+        ++frame.updateId;frame.nowMillis=10000+1000/rate;queries.body.alive=true;
+        auto intent=EvaluateInput(enabled,frame,centerRay,queries,controller);
+        Require(intent.down&&intent.held,"sniper acquires on the first eligible input update at every tested frame rate");
+        const auto before=queries.bodyCalls;
+        ++frame.updateId;frame.nowMillis=10000+2000/rate;
+        intent=EvaluateInput(enabled,frame,centerRay,queries,controller);
+        Require(intent.commitRelease&&queries.bodyCalls==before+1,
+                "sniper release uses the immediately following freshly checked input update");
+        const auto submitted=frame.nowMillis;
+        for(unsigned tick=1;tick<=rate/2;++tick) {
+            ++frame.updateId;frame.nowMillis=submitted+tick*1000/rate;
+            intent=EvaluateInput(enabled,frame,centerRay,queries,controller);
+        }
+        Require(!intent.down&&!intent.up&&!intent.held&&!controller.HasPendingShot(),
+                "missing-confirmation recovery is time based rather than frame-rate dependent");
+        ++frame.updateId;++frame.nowMillis;frame.manualActive=true;
+        Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough,
+                "manual takeover has priority immediately after a timeout");
+        ++frame.identity.weapon;frame.updateId=1;frame.manualActive=false;frame.nowMillis=1;
+        Require(EvaluateInput(enabled,frame,centerRay,queries,controller).down,
+                "new weapon lifetime cannot inherit an expired deadline or shot evidence");
+    }
+    Controller controller;Queries queries;auto frame=ReleaseReady();frame.nowMillis=1000;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);++frame.updateId;
+    EvaluateInput(enabled,frame,centerRay,queries,controller);++frame.updateId;
+    frame.nowMillis=1500;frame.shotSerial=1;
+    Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough,
+            "real acknowledgement takes priority at the timeout boundary");
+}
+
+void DecisionFeedback() {
+    Controller controller;auto frame=ReleaseReady();
+    Require(ExplainDecision(Settings{},frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Disabled,
+            "feedback reports disabled input independently of stale native state");
+    frame.manualActive=true;
+    Require(ExplainDecision(enabled,frame,TargetResult::Eligible,Intent{},controller)==DecisionStatus::Manual,
+            "feedback identifies physical ownership");
+    frame.manualActive=false;frame.fullyAimed=false;
+    Require(ExplainDecision(enabled,frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Aiming,
+            "Both-mode sniper feedback explains its native aim requirement");
+    frame.fullyAimed=true;frame.shotReady=false;
+    Require(ExplainDecision(enabled,frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Cooldown,
+            "feedback explains cooldown without inventing a target miss");
+    frame.shotReady=true;
+    Require(ExplainDecision(enabled,frame,TargetResult::WorldBlocked,Intent{},controller)==DecisionStatus::WorldBlocked&&
+            ExplainDecision(enabled,frame,TargetResult::SmokeBlocked,Intent{},controller)==DecisionStatus::SmokeBlocked,
+            "feedback distinguishes actual world and smoke rejection");
+    auto intent=controller.Step(enabled,frame);
+    Require(ExplainDecision(enabled,frame,TargetResult::Eligible,intent,controller)==DecisionStatus::Preparing,
+            "feedback identifies the owned sniper press");
+    ++frame.updateId;intent=controller.Step(enabled,frame);
+    Require(ExplainDecision(enabled,frame,TargetResult::Eligible,intent,controller)==DecisionStatus::Waiting,
+            "feedback identifies the confirmation wait after release");
+    ++frame.updateId;frame.nowMillis=Controller::shotAcknowledgementTimeoutMillis;
+    intent=controller.Step(enabled,frame);
+    Require(ExplainDecision(enabled,frame,TargetResult::InvalidRay,intent,controller)==DecisionStatus::Recovering,
+            "feedback identifies neutral timeout cleanup");
+}
+
 Frame ReleaseReady() {
     auto frame = Ready(FireMode::SingleRelease);
     frame.aiming = true;
@@ -505,6 +636,10 @@ int main() {
     SingleShotAcknowledgement();
     ReleaseShotAcknowledgement();
     ReleaseShotReadiness();
+    MissingAcknowledgementRecovery();
+    AmmoAcknowledgementAndQueryBudget();
+    SniperReactionCadence();
+    DecisionFeedback();
     ReleaseShotLifetimes();
     ReleaseShotCancellation();
     OwnershipAndLifecycle();

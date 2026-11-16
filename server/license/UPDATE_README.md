@@ -28,4 +28,6 @@ Game frame-rate options, including Ultra, are unlocked automatically once author
 
 The native ESP preview now includes the parented Wiz rig, constrained hair/garment dynamics, articulated gestures and a playback clock that starts when the model is ready. Its artist attribution and noncommercial license are included in `native/WIZ_LICENSE.md`. Host GLES motion captures and source-rig tests passed; Android appearance and performance still require device testing.
 
+The native trigger also recovers when a sniper's shot callback is missing, using verified clip consumption or a bounded cleanup deadline. Confirmation waits and duplicate updates skip redundant target traces, and periodic input checks avoid loader-list walks. Native aim/cooldown and fresh obstruction checks remain; phone testing is still needed to measure the reported missed shots and frame drops.
+
 Signed authorization raises the cost of panel swaps and response forgery. Software running on an attacker-controlled device can still be patched or rebuilt; this is not an uncrackable binary.
