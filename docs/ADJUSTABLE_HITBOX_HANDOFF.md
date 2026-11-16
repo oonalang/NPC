@@ -4,7 +4,7 @@
 
 The user wants adjustable enemy collision sizes. Direct headshots and body shots must retain their normal classification. They explicitly rejected an always-headshot feature.
 
-Worktree: `/workspace/NPC-hitboxes`. Branch: `feature/adjustable-hitboxes`. Started from main `306e6cf8b4e423ab7e74d6ff0c3a0803c74b2c49` (Keep the Wiz animation render sheets). The older `feature/esp-3d-runtime-physics` checkout is preserved separately; its character changes were not imported into this branch.
+Worktree: `/workspace/NPC-hitboxes`. The original implementation was published in `c04aa18`. The crash correction is on `fix/hitbox-fire-crash`, based on main `9430a9a`. Other worktrees and the newer Wiz work on main are preserved.
 
 ## Reference evidence
 
@@ -21,14 +21,20 @@ The reference's raw list traversal and shared-object writes were not copied. Its
 
 The previous NPC Hitbox hook returned true immediately whenever enabled. It supplied no new geometry or impact information. This is a plausible explanation for the reported body-only behavior, not a device-confirmed diagnosis.
 
+## Reported firing crash
+
+The user enabled Hitbox at 1.21× and crashed while shooting just beside an enemy. No weapon name or native crash log was supplied, and the crash was not reproduced on an Android device.
+
+The old enlarged-hit callback called `Transform.TransformPoint` itself before the original shape query, skipping the original capsule method's Unity destroyed-parent check. It also mapped ray endpoints and handed the native dispatcher a temporary copied `HitResult`. The correction removes that callback and both behaviors. These were unsafe assumptions on the reported near-miss path; without a stack trace, they are not a proven crash diagnosis.
+
 ## Implementation
 
-- Memory → Weapon handling → Hitbox now exposes Hitbox Size from 1.00× to 5.00×. The default and legacy-config fallback are 1.00×, which preserves stock geometry.
+- Memory → Weapon → Hitbox now exposes Hitbox Size from 1.00× to 5.00×. The default and legacy-config fallback are 1.00×, which preserves stock geometry.
 - Replaced the unconditional true hook with a normal query followed, only on a miss, by an enlarged detailed query. Existing direct hits take priority across the whole target, preventing an enlarged body region from replacing an existing direct head hit.
 - Enlargement applies only to hit type 1 from the local pawn's weapon fire component, against a living pawn in the game's enemy list. Both the base and instant-fire component implementations are hooked. Nested calls do not retry recursively.
 - A thread-local scope restricts enlargement to the selected target's avatar colliders. Lists use the managed array's actual `0x20` element offset, with bounds checks and no persistent object cache.
-- Uniform shape enlargement uses inverse-scaled query endpoints about each collider's world center. The original collision routine receives the real collider object. Returned positions are transformed back onto the original world-space shot segment. Distance is recalculated from the hit point because the native capsule path can leave its distance field unchanged.
-- Collider objects, dimensions, transforms, HitGroup values, damage multipliers and aim direction are never rewritten. Shields are excluded. Normal world obstruction processing remains in the original weapon query.
+- The original avatar-capsule method validates its parent and computes world-space geometry. A nested thread-local scope scales only the scalar axis length and radius passed to its original capsule primitive. The incoming ray, rotation, center, result pointer and metadata are forwarded unchanged. The game constructs the hit result; no result is copied, remapped or synthesized. Recursive primitive calls use neutral scale to prevent double enlargement.
+- Only the verified regular-capsule path is enlarged. Sphere, box, OBB and other shape paths remain stock. Collider objects, shared dimensions, transforms, HitGroup values, damage multipliers and aim direction are never rewritten. Shields are excluded. Normal world obstruction processing remains in the original weapon query.
 - Settings publish to one atomic snapshot. After thread-local initialization, the per-query path allocates no heap memory and uses bounded stack storage. Separate threads have separate scopes.
 - JSON and INI store `ExtraMenu.HitboxScale`. Values are finite and bounded. JSON loading also accepts the existing saved `KineticArmor` key as well as `Kinetic`; the old mismatch prevented a saved config from completing its load.
 - No new source comments were added.
@@ -41,13 +47,14 @@ Pinned game: 1.6.59, GNU build ID `056d6390cc712865`. Dump and ELF used: `/works
 | --- | --- | --- |
 | WeaponFireComponent.SingleLineCheckPhysics | `0xC2BE0C8` | Local weapon query scope |
 | WeaponFireComponent_Instant.SingleLineCheckPhysics | `0xD52E8E4` | Instant weapon query scope |
-| PhysicsUtil.RaycastAvatarCollider | `0x66FDB60` | Scaled detailed shape queries |
-| Transform.TransformPoint | `0x532D29C` | Collider's world-space center |
+| PhysicsUtil.RaycastAvatarCollider_Capsule | `0x66FCA40` | Original parent validation and target-specific scalar scope |
+| PhysicsUtil.RaycastCapsule(Vector3, Quaternion, float, float, Vector3, Vector3, ref HitResult) | `0x66F2A78` | Scale capsule arguments, preserve native result handling |
 | GamePlay.get_MatchGame | `0x801191C` | Enemy-list membership |
 | GamePlay.get_LocalPawn | `0x8012814` | Local ownership |
-| PhysicsUtil.RaycastAvatarCollider_Capsule | `0x66FCA40` | Plaintext layout/ABI anchor |
 
-The first four entries are encoded in the disk ELF. Installation waits until their runtime prefixes differ from the encoded bytes and resemble supported ARM64 stack prologues. Three plaintext anchors and the build ID must match. This is a readiness guard, not complete verification of the decoded method bodies or a proof of the hook ABI. An absent loader entry remains retryable; unsupported builds and partial installation failures disable enlargement. The old force-success fallback is removed.
+Only the two weapon entries are encoded in the disk ELF. Installation waits until their runtime prefixes differ from the encoded bytes and resemble supported ARM64 stack prologues. The build ID and seven plaintext anchors must match: the two getters, two capsule entries, and three fragments of the avatar-to-primitive call site. Unsupported builds and partial hook failures disable enlargement; an absent loader entry or undecoded entry remains retryable.
+
+The capsule caller and callee were disassembled from the pinned ELF. An Android NDK r22 compiler probe matches the observed AArch64 layout: center in s0–s2, quaternion in s3–s6, axis length in s7, radius at incoming SP+0, start at SP+8, end at SP+24, result in x1, metadata in x2, with the static receiver slot in x0. The probe and assembly are under `/workspace/hitbox-reference/capsule-abi.*`. This establishes a static ABI match, not execution of a live game trampoline. The decoded weapon bodies still require runtime verification.
 
 Relevant layout: fire-component owner `0x28`; enemy pawn alive `0x550`; match enemy list `0x178`; target avatar list `0xA8`; avatar HitGroup `0x20`, local center `0x24`, parent transform `0x40`, active flag `0x50`. `HitResult` has point `0x0`, normal `0xC`, distance `0x18`, material `0x1C`, collider `0x20`, size `0x28`. Native wrappers forward the metadata argument and use the static-method receiver slot present in this game's ABI.
 
@@ -58,15 +65,16 @@ Commands:
 ```sh
 sh tests/run-hitbox-tests.sh
 sh tests/run-memory-tab-tests.sh
+sh tests/run-home-layout-tests.sh
 sh tests/run-trigger-tests.sh
 python3 tests/verify-hitbox-profile.py /workspace/dumps/libunity.so
 ```
 
-The new host tests cover enlarged sphere/box/capsule intersections, impact positions and distances, segment limits, malformed results, original head/body priority, real misses, bounded managed lists, nested/reentrant scopes, concurrent scopes, normalization, JSON round trips, legacy defaults, loader/decode retry, build/anchor rejection, one-time installation and partial failure. AddressSanitizer and UndefinedBehaviorSanitizer are enabled for the new suites. Loader tests use a synthetic module and stub hook installer; they do not execute game instructions.
+The hitbox suite runs with AddressSanitizer and UndefinedBehaviorSanitizer. It covers capsule sizing, invalid/overflow dimensions, direct head/body priority, misses, bounded managed lists, nested/concurrent scopes, normalization, JSON round trips, legacy defaults, loader/decode retry, build/anchor rejection, one-time installation and partial failure.
 
-Verified results: the new suites, Memory tab layout/scroll/tap suite, existing trigger suite (111 behavior checks, 23 prepared-input checks, 39 profile checks and 4 permanent-rejection checks), and ARM64 Android 21 NDK r22 build passed. Offline verification matched all 7 hitbox disk records plus the existing 45 trigger fingerprints and 7 probes. Existing custom-widget compiler warnings remain in the Memory UI test build.
+`hitbox_native_test.cpp` exercises the actual C++ replacement callbacks with stubbed game methods. It covers the reported 1.21× side-shot path for base and instant fire, direct hits without retry, destroyed/missing parents, inactive/shield/unselected regions, local ownership and live-enemy gating, unchanged rays/result pointers/metadata, and reentry/unwind restoration. These tests do not execute the game library or native hook trampolines. The previous inverse-ray-only geometry tests were removed with that implementation.
 
-The existing trigger test harness had obsolete pending/failure stub signatures. These were updated to the current NativeDriver interface, and that header is now included to catch future signature drift.
+Current results: hitbox, Memory tab, and trigger suites passed; the ARM64 Android 21 NDK r22 build passed. Home layout/scrolling verification passed. Offline verification matched all nine hitbox records plus 45 trigger fingerprints and seven compatibility probes. Existing custom-widget compiler warnings remain in the UI tests.
 
 ARM64 build command, from `src/main`:
 
@@ -82,8 +90,8 @@ Build artifact: `/workspace/hitbox-reference/android-libs/arm64-v8a/libnets.so`.
 
 ## Remaining device checks and limits
 
-No Android device or active game session was available. Runtime instruction decoding, hook ABI, actual damage registration, FPS/latency impact and screenshots have not been verified on a device. Do not describe this branch as proven in-game or merge it solely on the host tests.
+No Android device or active game session was available. Live instruction decoding, hook/trampoline execution, crash resolution, actual damage registration, FPS/latency impact and screenshots have not been verified on a device. The user has authorized publication to main; publication must not be represented as device verification.
 
 The game's original broad-phase target selection and weapon range still apply. Enlargement affects detailed shapes of a target already supplied to the weapon query; a ray that never selects that target cannot become a hit through this feature. Server-side hit validation can reject client-side results, especially at large multipliers. This does not change server hitboxes or damage values.
 
-Next device pass: test disabled and 1× first; compare direct head/body shots at 1.25×, 1.5× and 2×; then near-head and near-body misses with rifles, shotguns and snipers. Check walls, shields, teammates, death/respawn, weapon switching, match changes and toggling off mid-session. Confirm actual target health loss, not only local hit markers. If the UI stays at Waiting for game hit checks, obtain decoded entry bytes and the build ID; do not bypass the readiness guard or guess new offsets.
+Next device pass: test disabled and 1× first; reproduce the reported side shot at 1.21× and capture any signal, fault address, build ID and top native frames. Compare direct head/body shots at 1.25×, 1.5× and 2×; then near-head and near-body misses with rifles, shotguns and snipers. Check walls, shields, teammates, death/respawn, weapon switching, match changes and toggling off mid-session. Confirm actual target health loss, not only local hit markers. If the UI stays at Waiting for game hit checks, obtain decoded entry bytes and the build ID; do not bypass the readiness guard or guess new offsets.

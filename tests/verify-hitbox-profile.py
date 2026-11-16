@@ -16,8 +16,8 @@ def main():
     trigger = runpy.run_path(str(root / "tests/verify-trigger-profile.py"))
     source = (root / "src/main/jni/System/Hooks/HitboxProfile.h").read_text()
     records = re.findall(r"\{(0x[0-9A-Fa-f]+),\s*\{([^}]*)\}\}", source)
-    if len(records) != 7:
-        raise ValueError("Expected three plaintext anchors and four encoded method records")
+    if len(records) != 9:
+        raise ValueError("Expected seven plaintext anchors and two encoded method records")
     with args.library.open("rb") as file, mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ) as library:
         trigger["verify"](library, root / "src/main/jni/Trigger")
         offset = struct.unpack_from("<Q", library, 32)[0]
@@ -36,7 +36,7 @@ def main():
                     break
             else:
                 raise ValueError(f"Hitbox entry {rva_text} is outside readable executable file segments")
-    print("Hitbox: all 7 disk records match (3 plaintext anchors, 4 encoded methods).")
+    print("Hitbox: all 9 disk records match (7 plaintext anchors, 2 encoded methods).")
     print("Decoded runtime instructions, hook ABI and in-game damage still require Android device verification.")
 
 

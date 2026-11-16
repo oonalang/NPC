@@ -306,7 +306,7 @@ class Service {
             } else if(hasCommand&&(command.action==Action::Connect||(command.action==Action::Scan&&state.driveMode))) {
                 const auto link=drive_music::ParseLink(command.action==Action::Connect?command.path:state.driveLink);
                 if(!link) state.error="Paste a Google Drive folder or audio-file sharing link.";
-                else if(!drive.Ready()) state.error="Drive music is available when the Android app can open its music cache.";
+                else if(!drive.Ready()) state.error="Cloud music is available when the Android app can open its music cache.";
                 else connect(link);
             } else if(hasCommand&&command.action==Action::Scan) {
                 state.scanning=true;state.error.clear();Publish(state);
@@ -452,8 +452,8 @@ inline void Draw() {
     };
     if(modeButton("##music_local_mode","Local",!state.driveMode)) SetDriveMode(false);
     ImGui::SameLine(0,8.f*scale);
-    if(modeButton("##music_drive_mode","Drive",state.driveMode)) SetDriveMode(true);
-    if(music_ui::Dialog("Drive source",driveDialog,"Paste your shared Drive link","Connect")==music_ui::DialogResult::Apply) ConnectDrive(driveDialog.text);
+    if(modeButton("##music_drive_mode","Cloud",state.driveMode)) SetDriveMode(true);
+    if(music_ui::Dialog("Cloud source",driveDialog,"Paste your shared music link","Connect")==music_ui::DialogResult::Apply) ConnectDrive(driveDialog.text);
     const auto origin=ImGui::GetCursorScreenPos();
     const float artSize=36.f*scale;
     draw->AddRectFilled(origin,origin+ImVec2(artSize,artSize),ImGui::GetColorU32(ImVec4(c::accent.x,c::accent.y,c::accent.z,.19f)),12.f*scale);
@@ -465,7 +465,7 @@ inline void Draw() {
     }
     const char* title=state.current>=0 && state.current<static_cast<int>(state.tracks.size())?state.tracks[state.current].title.c_str():"Pick a soundtrack";
     char progress[48];std::snprintf(progress,sizeof(progress),"Caching track... %.0f%%",state.download*100.f);
-    const char* detail=state.loading?(state.driveMode?progress:"Opening track..."):state.scanning?"Finding your music...":state.playing?(state.driveMode?"Playing from Drive":"Playing locally"):state.current>=0?"Paused":"Your songs, ready when you are";
+    const char* detail=state.loading?(state.driveMode?progress:"Opening track..."):state.scanning?"Finding your music...":state.playing?(state.driveMode?"Playing from Cloud":"Playing locally"):state.current>=0?"Paused":"Your songs, ready when you are";
     const auto textStart=origin+ImVec2(artSize+10.f*scale,1.f*scale);
     draw->PushClipRect(textStart,{origin.x+width,origin.y+42.f*scale},true);
     draw->AddText(ImGui::GetFont(),18.f*scale,textStart,ImGui::GetColorU32(c::text::text),title);
@@ -521,10 +521,10 @@ inline void Draw() {
     draw->AddText(ImGui::GetFont(),13.f*scale,row+ImVec2(0,7.f*scale),ImGui::GetColorU32(c::text::text),libraryLabel);
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_source",ICON_FA_FOLDER_OPEN,{sourceWidth,30.f*scale})) {
-        if(state.driveMode) {driveDialog.Open(state.driveLink);ImGui::OpenPopup("Drive source");}
+        if(state.driveMode) {driveDialog.Open(state.driveLink);ImGui::OpenPopup("Cloud source");}
         else {const auto path=state.folders.empty()?state.appFolder:state.folders.front();sourceDialog.Open(path);ImGui::OpenPopup("Music source");}
     }
-    if(ImGui::IsItemHovered()) ImGui::SetTooltip(state.driveMode?"Shared Drive folder":"Music folder");
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip(state.driveMode?"Shared cloud folder":"Music folder");
     ImGui::SameLine(0,6.f*scale);
     if(IconButton("##music_refresh",ICON_FA_SYNC,{refreshWidth,30.f*scale},false,state.scanning)) Scan();
     if(!state.error.empty()) {ImGui::PushTextWrapPos();ImGui::TextColored(ImVec4(.98f,.61f,.67f,1.f),"%s",state.error.c_str());ImGui::PopTextWrapPos();}
@@ -536,7 +536,7 @@ inline void Draw() {
         ImGui::BeginChild("##music_library",{0,listHeight},false,ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoMove);
         if(state.tracks.empty()) {
             ImGui::TextColored(c::text::text,"No songs here yet");
-            ImGui::PushTextWrapPos();ImGui::TextColored(c::text::text_hov,state.driveMode?"Upload audio files to your shared Drive folder, then refresh.":"Add audio files to your selected folder, then refresh.");ImGui::PopTextWrapPos();
+            ImGui::PushTextWrapPos();ImGui::TextColored(c::text::text_hov,state.driveMode?"Upload audio files to your shared cloud folder, then refresh.":"Add audio files to your selected folder, then refresh.");ImGui::PopTextWrapPos();
         }
         bool found=false;
         for(std::size_t i=0;i<state.tracks.size();++i) {

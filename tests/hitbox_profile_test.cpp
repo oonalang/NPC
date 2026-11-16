@@ -35,7 +35,8 @@ struct Module {
 };
 void Hook(void* address,void* replacement,void** original) {
     ++hooks;
-    const std::uintptr_t expected[]{0x66FDB60,0xC2BE0C8,0xD52E8E4};
+    const std::uintptr_t expected[]{0x66F2A78,0x66FCA40,0xC2BE0C8,0xD52E8E4};
+    assert(hooks<=4);
     assert(address==reinterpret_cast<void*>(loaded.dlpi_addr+expected[hooks-1])&&replacement&&original);
     *original=hooks==failHook?nullptr:reinterpret_cast<void*>(1);
 }
@@ -75,8 +76,8 @@ int main(int argc,char** argv) {
             assert(!hitbox::Install(module.base(),Hook)&&hooks==0&&hitbox::status==hitbox::Status::Waiting);
             std::memcpy(module.bytes+code.rva,hitbox::anchors[2].bytes.data(),16);
         }
-        assert(hitbox::Install(module.base(),Hook)&&hooks==3&&hitbox::available&&hitbox::status==hitbox::Status::Ready);
-        assert(hitbox::Install(module.base(),Hook)&&hooks==3);
+        assert(hitbox::Install(module.base(),Hook)&&hooks==4&&hitbox::available&&hitbox::status==hitbox::Status::Ready);
+        assert(hitbox::Install(module.base(),Hook)&&hooks==4);
     }
     std::printf("Hitbox profile %s passed\n",argc==2?argv[1]:"loader/decode retry and one-time installation");
 }

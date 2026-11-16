@@ -10,21 +10,20 @@ namespace hitbox {
 namespace {
 using Metadata = const void*;
 using WeaponTrace = bool(*)(void*, int, void*, void*, Point, Point, void*, Metadata);
-using AvatarRay = bool(*)(void*, int, void*, Point, Point, HitResult*, Metadata);
+using AvatarCapsule = bool(*)(void*, void*, Point, Point, HitResult*, Metadata);
+using CapsuleRay = bool(*)(void*, Point, Rotation, float, float, Point, Point, HitResult*, Metadata);
+using Getter = void*(*)(void*, Metadata);
 WeaponTrace originalBase = nullptr, originalInstant = nullptr;
-AvatarRay originalRay = nullptr;
-std::uintptr_t library = 0;
-
-template<class Function> Function At(std::uintptr_t rva) noexcept {
-    return reinterpret_cast<Function>(library + rva);
-}
+AvatarCapsule originalAvatarCapsule = nullptr;
+CapsuleRay originalCapsule = nullptr;
+Getter localPawn = nullptr, matchGame = nullptr;
 
 bool Enemy(void* instance, void* target) noexcept {
-    using Getter = void*(*)(void*, Metadata);
-    const auto* local = At<Getter>(0x8012814)(nullptr, nullptr);
+    if (!localPawn || !matchGame) return false;
+    const auto* local = localPawn(nullptr, nullptr);
     if (!local || target == local || Field<void*>(instance, 0x28) != local ||
         Field<unsigned char>(local, 0x550) != 1) return false;
-    const auto* match = At<Getter>(0x801191C)(nullptr, nullptr);
+    const auto* match = matchGame(nullptr, nullptr);
     std::array<const void*, 512> enemies{};
     std::size_t count = 0;
     if (!CopyList(Field<void*>(match, 0x178), enemies.data(), enemies.size(), count) ||
@@ -56,20 +55,21 @@ bool Instant(void* instance, int type, void* target, void* collider,
              Point start, Point direction, void* impact, Metadata info) {
     return Weapon(originalInstant, instance, type, target, collider, start, direction, impact, info);
 }
-bool Ray(void* instance, int shape, void* collider, Point start, Point end, HitResult* result, Metadata info) {
-    if (!originalRay) return false;
-    if (!currentTrace || currentTrace->scale <= 1.f || !result || !currentTrace->Contains(collider) ||
-        !BodyGroup(Field<std::uint16_t>(collider, 0x20)) || Field<unsigned char>(collider, 0x50) != 1)
-        return originalRay(instance, shape, collider, start, end, result, info);
-    const auto* parent = Field<void*>(collider, 0x40);
-    const auto position = Field<Point>(collider, 0x24);
-    if (!parent || !Finite(position)) return originalRay(instance, shape, collider, start, end, result, info);
-    using TransformPoint = Point(*)(const void*, Point, Metadata);
-    const auto center = At<TransformPoint>(0x532D29C)(parent, position, nullptr);
-    return ScaledRay(center, start, end, currentTrace->scale, *result,
-        [&](Point mappedStart, Point mappedEnd, HitResult& hit) {
-            return originalRay(instance, shape, collider, mappedStart, mappedEnd, &hit, info);
-        });
+bool Capsule(void* instance, Point center, Rotation rotation, float axisLength, float radius,
+             Point start, Point end, HitResult* result, Metadata info) {
+    if (!originalCapsule) return false;
+    ExpandCapsule(primitiveScale, axisLength, radius);
+    PrimitiveScope neutral(1.f);
+    return originalCapsule(instance, center, rotation, axisLength, radius, start, end, result, info);
+}
+bool Avatar(void* instance, void* collider, Point start, Point end, HitResult* result, Metadata info) {
+    if (!originalAvatarCapsule) return false;
+    float scale = 1.f;
+    if (available.load(std::memory_order_acquire) && currentTrace && currentTrace->Contains(collider) &&
+        BodyGroup(Field<std::uint16_t>(collider, 0x20)) && Field<unsigned char>(collider, 0x50) == 1)
+        scale = currentTrace->scale;
+    PrimitiveScope scope(scale);
+    return originalAvatarCapsule(instance, collider, start, end, result, info);
 }
 }
 
@@ -111,10 +111,12 @@ bool Install(std::uintptr_t base, HookInstaller hook) noexcept {
         if (std::memcmp(bytes, entry.bytes.data(), entry.bytes.size()) == 0) return false;
         if (!StackEntry(bytes)) return false;
     }
-    library = base;
+    localPawn = reinterpret_cast<Getter>(base + 0x8012814);
+    matchGame = reinterpret_cast<Getter>(base + 0x801191C);
     struct Hook { std::uintptr_t rva; void* replacement; void** original; };
     const Hook hooks[]{
-        {0x66FDB60, reinterpret_cast<void*>(Ray), reinterpret_cast<void**>(&originalRay)},
+        {0x66F2A78, reinterpret_cast<void*>(Capsule), reinterpret_cast<void**>(&originalCapsule)},
+        {0x66FCA40, reinterpret_cast<void*>(Avatar), reinterpret_cast<void**>(&originalAvatarCapsule)},
         {0xC2BE0C8, reinterpret_cast<void*>(Base), reinterpret_cast<void**>(&originalBase)},
         {0xD52E8E4, reinterpret_cast<void*>(Instant), reinterpret_cast<void**>(&originalInstant)}
     };

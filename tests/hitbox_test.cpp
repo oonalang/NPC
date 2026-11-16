@@ -24,23 +24,6 @@ static bool Sphere(Point center, float radius, Point start, Point end, HitResult
     result.material = 13;
     return true;
 }
-static bool Box(Point center, Point extent, Point start, Point end, HitResult& result) {
-    const float origin[]{start.x,start.y,start.z},finish[]{end.x,end.y,end.z};
-    const float middle[]{center.x,center.y,center.z},half[]{extent.x,extent.y,extent.z};
-    float near=0,far=1;int axis=0;float sign=0;
-    for (int i=0;i<3;++i) {
-        const float delta=finish[i]-origin[i],lo=middle[i]-half[i],hi=middle[i]+half[i];
-        if (std::fabs(delta)<1e-8f) {if(origin[i]<lo || origin[i]>hi) return false;continue;}
-        float a=(lo-origin[i])/delta,b=(hi-origin[i])/delta;
-        const float n=delta>0?-1.f:1.f;
-        if(a>b) std::swap(a,b);
-        if(a>near) {near=a;axis=i;sign=n;}
-        far=std::min(far,b);if(near>far) return false;
-    }
-    result.location={start.x+(end.x-start.x)*near,start.y+(end.y-start.y)*near,start.z+(end.z-start.z)*near};
-    result.normal={axis==0?sign:0,axis==1?sign:0,axis==2?sign:0};
-    return true;
-}
 static bool HorizontalCapsule(Point center,float radius,float halfLength,Point start,Point end,HitResult& result) {
     assert(Near(start.y,end.y));
     const Point closest{center.x,std::clamp(start.y,center.y-halfLength,center.y+halfLength),center.z};
@@ -48,44 +31,42 @@ static bool HorizontalCapsule(Point center,float radius,float halfLength,Point s
 }
 
 static void Geometry() {
-    int collider=0;
-    for (const auto center:{Point{0,0,0},Point{12,-3,4},Point{-31,12,8}})
-        for (float scale:{1.25f,2.f,3.5f,5.f})
-            for (float x:{-.95f,-.35f,0.f,.35f,.95f,1.4f}) {
-                const Point start{center.x+x,center.y,center.z-6},end{center.x+x,center.y,center.z+6};
-                HitResult actual{},expected{};actual.distance=FLT_MAX;actual.collider=&collider;
-                const bool expanded=ScaledRay(center,start,end,scale,actual,[&](Point a,Point b,HitResult& hit){return Sphere(center,.35f,a,b,hit);});
-                const bool reference=Sphere(center,.35f*scale,start,end,expected);
-                assert(expanded==reference);
-                if(expanded) {
-                    assert(Same(actual.location,expected.location)&&Same(actual.normal,expected.normal));
-                    assert(Near(actual.distance,actual.location.z-start.z));
-                    assert(actual.material==13&&actual.collider==&collider);
-                }
-                HitResult box{},largeBox{};box.distance=FLT_MAX;
-                const bool small=ScaledRay(center,start,end,scale,box,[&](Point a,Point b,HitResult& hit){return Box(center,{.35f,.5f,.2f},a,b,hit);});
-                const bool large=Box(center,{.35f*scale,.5f*scale,.2f*scale},start,end,largeBox);
-                assert(small==large);
-                if(small) assert(Same(box.location,largeBox.location)&&Same(box.normal,largeBox.normal));
+    for (float scale : {1.f,1.21f,1.25f,2.f,5.f})
+        for (float y : {-2.f,-.6f,0.f,.6f,1.1f})
+            for (float x : {-.5f,0.f,.15f,.22f,.5f}) {
+                const Point center{4,-3,7},start{4+x,-3+y,1},end{4+x,-3+y,13};
+                float axisLength=1.2f,radius=.2f;
+                assert(ExpandCapsule(scale,axisLength,radius)==(scale>1.f));
+                HitResult actual{},expected{};
+                const bool hit=HorizontalCapsule(center,radius,axisLength*.5f,start,end,actual);
+                const bool reference=HorizontalCapsule(center,.2f*scale,.6f*scale,start,end,expected);
+                assert(hit==reference);
+                if(hit) assert(Same(actual.location,expected.location)&&Same(actual.normal,expected.normal));
             }
-    for(float scale:{1.25f,2.f,5.f}) for(float y:{-2.f,-.6f,0.f,.6f,1.1f}) for(float x:{-.5f,0.f,.15f,.5f}) {
-        const Point center{4,-3,7},start{4+x,-3+y,1},end{4+x,-3+y,13};
-        HitResult capsule{},large{};capsule.distance=FLT_MAX;
-        const bool mapped=ScaledRay(center,start,end,scale,capsule,[&](Point a,Point b,HitResult& hit){return HorizontalCapsule(center,.2f,.6f,a,b,hit);});
-        const bool expanded=HorizontalCapsule(center,.2f*scale,.6f*scale,start,end,large);
-        assert(mapped==expanded);
-        if(mapped) assert(Same(capsule.location,large.location)&&Same(capsule.normal,large.normal));
+    for(float value : {NAN,INFINITY,-INFINITY,-1.f,0.f,1.f}) {
+        float axis=1.2f,radius=.2f;
+        assert(!ExpandCapsule(value,axis,radius)&&axis==1.2f&&radius==.2f);
     }
-    HitResult result{{1,2,3},{0,1,0},123,9,&collider};const auto before=result;
-    assert(!ScaledRay({0,0,0},{0,0,-6},{0,0,-3},2,result,[&](Point a,Point b,HitResult& hit){return Sphere({0,0,0},.5f,a,b,hit);}));
-    assert(std::memcmp(&result,&before,sizeof(result))==0);
-    for (const auto point:{Point{100,0,0},Point{0,0,20},Point{0,0,-20},Point{NAN,0,0}}) {
-        assert(!ScaledRay({0,0,0},{0,0,-6},{0,0,6},2,result,[&](Point,Point,HitResult& hit){hit.location=point;hit.normal={0,1,0};return true;}));
-        assert(std::memcmp(&result,&before,sizeof(result))==0);
+    for(float bad : {NAN,INFINITY,-INFINITY,-1.f}) {
+        float axis=bad,radius=.2f;
+        assert(!ExpandCapsule(1.21f,axis,radius)&&radius==.2f);
+        axis=1.2f;radius=bad;
+        assert(!ExpandCapsule(1.21f,axis,radius)&&axis==1.2f);
     }
-    int calls=0;
-    assert(ScaledRay({0,0,0},{1,2,3},{3,2,1},1,result,[&](Point a,Point b,HitResult&){++calls;assert(Same(a,{1,2,3})&&Same(b,{3,2,1}));return true;}));
-    assert(calls==1);
+    float axis=0.f,radius=.2f;
+    assert(ExpandCapsule(1.21f,axis,radius)&&axis==0.f&&Near(radius,.242f));
+    axis=1.f;radius=0.f;assert(!ExpandCapsule(1.21f,axis,radius)&&axis==1.f);
+    axis=FLT_MAX;radius=1.f;assert(!ExpandCapsule(5.f,axis,radius)&&axis==FLT_MAX&&radius==1.f);
+    axis=1.f;radius=FLT_MAX;assert(!ExpandCapsule(5.f,axis,radius)&&axis==1.f&&radius==FLT_MAX);
+    assert(primitiveScale==1.f);
+    {
+        PrimitiveScope outer(1.21f);assert(Near(primitiveScale,1.21f));
+        {PrimitiveScope neutral(1.f);assert(primitiveScale==1.f);}
+        assert(Near(primitiveScale,1.21f));
+        try {PrimitiveScope inner(3.f);throw 1;} catch(int) {}
+        assert(Near(primitiveScale,1.21f));
+    }
+    assert(primitiveScale==1.f);
 }
 
 static void ClassificationAndScope() {
@@ -100,7 +81,9 @@ static void ClassificationAndScope() {
             const Point end{start.x,start.y,6};
             for(const auto& region:regions) {
                 assert(currentTrace->Contains(&region));
-                if(ScaledRay(region.center,start,end,currentTrace->scale,result,[&](Point a,Point b,HitResult& out){return Sphere(region.center,region.radius,a,b,out);})) {group=region.group;return true;}
+                float axis=0.f,radius=region.radius;
+                ExpandCapsule(currentTrace->scale,axis,radius);
+                if(Sphere(region.center,radius,start,end,result)) {group=region.group;return true;}
             }
             return false;
         });
@@ -127,9 +110,10 @@ static void ClassificationAndScope() {
     const auto worker=[&](float scale) {
         auto own=context;own.scale=scale;
         for(int i=0;i<10000;++i) {
+            PrimitiveScope primitive(scale);
             int calls=0;
             assert(TraceWeapon(own,[&] {++calls;assert(currentTrace&&currentTrace->scale==(calls==1?1.f:scale));return calls==2;}));
-            assert(calls==2&&!currentTrace);
+            assert(calls==2&&!currentTrace&&primitiveScale==scale);
         }
     };
     std::thread a(worker,2.f),b(worker,4.f);a.join();b.join();
@@ -161,5 +145,5 @@ static void ListsAndSettings() {
 
 int main() {
     Geometry();ClassificationAndScope();ListsAndSettings();
-    std::puts("Hitbox: scaled sphere/box/capsule intersections, world-space impacts, normal head/body priority, miss handling, bounded lists, nested/concurrent scopes and settings passed");
+    std::puts("Hitbox: capsule dimensions, invalid geometry, normal head/body priority, miss handling, bounded lists, nested/concurrent scopes and settings passed");
 }

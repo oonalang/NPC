@@ -17,3 +17,7 @@ ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary" "$config_dir"
 for mode in '' --build --anchor --partial; do
     ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary" $mode
 done
+"${CXX:-c++}" -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+    -D__ANDROID__ -D__aarch64__ "$project_dir/tests/hitbox_native_test.cpp" \
+    "$project_dir/src/main/jni/Trigger/NativeProfile.cpp" -lpthread -o "$test_binary"
+ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary"

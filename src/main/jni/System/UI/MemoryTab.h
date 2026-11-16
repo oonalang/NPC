@@ -17,7 +17,7 @@ extern float SlideRange,SnowBsize,speedHackMultiplier,jumpHeightMultiplier,MpBsi
 namespace memory_tab {
 enum class Category { Movement,Weapons,Protection,Blueprints };
 inline Category selected=Category::Movement;
-inline constexpr const char* labels[]{"Movement","Weapon handling","Protection & view","Blueprints"};
+inline constexpr const char* labels[]{"Movement","Weapon","Protection & view","Blueprints"};
 inline bool CategoryButton(int index,ImVec2 size) {
     ImGui::PushID(index);
     const auto lo=ImGui::GetCursorScreenPos();
@@ -143,14 +143,14 @@ inline void Draw(ImVec2 available) {
     custom::Child(first,{panelWidth,bodyHeight},true,ImGuiWindowFlags_NoScrollbar);
     switch(selected) {
         case Category::Movement: Movement();if(!wide) {Section("MOVEMENT TUNING");MovementTuning();}break;
-        case Category::Weapons: WeaponControl();if(!wide) {Section("WEAPON HANDLING");WeaponHandling();}break;
+        case Category::Weapons: WeaponControl();if(!wide) {Section("WEAPON");WeaponHandling();}break;
         case Category::Protection: Protection();if(!wide) {Section("CAMERA");Camera();}break;
         case Category::Blueprints: Blueprints();break;
     }
     custom::EndChild();ImGui::EndGroup();
     if(wide) {
         ImGui::SameLine(0,gap);ImGui::BeginGroup();
-        const char* second=selected==Category::Movement?"MOVEMENT TUNING##memory_tuning":selected==Category::Weapons?"WEAPON HANDLING##memory_handling":"CAMERA##memory_camera";
+        const char* second=selected==Category::Movement?"MOVEMENT TUNING##memory_tuning":selected==Category::Weapons?"WEAPON##memory_handling":"CAMERA##memory_camera";
         custom::Child(second,{panelWidth,bodyHeight},true,ImGuiWindowFlags_NoScrollbar);
         if(selected==Category::Movement) MovementTuning();else if(selected==Category::Weapons) WeaponHandling();else Camera();
         custom::EndChild();ImGui::EndGroup();

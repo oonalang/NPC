@@ -27,6 +27,7 @@ inline Options Read() noexcept {
 }
 
 struct Point { float x, y, z; };
+struct Rotation { float x, y, z, w; };
 struct HitResult {
     Point location, normal;
     float distance;
@@ -34,21 +35,33 @@ struct HitResult {
     void* collider;
 };
 static_assert(sizeof(Point) == 12);
+static_assert(sizeof(Rotation) == 16);
 static_assert(offsetof(HitResult, distance) == 0x18);
 static_assert(offsetof(HitResult, collider) == 0x20);
 static_assert(sizeof(HitResult) == 0x28);
 
-inline bool Finite(Point value) noexcept {
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
-}
-inline Point Around(Point point, Point center, float factor) noexcept {
-    return {center.x + (point.x - center.x) * factor,
-            center.y + (point.y - center.y) * factor,
-            center.z + (point.z - center.z) * factor};
-}
 inline bool BodyGroup(unsigned group) noexcept {
     return group >= 1 && group <= 31 && group != 6;
 }
+inline bool ExpandCapsule(float scale, float& axisLength, float& radius) noexcept {
+    scale = NormalizeScale(scale);
+    if (scale <= 1.f || !std::isfinite(axisLength) || !std::isfinite(radius) || axisLength < 0.f || radius <= 0.f)
+        return false;
+    const float expandedAxis = axisLength * scale, expandedRadius = radius * scale;
+    if (!std::isfinite(expandedAxis) || !std::isfinite(expandedRadius)) return false;
+    axisLength = expandedAxis;
+    radius = expandedRadius;
+    return true;
+}
+inline thread_local float primitiveScale = 1.f;
+class PrimitiveScope {
+    float previous_;
+public:
+    explicit PrimitiveScope(float scale) noexcept : previous_(primitiveScale) { primitiveScale = NormalizeScale(scale); }
+    PrimitiveScope(const PrimitiveScope&) = delete;
+    PrimitiveScope& operator=(const PrimitiveScope&) = delete;
+    ~PrimitiveScope() { primitiveScale = previous_; }
+};
 
 struct TraceContext {
     std::array<const void*, maximumColliders> colliders{};
@@ -79,37 +92,6 @@ bool TraceWeapon(TraceContext context, Original original) {
     if (original()) return true;
     context.scale = expandedScale;
     return original();
-}
-
-template<class Original>
-bool ScaledRay(Point center, Point start, Point end, float scale, HitResult& result, Original original) {
-    scale = NormalizeScale(scale);
-    if (scale == 1.f || !Finite(center) || !Finite(start) || !Finite(end))
-        return original(start, end, result);
-    const auto mappedStart = Around(start, center, 1.f / scale);
-    const auto mappedEnd = Around(end, center, 1.f / scale);
-    if (!Finite(mappedStart) || !Finite(mappedEnd)) return false;
-    HitResult candidate = result;
-    if (std::isfinite(candidate.distance)) candidate.distance /= scale;
-    candidate.location = Around(candidate.location, center, 1.f / scale);
-    if (!original(mappedStart, mappedEnd, candidate)) return false;
-    candidate.location = Around(candidate.location, center, scale);
-    const double dx = double(end.x) - start.x, dy = double(end.y) - start.y, dz = double(end.z) - start.z;
-    const double lengthSquared = dx * dx + dy * dy + dz * dz;
-    const double length = std::sqrt(lengthSquared);
-    const double hx = double(candidate.location.x) - start.x;
-    const double hy = double(candidate.location.y) - start.y;
-    const double hz = double(candidate.location.z) - start.z;
-    const double along = length > 0 ? (hx * dx + hy * dy + hz * dz) / length : -1;
-    const double distanceSquared = hx * hx + hy * hy + hz * hz;
-    const double tolerance = std::max(.0005, length * .00001);
-    if (!Finite(candidate.location) || !Finite(candidate.normal) ||
-        !std::isfinite(length) || length <= 0 || along < -tolerance || along > length + tolerance ||
-        distanceSquared - along * along > tolerance * tolerance) return false;
-    candidate.distance = static_cast<float>(std::sqrt(distanceSquared));
-    if (!std::isfinite(candidate.distance)) return false;
-    result = candidate;
-    return true;
 }
 
 template<class Value> Value Field(const void* object, std::size_t offset) noexcept {
