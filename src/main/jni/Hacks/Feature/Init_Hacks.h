@@ -141,6 +141,11 @@ struct sWeaponAim {
         float ItemDistance;
         bool PlacedNadesESP;
         bool PlacedEnemyOnly;
+        bool PlacedTripMines;
+        bool PlacedC4;
+        bool PlacedSensors;
+        bool PlacedTrophies;
+        bool PlacedOther;
         float PlacedDistance;
         bool BRClass;
         bool Vehicle;
