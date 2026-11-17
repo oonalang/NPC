@@ -21,6 +21,7 @@ struct Loot {
     int item = 0;
     int count = 0;
     char name[64] = {};
+    bool nameResolved = false;
     Clock::time_point seen;
 };
 
@@ -92,11 +93,26 @@ inline uint32_t PawnTeam(void* pawn) {
     return fn ? fn(pawn) : 0;
 }
 
-inline void CopyWeaponName(void* instance, char (&buffer)[64]) {
-    auto* config = *reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(instance) + 0xD8);
-    if (!Tools::IsPtrValid(config) || !HasPrefix(ClassName(config), "BRWeaponConfig")) return;
-    using Name = String* (*)(void*);
-    static Name fn = reinterpret_cast<Name>(getAbsoluteAddress("libunity.so", 0xA304494));
+inline uintptr_t NameGetter(const char* name) {
+    if (!name) return 0;
+    if (!std::strcmp(name, "BRWeaponConfig")) return 0xA304494;
+    if (!std::strcmp(name, "BRClipConfig")) return 0xA2F30E0;
+    if (!std::strcmp(name, "BREquipConfig")) return 0xA2F883C;
+    if (!std::strcmp(name, "BREquipPartConfig")) return 0xA2F9E5C;
+    if (!std::strcmp(name, "BRMedicineConfig")) return 0xA2FD028;
+    if (!std::strcmp(name, "BRThrowingConfig")) return 0xA303500;
+    if (!std::strcmp(name, "BRSkillItemConfig")) return 0xA301CFC;
+    if (!std::strcmp(name, "BRPerkConfig")) return 0xA2FE438;
+    return 0;
+}
+
+inline void CopyItemName(void* instance, char (&buffer)[64]) {
+    void* config = *reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(instance) + 0xD8);
+    if (!Tools::IsPtrValid(config)) return;
+    const uintptr_t rva = NameGetter(ClassName(config));
+    if (!rva) return;
+    using GetName = String* (*)(void*);
+    const auto fn = reinterpret_cast<GetName>(getAbsoluteAddress("libunity.so", rva));
     if (!fn) return;
     String* result = fn(config);
     if (!Tools::IsPtrValid(result) || result->length <= 0 || result->length > 60) return;
@@ -151,11 +167,24 @@ inline void TrackLoot(void* instance) {
     if (bytes[0x30] != 0 || entry.kind <= 0 || entry.kind > 21 ||
         entry.item <= 0 || !ValidWorld(entry.pos)) return;
     if (!ItemEnabled(entry.kind)) return;
-    if (entry.kind == 1) CopyWeaponName(instance, entry.name);
+    const uintptr_t key = reinterpret_cast<uintptr_t>(instance);
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        const auto existing = loot.find(key);
+        if (existing != loot.end() && existing->second.kind == entry.kind &&
+            existing->second.item == entry.item && existing->second.nameResolved) {
+            std::memcpy(entry.name, existing->second.name, sizeof(entry.name));
+            entry.nameResolved = true;
+        }
+    }
+    if (!entry.nameResolved) {
+        CopyItemName(instance, entry.name);
+        entry.nameResolved = true;
+    }
     entry.seen = Clock::now();
     std::lock_guard<std::mutex> lock(mutex);
-    if (loot.size() >= 350 && loot.find(reinterpret_cast<uintptr_t>(instance)) == loot.end()) return;
-    loot[reinterpret_cast<uintptr_t>(instance)] = entry;
+    if (loot.size() >= 350 && loot.find(key) == loot.end()) return;
+    loot[key] = entry;
 }
 
 inline void TrackPlaced(void* instance) {
