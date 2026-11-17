@@ -50,6 +50,7 @@ inline nlohmann::json CaptureConfiguration() {
     config["ESPMenu"]["ItemMods"] = Config.ESPMenu.ItemMods;
     config["ESPMenu"]["ItemEquipment"] = Config.ESPMenu.ItemEquipment;
     config["ESPMenu"]["ItemOther"] = Config.ESPMenu.ItemOther;
+    config["ESPMenu"]["ItemSearch"] = std::string(Config.ESPMenu.ItemSearch);
     config["ESPMenu"]["ItemDistance"] = Config.ESPMenu.ItemDistance;
     config["ESPMenu"]["PlacedNadesESP"] = Config.ESPMenu.PlacedNadesESP;
     config["ESPMenu"]["PlacedTripMines"] = Config.ESPMenu.PlacedTripMines;
@@ -155,6 +156,11 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
             Config.ESPMenu.ItemMods = esp.value("ItemMods",Config.ESPMenu.ItemMods);
             Config.ESPMenu.ItemEquipment = esp.value("ItemEquipment",Config.ESPMenu.ItemEquipment);
             Config.ESPMenu.ItemOther = esp.value("ItemOther",Config.ESPMenu.ItemOther);
+            if (esp.contains("ItemSearch") && esp["ItemSearch"].is_string()) {
+                const std::string query = esp["ItemSearch"].get<std::string>().substr(0,63);
+                std::memset(Config.ESPMenu.ItemSearch,0,sizeof(Config.ESPMenu.ItemSearch));
+                std::memcpy(Config.ESPMenu.ItemSearch,query.data(),query.size());
+            }
             Config.ESPMenu.ItemDistance = std::clamp(esp.value("ItemDistance",Config.ESPMenu.ItemDistance),20.0f,250.0f);
             Config.ESPMenu.PlacedNadesESP = esp.value("PlacedNadesESP",Config.ESPMenu.PlacedNadesESP);
             Config.ESPMenu.PlacedTripMines = esp.value("PlacedTripMines",Config.ESPMenu.PlacedTripMines);
