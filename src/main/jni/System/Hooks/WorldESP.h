@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -39,6 +40,8 @@ struct Device {
 inline std::mutex mutex;
 inline std::unordered_map<uintptr_t, Loot> loot;
 inline std::unordered_map<uintptr_t, Device> devices;
+inline std::atomic<bool> wantLoot{false};
+inline std::atomic<bool> wantDevices{false};
 inline Tick originalNormalTick = nullptr;
 inline Tick originalBRTick = nullptr;
 inline Tick originalStickTick = nullptr;
@@ -185,7 +188,7 @@ inline bool ItemEnabled(int type) {
 }
 
 inline void TrackLoot(void* instance) {
-    if (!Config.ESPMenu.ItemESP || !Tools::IsPtrValid(instance)) return;
+    if (!wantLoot.load(std::memory_order_relaxed) || !Tools::IsPtrValid(instance)) return;
     void* data = *reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(instance) + 0x50);
     if (!Tools::IsPtrValid(data)) return;
     auto* bytes = reinterpret_cast<const uint8_t*>(data);
@@ -196,7 +199,7 @@ inline void TrackLoot(void* instance) {
     std::memcpy(&entry.pos, bytes + 0x4C, sizeof(Vector3));
     if (bytes[0x30] != 0 || entry.kind <= 0 || entry.kind > 21 ||
         entry.item <= 0 || !ValidWorld(entry.pos)) return;
-    if (!ItemEnabled(entry.kind)) return;
+    if (entry.kind < 1 || entry.kind > 8) return;
     const uintptr_t key = reinterpret_cast<uintptr_t>(instance);
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -218,7 +221,7 @@ inline void TrackLoot(void* instance) {
 }
 
 inline void TrackPlaced(void* instance) {
-    if (!Config.ESPMenu.PlacedNadesESP || !Tools::IsPtrValid(instance)) return;
+    if (!wantDevices.load(std::memory_order_relaxed) || !Tools::IsPtrValid(instance)) return;
     const auto kind = Identify(ClassName(instance));
     if (kind == DeviceKind::None) return;
     const uintptr_t address = reinterpret_cast<uintptr_t>(instance);
@@ -271,6 +274,8 @@ inline bool Projection(Camera* cam, const Vector3& world, int width, int height,
 }
 
 inline void Draw(ImDrawList* draw, int width, int height, const Vector3& localPosition, Pawn* localPawn) {
+    wantLoot.store(Config.ESPMenu.ItemESP,std::memory_order_relaxed);
+    wantDevices.store(Config.ESPMenu.PlacedNadesESP,std::memory_order_relaxed);
     if ((!Config.ESPMenu.ItemESP && !Config.ESPMenu.PlacedNadesESP) ||
         !draw || !ValidWorld(localPosition)) return;
     Camera* cam = Camera::get_main();
