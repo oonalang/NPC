@@ -52,6 +52,11 @@ inline nlohmann::json CaptureConfiguration() {
     config["ESPMenu"]["ItemOther"] = Config.ESPMenu.ItemOther;
     config["ESPMenu"]["ItemDistance"] = Config.ESPMenu.ItemDistance;
     config["ESPMenu"]["PlacedNadesESP"] = Config.ESPMenu.PlacedNadesESP;
+    config["ESPMenu"]["PlacedTripMines"] = Config.ESPMenu.PlacedTripMines;
+    config["ESPMenu"]["PlacedC4"] = Config.ESPMenu.PlacedC4;
+    config["ESPMenu"]["PlacedSensors"] = Config.ESPMenu.PlacedSensors;
+    config["ESPMenu"]["PlacedTrophies"] = Config.ESPMenu.PlacedTrophies;
+    config["ESPMenu"]["PlacedOther"] = Config.ESPMenu.PlacedOther;
     config["ESPMenu"]["PlacedEnemyOnly"] = Config.ESPMenu.PlacedEnemyOnly;
     config["ESPMenu"]["PlacedDistance"] = Config.ESPMenu.PlacedDistance;
     config["ESPMenu"]["isPlayerLine"] = Config.ESPMenu.isPlayerLine;
@@ -152,6 +157,11 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
             Config.ESPMenu.ItemOther = esp.value("ItemOther",Config.ESPMenu.ItemOther);
             Config.ESPMenu.ItemDistance = std::clamp(esp.value("ItemDistance",Config.ESPMenu.ItemDistance),20.0f,250.0f);
             Config.ESPMenu.PlacedNadesESP = esp.value("PlacedNadesESP",Config.ESPMenu.PlacedNadesESP);
+            Config.ESPMenu.PlacedTripMines = esp.value("PlacedTripMines",Config.ESPMenu.PlacedTripMines);
+            Config.ESPMenu.PlacedC4 = esp.value("PlacedC4",Config.ESPMenu.PlacedC4);
+            Config.ESPMenu.PlacedSensors = esp.value("PlacedSensors",Config.ESPMenu.PlacedSensors);
+            Config.ESPMenu.PlacedTrophies = esp.value("PlacedTrophies",Config.ESPMenu.PlacedTrophies);
+            Config.ESPMenu.PlacedOther = esp.value("PlacedOther",Config.ESPMenu.PlacedOther);
             Config.ESPMenu.PlacedEnemyOnly = esp.value("PlacedEnemyOnly",Config.ESPMenu.PlacedEnemyOnly);
             Config.ESPMenu.PlacedDistance = std::clamp(esp.value("PlacedDistance",Config.ESPMenu.PlacedDistance),10.0f,120.0f);
             Config.ESPMenu.isPlayerLine = esp.value("isPlayerLine",Config.ESPMenu.isPlayerLine);
