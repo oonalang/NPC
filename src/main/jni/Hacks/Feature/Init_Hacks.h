@@ -218,6 +218,7 @@ sColorsESPBOT sColorsESPBOT{0};
         bool Attachment;
 		bool Blueprints;
 		bool ClearDisplay;
+        float StretchScreen;
 		bool ResetGuest;
 		bool RedWallhack;
     	bool Spread;
