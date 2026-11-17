@@ -5,6 +5,13 @@
 #include "../Hooks/SlideFatigue.h"
 #include <sstream>
 #include <ctime>
+#include <fstream>
+#include <cstdio>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <cctype>
+#include <cerrno>
+#include "FileUtils.h"
 
 #include "../foxcheats/include/json.hpp"
 #include "../../Hacks/Feature/Init_Hacks.h"
@@ -21,9 +28,10 @@ extern float SnowBsize;
 extern bool isSpeedHackEnabled;
 extern float speedHackMultiplier;
 
-std::string androidFilesDir = "/storage/emulated/0/Android/data/com.garena.game.codm/files/";
 
-void SaveConfiguration(const std::string& filename) {
+
+
+inline nlohmann::json CaptureConfiguration() {
     nlohmann::json config;
     const auto frames=frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1);
     config["FrameRate"]["Custom"]=frames.custom;
@@ -88,28 +96,11 @@ void SaveConfiguration(const std::string& filename) {
     config["menu"][1] = menu[1];
     config["menu"][2] = menu[2];
 
-    std::string configDir = androidFilesDir + "configs";
-    mkdir(configDir.c_str(), 0777);
-
-    std::string filePath = configDir + "/" + filename + ".json";
-    std::ofstream file(filePath);
-    if (file.is_open()) {
-        file << std::setw(4) << config;
-        file.close();
-    }
+    return config;
 }
 
-bool LoadConfiguration(const std::string& filename) {
+inline bool ApplyConfiguration(const nlohmann::json& config) {
     try {
-        std::string filePath = androidFilesDir + "configs/" + filename + ".json";
-        std::ifstream file(filePath);
-        if (!file.is_open()) {
-            return false;
-        }
-
-        nlohmann::json config;
-        file >> config;
-
         if (config.contains("ESPMenu")) {
             Config.ESPMenu.Box = config["ESPMenu"]["Box"].get<bool>();
             Config.ESPMenu.Name = config["ESPMenu"]["Name"].get<bool>();
@@ -203,8 +194,63 @@ bool LoadConfiguration(const std::string& filename) {
         }
 
         return true;
+    } catch (const std::exception&) {
+        return false;
     }
-    catch (const std::exception& e) {
+}
+
+inline std::string ConfigStorageDirectory() {
+    const std::string base = GetFilesDirPath(VM);
+    return base.empty() ? std::string() : base + "/configs";
+}
+
+inline bool ConfigFileNameValid(const std::string& name) {
+    if (name.empty() || name.size() > 48) return false;
+    for (unsigned char ch : name) {
+        if (!std::isalnum(ch) && ch != '-' && ch != '_') return false;
+    }
+    return true;
+}
+
+inline bool SaveConfigurationFile(const std::string& name, const nlohmann::json& value) {
+    if (!ConfigFileNameValid(name)) return false;
+    const std::string dir = ConfigStorageDirectory();
+    if (dir.empty() || (mkdir(dir.c_str(), 0700) != 0 && errno != EEXIST)) return false;
+    const std::string path = dir + "/" + name + ".json";
+    const std::string temp = path + ".tmp";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        if (!out.is_open()) return false;
+        out << value.dump(2);
+        out.flush();
+        if (!out.good()) { out.close(); std::remove(temp.c_str()); return false; }
+    }
+    if (std::rename(temp.c_str(), path.c_str()) != 0) {
+        std::remove(temp.c_str());
+        return false;
+    }
+    return true;
+}
+
+inline bool SaveConfiguration(const std::string& filename) {
+    return SaveConfigurationFile(filename, CaptureConfiguration());
+}
+
+inline bool LoadConfiguration(const std::string& filename) {
+    if (!ConfigFileNameValid(filename)) return false;
+    const std::string dir = ConfigStorageDirectory();
+    if (dir.empty()) return false;
+    std::ifstream input(dir + "/" + filename + ".json", std::ios::binary);
+    if (!input.is_open()) {
+        const std::string legacy = "/storage/emulated/0/Android/data/com.garena.game.codm/files/configs/" + filename + ".json";
+        input.open(legacy, std::ios::binary);
+    }
+    if (!input.is_open()) return false;
+    try {
+        nlohmann::json config;
+        input >> config;
+        return ApplyConfiguration(config);
+    } catch (const std::exception&) {
         return false;
     }
 }
