@@ -155,4 +155,5 @@ inline void hook_WeaponProjectileTick(void* instance, float deltaTime)
     if (orig_WeaponProjectileTick)
         orig_WeaponProjectileTick(instance, deltaTime);
     TrackThrowable(instance);
+    world_esp::TrackPlaced(instance);
 }
