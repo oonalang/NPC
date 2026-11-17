@@ -14,6 +14,7 @@ inline void Draw() {
     static char name[64]="My_Config";
     static std::string status;
     static std::string deleteTarget;
+    static bool openDeletePopup=false;
     if (!initialized) {
         profiles=device_profiles::List();
         initialized=true;
@@ -69,12 +70,13 @@ inline void Draw() {
         ImGui::SameLine();
         if (ImGui::Button("Delete",ImVec2(95.0f,35.0f))) {
             deleteTarget=profile.name;
-            ImGui::OpenPopup("Delete profile?");
+            openDeletePopup=true;
         }
         ImGui::Separator();
         ImGui::PopID();
     }
     ImGui::EndChild();
+    if (openDeletePopup) { ImGui::OpenPopup("Delete profile?");openDeletePopup=false; }
     if (ImGui::BeginPopupModal("Delete profile?",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Delete %s?",deleteTarget.c_str());
         if (ImGui::Button("Confirm",ImVec2(120,36))) {
