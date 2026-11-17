@@ -50,6 +50,7 @@ inline void MovementTuning() {
     if(Config.ExtraMenu.UnlimitedFly) custom::SliderFloat("Fly Speed",&Config.ExtraMenu.FlySpeed,1.f,10.f,"%.0f");
     custom::SliderFloat("Snowboard Speed",&SnowBsize,0.f,100.f,"%.1f");
     custom::SliderFloat("Slide Distance",&SlideRange,0.f,30.f,"%.1f");
+    if(SlideRange>0.0f&&(!o_get_SlideTackleAcclerationSpeed||!o_get_SlideTackleSpeed||!o_GetSuperSlideRate)) ImGui::TextDisabled("Slide handler pending or unavailable");
 
     custom::SliderFloat("Speed Multiplier",&speedHackMultiplier,1.f,2.f,"%.1fx");
     custom::SliderFloat("High Jump",&jumpHeightMultiplier,1.f,5.f,"%.2fx");
@@ -66,8 +67,10 @@ inline void WeaponControl() {
     custom::Checkbox("No Recoil",&Config.ExtraMenu.Recoil);
     custom::Checkbox("No Spread",&Config.ExtraMenu.Spread);
     custom::Checkbox("No Shake",&Config.ExtraMenu.Shake);
+    if(Config.ExtraMenu.Shake&&!orig_get_WeaponShake_Enable) ImGui::TextDisabled("Weapon shake handler pending or unavailable");
 
     custom::Checkbox("No Overheat",&Config.ExtraMenu.Rpd);
+    if(Config.ExtraMenu.Rpd&&!orig_get_AddHotTime) ImGui::TextDisabled("Overheat handler pending or unavailable");
 
     custom::Checkbox("Fire Rate",&Config.ExtraMenu.Fire);
 }
@@ -81,6 +84,7 @@ inline void WeaponHandling() {
 }
 inline void Protection() {
     custom::Checkbox("Fast Armor Plate",&Config.ExtraMenu.FastArmorPlate);
+    if(Config.ExtraMenu.FastArmorPlate&&(!orig_BRUseItemArmorPlate_SetUseItemTime||!orig_BRUseItemArmorPlate_Tick)) ImGui::TextDisabled("Armor handler pending or unavailable");
 
     custom::Checkbox("Anti Flashbang",&Config.ExtraMenu.Flash);
     custom::Checkbox("No Smoke",&Config.ExtraMenu.NoSmoke);
