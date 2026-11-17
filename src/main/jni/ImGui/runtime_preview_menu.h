@@ -234,6 +234,8 @@ inline void RenderEspTab(float childWidth, float childHeight) {
         custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
         custom::Checkbox("360 Alert", &Config.ESPMenu.Alert);
         custom::Checkbox("Show AimLine", &Config.ESPMenu.Aimline);
+        custom::Checkbox("ESP Items (BR)", &Config.ESPMenu.ItemESP);
+        custom::Checkbox("ESP Placed Nades (MP)", &Config.ESPMenu.PlacedNadesESP);
         custom::Checkbox("Yellow Wallhack", &Config.ExtraMenu.WallHack);
         custom::Checkbox("Red Wallhack", &Config.ExtraMenu.RedWallhack);
         EndContentChild(left);
