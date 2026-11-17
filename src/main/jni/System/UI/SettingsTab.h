@@ -211,13 +211,13 @@ namespace settings_tab
         // Nothing to render here — kept for layout spacing only.
         const float sidePad = 15.0f;
         ImGui::SetCursorPosX(sidePad);
-        ImGui::TextColored(c::text::text, "Config is managed");
+        ImGui::TextColored(c::text::text, "Use the Configs tab");
         ContentGap(2.0f);
         ImGui::SetCursorPosX(sidePad);
-        ImGui::TextColored(c::text::text, "via the side panel.");
+        ImGui::TextColored(c::text::text, "for local profiles, import");
         ContentGap(2.0f);
         ImGui::SetCursorPosX(sidePad);
-        ImGui::TextColored(c::text::text_active, "SAV  /  LOD  /  RST");
+        ImGui::TextColored(c::text::text_active, "and portable JSON export.");
     }
 
     inline void RenderEnhancementCard() {settings_controls::Draw();}
