@@ -150,6 +150,8 @@ inline void DrawThrowableAlert(ImDrawList* draw, int width, int height, const Ve
     }
 }
 
+namespace world_esp { inline void TrackPlaced(void*); }
+
 inline void hook_WeaponProjectileTick(void* instance, float deltaTime)
 {
     if (orig_WeaponProjectileTick)
