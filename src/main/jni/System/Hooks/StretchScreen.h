@@ -109,6 +109,7 @@ struct Saved {
     GLint texture = 0;
     GLint texture0 = 0;
     GLint sampler0 = 0;
+    GLint unpack = 0;
     GLint program = 0;
     GLint vao = 0;
     GLint viewport[4] = {};
@@ -124,6 +125,7 @@ struct Saved {
         glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture0);
         glGetIntegerv(GL_SAMPLER_BINDING, &sampler0);
         glActiveTexture(active);
+        glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpack);
         glGetIntegerv(GL_CURRENT_PROGRAM, &program);
         glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &vao);
         glGetIntegerv(GL_VIEWPORT, viewport);
@@ -144,6 +146,7 @@ struct Saved {
     ~Saved() {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(read));
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(draw));
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, static_cast<GLuint>(unpack));
         glUseProgram(static_cast<GLuint>(program));
         glBindVertexArray(static_cast<GLuint>(vao));
         glActiveTexture(GL_TEXTURE0);
@@ -177,6 +180,7 @@ inline bool Prepare(int width, int height) {
     if (!buffer.texture || !buffer.framebuffer) return false;
     glBindTexture(GL_TEXTURE_2D, buffer.texture);
     if (buffer.width != width || buffer.height != height) {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
