@@ -171,11 +171,17 @@ inline bool ImportJson(const std::string& text, std::string& importedName) {
     const std::string base=importedName;
     const auto existing=List();
     if (existing.size()>=60) return false;
-    for (unsigned index=1;index<=60;++index) {
-        bool occupied=false;
-        for (const auto& item:existing) if (item.name==importedName) {occupied=true;break;}
-        if (!occupied) break;
-        importedName=NormalizeName(base+"_"+std::to_string(index+1));
+    const auto exists=[&existing](const std::string& name) {
+        return std::any_of(existing.begin(),existing.end(),[&name](const Entry& entry) { return entry.name==name; });
+    };
+    if (exists(importedName)) {
+        bool found=false;
+        for (unsigned index=2;index<=61;++index) {
+            const std::string suffix="_"+std::to_string(index);
+            const std::string candidate=base.substr(0,40-suffix.size())+suffix;
+            if (!exists(candidate)) {importedName=candidate;found=true;break;}
+        }
+        if (!found) return false;
     }
     return Write(File(importedName),Package(importedName,settings).dump(2));
 }
