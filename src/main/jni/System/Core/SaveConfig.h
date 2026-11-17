@@ -87,6 +87,8 @@ inline nlohmann::json CaptureConfiguration() {
     config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
     config["ExtraMenu"]["HitboxScale"] = hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
+    config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
+    config["ExtraMenu"]["Shake"] = Config.ExtraMenu.Shake;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
     config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
     config["ExtraMenu"]["NoSlideFatigue"] = Config.ExtraMenu.NoSlideFatigue;
@@ -181,13 +183,13 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
             Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(config["ExtraMenu"].value("HitboxScale",hitbox::defaultScale));
             hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-            Config.ExtraMenu.Rpd = false;
+            Config.ExtraMenu.Rpd = config["ExtraMenu"].value("Rpd",Config.ExtraMenu.Rpd);
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
             Config.ExtraMenu.NoCrouch = config["ExtraMenu"].value("NoCrouch", false);
             Config.ExtraMenu.NoSlideFatigue = config["ExtraMenu"].value("NoSlideFatigue", false);
             slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
             Config.ExtraMenu.Recoil = config["ExtraMenu"]["Recoil"].get<bool>();
-            Config.ExtraMenu.Shake = false;
+            Config.ExtraMenu.Shake = config["ExtraMenu"].value("Shake",Config.ExtraMenu.Shake);
             Config.ExtraMenu.Spread = config["ExtraMenu"]["Spread"].get<bool>();
             Config.ExtraMenu.Reload = config["ExtraMenu"]["Reload"].get<bool>();
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
