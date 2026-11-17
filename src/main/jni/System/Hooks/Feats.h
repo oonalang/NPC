@@ -1,6 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include "FrameRate.h"
 #include "../../Security/Access.h"
 #define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
@@ -227,14 +230,6 @@ inline float h_get_SlideTackleAcclerationSpeed(void* ins) {
     return value*(1.0f+std::min(SlideRange,30.0f)/30.0f);
 }
 
-inline float (*o_PawnGetMaxSpeed)(void*) = nullptr;
-inline float h_PawnGetMaxSpeed(void* ins) {
-    if (SlideRange > 0.0f) {
-        return SlideRange + 256;
-    }
-    return o_PawnGetMaxSpeed(ins);
-}
-
 inline float (*o_get_SlideTackleSpeed)(void*) = nullptr;
 inline float h_get_SlideTackleSpeed(void* ins) {
     const float value=o_get_SlideTackleSpeed ? o_get_SlideTackleSpeed(ins) : 0.0f;
@@ -247,13 +242,6 @@ inline float h_GetSuperSlideRate(void* ins) {
     const float value=o_GetSuperSlideRate ? o_GetSuperSlideRate(ins) : 0.0f;
     if (SlideRange <= 0.0f || !std::isfinite(value) || value <= 0.0f) return value;
     return value*(1.0f+std::min(SlideRange,30.0f)/30.0f);
-}
-
-inline void (*o_TickLocalPlayer)(void*, float) = nullptr;
-inline void h_TickLocalPlayer(void* ins, float deltaTime) {
-    if (SlideRange <= 0.0f) {
-        o_TickLocalPlayer(ins, deltaTime);
-    }
 }
 
 //-- No Overheat
