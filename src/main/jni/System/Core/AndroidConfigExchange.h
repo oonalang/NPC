@@ -31,7 +31,7 @@ inline bool DownloadJson(const std::string& name, const std::string& body) {
     jobject app = Application(env);
     if (!app) return false;
     jclass versionClass = env->FindClass("android/os/Build$VERSION");
-    if (!versionClass || !ClearError(env)) { env->DeleteLocalRef(app); return false; }
+    if (!versionClass) { ClearError(env);env->DeleteLocalRef(app);return false; }
     jfieldID sdkField = env->GetStaticFieldID(versionClass, "SDK_INT", "I");
     const int sdk = sdkField ? env->GetStaticIntField(versionClass, sdkField) : 0;
     env->DeleteLocalRef(versionClass);
