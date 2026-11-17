@@ -170,6 +170,7 @@ inline bool ImportJson(const std::string& text, std::string& importedName) {
     if (importedName.empty()) importedName="Imported";
     const std::string base=importedName;
     const auto existing=List();
+    if (existing.size()>=60) return false;
     for (unsigned index=1;index<=60;++index) {
         bool occupied=false;
         for (const auto& item:existing) if (item.name==importedName) {occupied=true;break;}
