@@ -6,9 +6,9 @@
 #include <string>
 
 struct FeedbackState {
-    bool enabled = true;
-    bool consented = true;
-    bool includeScreenshot = true;
+    bool enabled = false;
+    bool consented = false;
+    bool includeScreenshot = false;
     bool hasMatchStats = false;
     int kills = 0;
     int deaths = 0;
