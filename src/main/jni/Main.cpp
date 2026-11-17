@@ -285,6 +285,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Config.sColorsESPBOT.SkeletonBOT = CREATE_COLOR(0, 255, 0, 180);
         Config.sColorsESPOTHERS.PovOTHERS = CREATE_COLOR(225, 0, 0, 180);
 
+        Config.ESPMenu.ItemWeapons = true;
+        Config.ESPMenu.ItemAmmo = true;
+        Config.ESPMenu.ItemMods = true;
+        Config.ESPMenu.ItemEquipment = true;
+        Config.ESPMenu.ItemOther = false;
+        Config.ESPMenu.ItemDistance = 150.0f;
+        Config.ESPMenu.PlacedEnemyOnly = true;
+        Config.ESPMenu.PlacedDistance = 80.0f;
         Config.ExtraMenu.NoGravityScale = 1.0f;
         Config.Aim.AimAssistSize = 0.0f;
         Config.Aim.Cross = 45.0f;
@@ -725,7 +733,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             Config.ESPMenu.isPlayerLine, Config.ESPMenu.Box, Config.ESPMenu.Skeleton,
                             Config.ESPMenu.Health, Config.ESPMenu.Name, Config.ESPMenu.Distance,
                             Config.ESPMenu.Count, Config.ESPMenu.Alert, Config.ESPMenu.BRClass,
-                            Config.ESPMenu.Aimline, Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
+                            Config.ESPMenu.Aimline, Config.ESPMenu.ItemESP, Config.ESPMenu.PlacedNadesESP, Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
                             Config.Aim.Aimbot360, Config.Aim.AimSilent, Config.ESPMenu.ShowFov,
                             Config.ExtraMenu.Blueprints, Config.ExtraMenu.AutoJumpFire, Config.ExtraMenu.FastArmorPlate,
                             Config.ExtraMenu.CameraPov, Config.ExtraMenu.SmartReload, Config.ExtraMenu.NoSmoke,
