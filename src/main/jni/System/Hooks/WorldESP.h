@@ -139,6 +139,26 @@ inline void CopyItemName(void* instance, char (&buffer)[64]) {
     buffer[written] = 0;
 }
 
+inline bool SearchMatches(const char* haystack, const char* needle) {
+    if (!needle || !*needle) return true;
+    if (!haystack) return false;
+    for (const char* start=haystack; *start; ++start) {
+        const char* a=start;
+        const char* b=needle;
+        while (*a && *b) {
+            const unsigned char ax=static_cast<unsigned char>(*a);
+            const unsigned char bx=static_cast<unsigned char>(*b);
+            const char ca=ax>='A' && ax<='Z' ? static_cast<char>(ax+32) : static_cast<char>(ax);
+            const char cb=bx>='A' && bx<='Z' ? static_cast<char>(bx+32) : static_cast<char>(bx);
+            if (ca!=cb) break;
+            ++a;
+            ++b;
+        }
+        if (!*b) return true;
+    }
+    return false;
+}
+
 inline const char* ItemCategory(int type) {
     switch (type) {
         case 1: return "WEAPON";
@@ -293,6 +313,7 @@ inline void Draw(ImDrawList* draw, int width, int height, const Vector3& localPo
             std::snprintf(label, sizeof(label), "%s | %.0fm", item.name, distance);
         else
             std::snprintf(label, sizeof(label), "%s #%d | %.0fm", ItemCategory(item.kind), item.item, distance);
+        if (!SearchMatches(label,Config.ESPMenu.ItemSearch)) continue;
         draw->AddCircleFilled(screen, 3.5f, color);
         DrawTextWithBorder1(draw, label, {screen.x+7.f,screen.y-12.f}, color, IM_COL32(0,0,0,240), 14.0f);
     }
