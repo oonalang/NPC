@@ -5,6 +5,7 @@
 #include "Includes/Utils.h"
 #include "ImGui/Call_ImGui.h"
 #include "ImGui/ClayGlass.h"
+#include "System/Hooks/StretchScreen.h"
 #include "IL2CppSDKGenerator/BasicStructs/Call_BasicStructs.h"
 #include "IL2CppSDKGenerator/IL2Cpp/Call_IL2Cpp.h"
 #include "Hacks/Hacks.h"
@@ -315,6 +316,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     screenWidth = (float)g_GlWidth;
     screenHeight = (float)g_GlHeight;
     io->DisplaySize = ImVec2((float)g_GlWidth, (float)g_GlHeight);
+    const bool stretchReady = stretch_screen::Apply(g_GlWidth, g_GlHeight, Config.ExtraMenu.StretchScreen);
     const auto frameTime = std::chrono::steady_clock::now();
     static auto previousFrameTime = frameTime;
     const float measuredFrameSeconds=std::chrono::duration<float>(frameTime-previousFrameTime).count();
@@ -371,8 +373,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
+    const int espFirstVertex = draw->VtxBuffer.Size;
     if (menuReady)
-        DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
+        DrawESP(draw, screenWidth, screenHeight, get_dpi());
+    if (menuReady && stretchReady)
+        stretch_screen::RemapOverlay(draw, espFirstVertex, g_GlWidth, g_GlHeight, Config.ExtraMenu.StretchScreen);
     if(menuReady) {
         PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
         floating_info::Render(draw, screenWidth, screenHeight);
