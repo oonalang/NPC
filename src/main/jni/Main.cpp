@@ -71,8 +71,6 @@ void Init_Thread2();
 #include <functional>
 #include "FeedbackService.h"
 
-static auto lastScreenshotTime = std::chrono::steady_clock::now();
-constexpr std::chrono::seconds screenshotInterval(180);
 
 class _BYTE;
 class _BOOL4;
