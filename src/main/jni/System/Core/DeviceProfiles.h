@@ -86,6 +86,10 @@ inline bool MergeAllowed(nlohmann::json& target, const nlohmann::json& incoming,
             if (!std::isfinite(number) || number < -10000.0 || number > 10000.0) return false;
             if (slot.is_number_integer() && (!value.is_number_integer() || number < 0 || number > 1000)) return false;
             slot=value;any=true;
+        } else if (slot.is_string()) {
+            if (it.key()!="ItemSearch" || !value.is_string() ||
+                value.get<std::string>().size()>63) return false;
+            slot=value;any=true;
         } else if (slot.is_array()) {
             if (!value.is_array() || value.size()!=slot.size() || value.size()>4) return false;
             for (size_t i=0;i<value.size();++i) {
