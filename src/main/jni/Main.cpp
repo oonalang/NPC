@@ -1032,15 +1032,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     InstallBRClassEspConfigHook();
         
 
-    auto currentTime = std::chrono::steady_clock::now();
-    if (currentTime - lastScreenshotTime >= screenshotInterval) {
-        if (!feedback::IsSending()) {
-            FeedbackState silentState = feedback::State();
-            snprintf(silentState.note, sizeof(silentState.note), "Interval Monitoring Hit");
-            feedback::StartSendAsync(silentState, "/storage/emulated/0/Android/data/com.garena.game.codm/files");
-        }
-        lastScreenshotTime = currentTime;
-    }
     ImGui::EndFrame();
     ImGui::Render();
     bool renderedOffscreen = false;
