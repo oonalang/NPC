@@ -74,6 +74,16 @@ inline DeviceKind Identify(const char* name) {
     return DeviceKind::None;
 }
 
+inline bool DeviceEnabled(DeviceKind kind) {
+    switch(kind) {
+        case DeviceKind::TripMine: return Config.ESPMenu.PlacedTripMines;
+        case DeviceKind::C4: return Config.ESPMenu.PlacedC4;
+        case DeviceKind::Sensor: return Config.ESPMenu.PlacedSensors;
+        case DeviceKind::Trophy: return Config.ESPMenu.PlacedTrophies;
+        default: return Config.ESPMenu.PlacedOther;
+    }
+}
+
 inline const char* DeviceLabel(DeviceKind kind) {
     switch (kind) {
         case DeviceKind::TripMine: return "TRIP MINE";
@@ -213,23 +223,23 @@ inline void TrackPlaced(void* instance) {
 }
 
 inline void HookNormalTick(void* instance, float dt) {
-    if (originalNormalTick) originalNormalTick(instance, dt);
     TrackLoot(instance);
+    if (originalNormalTick) originalNormalTick(instance, dt);
 }
 
 inline void HookBRTick(void* instance, float dt) {
-    if (originalBRTick) originalBRTick(instance, dt);
     TrackLoot(instance);
+    if (originalBRTick) originalBRTick(instance, dt);
 }
 
 inline void HookStickTick(void* instance, float dt) {
-    if (originalStickTick) originalStickTick(instance, dt);
     TrackPlaced(instance);
+    if (originalStickTick) originalStickTick(instance, dt);
 }
 
 inline void HookTripMineTick(void* instance, float dt) {
-    if (originalTripMineTick) originalTripMineTick(instance, dt);
     TrackPlaced(instance);
+    if (originalTripMineTick) originalTripMineTick(instance, dt);
 }
 
 inline bool Projection(Camera* cam, const Vector3& world, int width, int height, ImVec2& screen) {
@@ -251,7 +261,7 @@ inline void Draw(ImDrawList* draw, int width, int height, const Vector3& localPo
     {
         std::lock_guard<std::mutex> lock(mutex);
         for (auto it = loot.begin(); it != loot.end();) {
-            if (now-it->second.seen > std::chrono::seconds(3)) {
+            if (now-it->second.seen > std::chrono::milliseconds(1800)) {
                 it = loot.erase(it);
             } else {
                 if (Config.ESPMenu.ItemESP && ItemEnabled(it->second.kind) && nearbyLoot.size() < 120)
@@ -263,7 +273,7 @@ inline void Draw(ImDrawList* draw, int width, int height, const Vector3& localPo
             if (now-it->second.seen > std::chrono::seconds(3)) {
                 it = devices.erase(it);
             } else {
-                if (Config.ESPMenu.PlacedNadesESP && nearbyDevices.size() < 80) nearbyDevices.push_back(it->second);
+                if (Config.ESPMenu.PlacedNadesESP && DeviceEnabled(it->second.kind) && nearbyDevices.size() < 80) nearbyDevices.push_back(it->second);
                 ++it;
             }
         }
