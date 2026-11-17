@@ -138,6 +138,7 @@ struct sWeaponAim {
         bool ItemMods;
         bool ItemEquipment;
         bool ItemOther;
+        char ItemSearch[64];
         float ItemDistance;
         bool PlacedNadesESP;
         bool PlacedEnemyOnly;
