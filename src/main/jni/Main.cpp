@@ -292,6 +292,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Config.ESPMenu.ItemOther = false;
         Config.ESPMenu.ItemDistance = 150.0f;
         Config.ESPMenu.PlacedEnemyOnly = true;
+        Config.ESPMenu.PlacedTripMines = true;
+        Config.ESPMenu.PlacedC4 = true;
+        Config.ESPMenu.PlacedSensors = true;
+        Config.ESPMenu.PlacedTrophies = true;
+        Config.ESPMenu.PlacedOther = true;
         Config.ESPMenu.PlacedDistance = 80.0f;
         Config.ExtraMenu.NoGravityScale = 1.0f;
         Config.Aim.AimAssistSize = 0.0f;
