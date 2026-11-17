@@ -23,6 +23,9 @@ inline void Draw() {
     float volume=ui_sounds::Gain()*100.f;
     if(custom::SliderFloat("Effects volume",&volume,0.f,100.f,"%.0f%%")) ui_sounds::SetGain(volume*.01f);
     ImGui::Separator();
-    if(custom::Button("RESET GUEST",{ImMax(1.f,ImGui::GetContentRegionAvail().x),50.f})) Config.ExtraMenu.ResetGuest=true;
+    ImGui::BeginDisabled(true);
+    custom::Button("RESET GUEST",{ImMax(1.f,ImGui::GetContentRegionAvail().x),50.f});
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Guest reset unavailable until the action is safely verified");
 }
 }
