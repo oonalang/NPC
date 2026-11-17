@@ -97,6 +97,7 @@ inline nlohmann::json CaptureConfiguration() {
     config["ExtraMenu"]["UnlimitedFly"] = Config.ExtraMenu.UnlimitedFly;
     config["ExtraMenu"]["FlySpeed"] = Config.ExtraMenu.FlySpeed;
     config["ExtraMenu"]["ClearDisplay"] = Config.ExtraMenu.ClearDisplay;
+    config["ExtraMenu"]["StretchScreen"] = Config.ExtraMenu.StretchScreen;
     config["ExtraMenu"]["Flash"] = Config.ExtraMenu.Flash;
     config["ExtraMenu"]["Diving"] = Config.ExtraMenu.Diving;
     config["ExtraMenu"]["Fire"] = Config.ExtraMenu.Fire;
@@ -212,6 +213,8 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
             Config.ExtraMenu.UnlimitedFly = extra.value("UnlimitedFly",Config.ExtraMenu.UnlimitedFly);
             Config.ExtraMenu.FlySpeed = std::clamp(extra.value("FlySpeed",Config.ExtraMenu.FlySpeed),1.f,10.f);
             Config.ExtraMenu.ClearDisplay = extra.value("ClearDisplay",Config.ExtraMenu.ClearDisplay);
+            const float stretchValue = extra.value("StretchScreen",Config.ExtraMenu.StretchScreen);
+            Config.ExtraMenu.StretchScreen = std::isfinite(stretchValue) ? std::clamp(stretchValue,0.0f,100.0f) : 0.0f;
             Config.ExtraMenu.Flash = config["ExtraMenu"]["Flash"].get<bool>();
             Config.ExtraMenu.Diving = config["ExtraMenu"]["Diving"].get<bool>();
             Config.ExtraMenu.Fire = config["ExtraMenu"]["Fire"].get<bool>();
