@@ -22,15 +22,6 @@ enum class RuntimeStatus : std::uint8_t {
 RuntimeStatus GetRuntimeStatus() noexcept;
 FireMode GetDetectedFireMode() noexcept;
 
-enum class DecisionStatus : std::uint8_t {
-    Disabled, Setup, Context, Manual, Unsupported, Empty, Blocked, Aiming, Cooldown,
-    NoTarget, QueryUnavailable, WorldBlocked, SmokeBlocked, Preparing, Waiting, Firing, Recovering
-};
-DecisionStatus GetDecisionStatus() noexcept;
-const char* DecisionStatusText(DecisionStatus status) noexcept;
-
-
-
 bool GetViewportCenter(float& normalizedX, float& normalizedY) noexcept;
 
 struct Point3 {
@@ -82,9 +73,6 @@ enum class TargetResult : std::uint8_t {
     SmokeBlocked,
     Eligible
 };
-
-DecisionStatus ExplainDecision(const Settings&, const Frame&, TargetResult,
-                               const Intent&, const Controller&) noexcept;
 
 TargetResult EvaluateTarget(TargetQueries& queries,
                             const ContextIdentity& context,

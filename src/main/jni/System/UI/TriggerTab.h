@@ -23,7 +23,6 @@ inline void RenderTriggerCustomizationTab(float childWidth, float childHeight, f
         custom::Checkbox("Hide Record", &hideRecordEnabled);
         PhantomTrigger::SetSettings(triggerSettings);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.78f, .75f, .86f, 1.f));
-        ImGui::TextWrapped("Status: %s",PhantomTrigger::DecisionStatusText(PhantomTrigger::GetDecisionStatus()));
         if (hideRecordUnavailable)
             ImGui::TextWrapped("Hide Record is unsupported on this device");
         if (retrySetup && PhantomTrigger::GetRuntimeStatus() ==

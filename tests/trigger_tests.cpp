@@ -438,39 +438,6 @@ void SniperReactionCadence() {
             "real acknowledgement permits ready rearming at the timeout boundary");
 }
 
-void DecisionFeedback() {
-    Controller controller;auto frame=ReleaseReady();
-    Require(ExplainDecision(Settings{},frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Disabled,
-            "feedback reports disabled input independently of stale native state");
-    frame.manualActive=true;
-    Require(ExplainDecision(enabled,frame,TargetResult::Eligible,Intent{},controller)==DecisionStatus::Manual,
-            "feedback identifies physical ownership");
-    frame.manualActive=false;frame.fireMode=FireMode::Unsupported;frame.fullyAimed=false;
-    Require(ExplainDecision({true,Mode::ADSOnly,false},frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Unsupported,
-            "unsampled aim state cannot hide an unsupported input handler");
-    frame.fireMode=FireMode::SingleRelease;
-    frame.manualActive=false;frame.fullyAimed=false;
-    Require(ExplainDecision(enabled,frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Aiming,
-            "Both-mode sniper feedback explains its native aim requirement");
-    frame.fullyAimed=true;frame.shotReady=false;
-    Require(ExplainDecision(enabled,frame,TargetResult::InvalidRay,Intent{},controller)==DecisionStatus::Cooldown,
-            "feedback explains cooldown without inventing a target miss");
-    frame.shotReady=true;
-    Require(ExplainDecision(enabled,frame,TargetResult::WorldBlocked,Intent{},controller)==DecisionStatus::WorldBlocked&&
-            ExplainDecision(enabled,frame,TargetResult::SmokeBlocked,Intent{},controller)==DecisionStatus::SmokeBlocked,
-            "feedback distinguishes actual world and smoke rejection");
-    auto intent=controller.Step(enabled,frame);
-    Require(ExplainDecision(enabled,frame,TargetResult::Eligible,intent,controller)==DecisionStatus::Preparing,
-            "feedback identifies the owned sniper press");
-    ++frame.updateId;intent=controller.Step(enabled,frame);
-    Require(ExplainDecision(enabled,frame,TargetResult::Eligible,intent,controller)==DecisionStatus::Waiting,
-            "feedback identifies the confirmation wait after release");
-    ++frame.updateId;frame.nowMillis=Controller::shotAcknowledgementTimeoutMillis;
-    intent=controller.Step(enabled,frame);
-    Require(ExplainDecision(enabled,frame,TargetResult::InvalidRay,intent,controller)==DecisionStatus::Recovering,
-            "feedback identifies neutral timeout cleanup");
-}
-
 Frame ReleaseReady() {
     auto frame = Ready(FireMode::SingleRelease);
     frame.aiming = true;
@@ -851,7 +818,6 @@ int main() {
     MissingAcknowledgementRecovery();
     AmmoAcknowledgementAndQueryBudget();
     SniperReactionCadence();
-    DecisionFeedback();
     ReleaseShotLifetimes();
     ReleaseShotCancellation();
     OwnershipAndLifecycle();

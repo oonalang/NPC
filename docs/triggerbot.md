@@ -126,9 +126,6 @@ rather than claiming a device diagnosis.
   Hidden dot overlays skip screen-coordinate work; visible overlays validate
   screen dimensions and projection. Fresh camera rays are preserved. No managed impact object is retained between
   queries.
-- The Trigger tab reports useful decision status: full-aim wait, weapon
-  recovery, cover/smoke rejection, owned press, confirmation wait and input
-  recovery. These are input states, not claims of server-registered hits.
 
 Host scenarios at 30, 60 and 120 updates/sec verify an owned press on the first
 eligible update, a release on the next freshly checked update, and time-based

@@ -18,7 +18,6 @@ namespace PhantomTrigger {
 namespace {
 std::atomic<RuntimeStatus> status{RuntimeStatus::WaitingForBinaryVerification};
 std::atomic<FireMode> detected{FireMode::Unsupported};
-std::atomic<DecisionStatus> decisionStatus{DecisionStatus::Setup};
 std::atomic<std::uint64_t> viewport{0};
 std::atomic<bool> viewportValid{false};
 std::atomic<std::uintptr_t> observedComponent{0};
@@ -198,7 +197,6 @@ void DecidePreparedInput(void* owner, void* param) {
         local.controller.Reset();
         local.hasFrame = false;
         status.store(RuntimeStatus::Disabled,std::memory_order_release);
-        decisionStatus.store(DecisionStatus::Disabled,std::memory_order_release);
         detected.store(FireMode::Unsupported,std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         ViewRay ray;
@@ -214,7 +212,6 @@ void DecidePreparedInput(void* owner, void* param) {
         local.cancellation.Reset();
         detected.store(FireMode::Unsupported, std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext, std::memory_order_release);
-        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
         viewportValid.store(false, std::memory_order_release);
         observedComponent.store(0,std::memory_order_release);
         return;
@@ -245,7 +242,6 @@ void DecidePreparedInput(void* owner, void* param) {
         local.hasFrame = false;
         observedComponent.store(0,std::memory_order_release);
         status.store(RuntimeStatus::Ready,std::memory_order_release);
-        decisionStatus.store(DecisionStatus::Manual,std::memory_order_release);
         ViewRay ray;
         PrepareViewRay(settings.showDot,settings.showDot,ray);
         return;
@@ -257,7 +253,6 @@ void DecidePreparedInput(void* owner, void* param) {
         observedComponent.store(0,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
         return;
     }
     const auto component = At<ObjectGetter>(0x5472E48)(weapon, nullptr);
@@ -267,7 +262,6 @@ void DecidePreparedInput(void* owner, void* param) {
         observedComponent.store(0,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
         return;
     }
     observedComponent.store(component,std::memory_order_release);
@@ -331,8 +325,6 @@ void DecidePreparedInput(void* owner, void* param) {
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,
                                                      allowReleaseSequence);
     if (decision.resetController) local.controller.Reset();
-    decisionStatus.store(decision.resetController ? DecisionStatus::Recovering :
-        ExplainDecision(settings,frame,target,decision.input,local.controller),std::memory_order_release);
     local.stopAfterUpdate = decision.stopResult;
     local.syntheticInput = !decision.input.passthrough &&
         (decision.input.held || decision.input.down || decision.input.up);
@@ -418,14 +410,12 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         detected.store(FireMode::Unsupported,std::memory_order_release);
         viewportValid.store(false,std::memory_order_release);
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
-        decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
     }
     --local.depth;
 }
 void Start(void* controller, void* match, Metadata metadata) {
     lifecycle.fetch_add(1,std::memory_order_acq_rel);
     observedComponent.store(0,std::memory_order_release);
-    decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
     originalStart(controller,match,metadata);
 }
 void End(void* controller, Metadata metadata) {
@@ -433,7 +423,6 @@ void End(void* controller, Metadata metadata) {
     viewportValid.store(false,std::memory_order_release);
     observedComponent.store(0,std::memory_order_release);
     detected.store(FireMode::Unsupported,std::memory_order_release);
-    decisionStatus.store(DecisionStatus::Context,std::memory_order_release);
     if (installation.load(std::memory_order_acquire) == 2)
         status.store(RuntimeStatus::WaitingForContext,std::memory_order_release);
     originalEnd(controller,metadata);
@@ -476,7 +465,6 @@ bool InstallNativeDriver(std::uintptr_t base) noexcept {
 }
 RuntimeStatus NativeStatus() noexcept { return status.load(std::memory_order_acquire); }
 FireMode NativeDetectedMode() noexcept { return detected.load(std::memory_order_acquire); }
-DecisionStatus NativeDecisionStatus() noexcept { return decisionStatus.load(std::memory_order_acquire); }
 bool NativeViewportCenter(float& x, float& y) noexcept {
     x = y = .5f;
     if (!viewportValid.load(std::memory_order_acquire)) return false;
@@ -491,14 +479,12 @@ void NativeDriverFailure() noexcept {
     installation.store(3,std::memory_order_release);
 #endif
     status.store(RuntimeStatus::InvalidNativeState,std::memory_order_release);
-    decisionStatus.store(DecisionStatus::QueryUnavailable,std::memory_order_release);
     detected.store(FireMode::Unsupported,std::memory_order_release);
     viewportValid.store(false,std::memory_order_release);
     observedComponent.store(0,std::memory_order_release);
 }
 void NativeDriverPending() noexcept {
     status.store(RuntimeStatus::WaitingForBinaryVerification,std::memory_order_release);
-    decisionStatus.store(DecisionStatus::Setup,std::memory_order_release);
 }
 void NotifyNativeShot(std::uintptr_t component) noexcept {
     if (component && component == observedComponent.load(std::memory_order_acquire))

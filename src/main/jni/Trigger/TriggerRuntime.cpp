@@ -106,60 +106,6 @@ FireMode GetDetectedFireMode() noexcept {
 #endif
 }
 
-DecisionStatus GetDecisionStatus() noexcept {
-#if defined(__ANDROID__) && !defined(STUDIO_STANDALONE_PREVIEW)
-    return NativeDecisionStatus();
-#else
-    return DecisionStatus::Setup;
-#endif
-}
-
-const char* DecisionStatusText(DecisionStatus value) noexcept {
-    switch (value) {
-        case DecisionStatus::Disabled: return "Disabled";
-        case DecisionStatus::Setup: return "Waiting for game verification";
-        case DecisionStatus::Context: return "Waiting for a live player and weapon";
-        case DecisionStatus::Manual: return "Manual fire has priority";
-        case DecisionStatus::Unsupported: return "Weapon input mode is unsupported";
-        case DecisionStatus::Empty: return "Waiting for ammo";
-        case DecisionStatus::Blocked: return "Weapon is busy";
-        case DecisionStatus::Aiming: return "Waiting for full aim";
-        case DecisionStatus::Cooldown: return "Weapon is recovering";
-        case DecisionStatus::NoTarget: return "No enemy under the crosshair";
-        case DecisionStatus::QueryUnavailable: return "Target could not be verified";
-        case DecisionStatus::WorldBlocked: return "Target is behind cover";
-        case DecisionStatus::SmokeBlocked: return "Smoke blocks the target";
-        case DecisionStatus::Preparing: return "Preparing the shot";
-        case DecisionStatus::Waiting: return "Waiting for shot confirmation";
-        case DecisionStatus::Firing: return "Fire input active";
-        case DecisionStatus::Recovering: return "Resetting fire input";
-    }
-    return "Waiting for game verification";
-}
-
-DecisionStatus ExplainDecision(const Settings& settings, const Frame& frame,
-        TargetResult target, const Intent& intent, const Controller& controller) noexcept {
-    if (!settings.enabled) return DecisionStatus::Disabled;
-    if (frame.manualActive) return DecisionStatus::Manual;
-    if (!frame.contextValid || !frame.bindingsReady) return DecisionStatus::Context;
-    if (controller.HasPendingShot()) return DecisionStatus::Waiting;
-    if (controller.IsRearming()) return DecisionStatus::Recovering;
-    if (!intent.passthrough && !intent.down && !intent.held && !intent.commitRelease)
-        return DecisionStatus::Recovering;
-    if (!frame.ammoAvailable) return DecisionStatus::Empty;
-    if (frame.hardBlocked) return DecisionStatus::Blocked;
-    if (frame.fireMode == FireMode::Unsupported) return DecisionStatus::Unsupported;
-    if (((settings.mode == Mode::ADSOnly || frame.fireMode == FireMode::SingleRelease)) &&
-        (!frame.aiming || !frame.fullyAimed)) return DecisionStatus::Aiming;
-    if (!frame.shotReady && !controller.HasOwnedInput()) return DecisionStatus::Cooldown;
-    if (target == TargetResult::WorldBlocked) return DecisionStatus::WorldBlocked;
-    if (target == TargetResult::SmokeBlocked) return DecisionStatus::SmokeBlocked;
-    if (target == TargetResult::QueryUnavailable) return DecisionStatus::QueryUnavailable;
-    if (intent.down && frame.fireMode == FireMode::SingleRelease) return DecisionStatus::Preparing;
-    if (intent.down || intent.held || intent.commitRelease) return DecisionStatus::Firing;
-    return DecisionStatus::NoTarget;
-}
-
 bool GetViewportCenter(float& normalizedX, float& normalizedY) noexcept {
 #if defined(__ANDROID__) && !defined(STUDIO_STANDALONE_PREVIEW)
     return NativeViewportCenter(normalizedX, normalizedY);
