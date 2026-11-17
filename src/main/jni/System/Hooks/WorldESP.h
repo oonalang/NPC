@@ -199,7 +199,7 @@ inline void TrackLoot(void* instance) {
     std::memcpy(&entry.pos, bytes + 0x4C, sizeof(Vector3));
     if (bytes[0x30] != 0 || entry.kind <= 0 || entry.kind > 21 ||
         entry.item <= 0 || !ValidWorld(entry.pos)) return;
-    if (entry.kind < 1 || entry.kind > 8) return;
+    if (entry.kind < 1 || entry.kind > 21) return;
     const uintptr_t key = reinterpret_cast<uintptr_t>(instance);
     {
         std::lock_guard<std::mutex> lock(mutex);
