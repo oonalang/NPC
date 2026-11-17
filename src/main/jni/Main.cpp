@@ -43,6 +43,7 @@
 #include "System/UI/AuthenticateFlow.h"
 #include "System/UI/ReducedMotion.h"
 #include "System/UI/HomeTab.h"
+#include "System/UI/DeviceProfilesTab.h"
 #include "System/UI/AuthenticateInput.h"
 
 static void RequestTriggerInitialization();
@@ -648,8 +649,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         ImMax(0.0f, (hostMax.y - hostMin.y) - contentPadding * 2.0f)
                     );
 
-                    runtimeState.page = ImClamp(runtimeState.page, 1, 7);
-                    runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
+                    runtimeState.page = ImClamp(runtimeState.page, 1, 8);
+                    runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 8);
 
                     custom::shell::DrawBrandHeader(headerMin, headerMax);
 
@@ -669,10 +670,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         ICON_FA_BULLSEYE,
                         ICON_FA_MICROCHIP,
                         ICON_FA_MAGIC,
-                        ICON_FA_COG
+                        ICON_FA_COG,
+                        ICON_FA_FOLDER_OPEN
                     };
                     static const char *sidebarLabels[] = {
-                        "Home", "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Settings"
+                        "Home", "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Settings", "Configs"
                     };
                     const int sidebarButtonCount = IM_ARRAYSIZE(sidebarIcons);
                     const float sidebarButtonGap = 6.0f;
@@ -924,6 +926,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                             ImGui::PopStyleVar();
                         }
+
+                        if (runtimeState.activeTab == 8)
+                            device_profiles_tab::Draw();
 
                         ImGui::PopStyleVar();
                         if (pushedContentFont) {
