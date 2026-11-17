@@ -6,6 +6,7 @@
 namespace settings_controls {
 inline void Draw() {
     custom::Checkbox("Clear Display",&Config.ExtraMenu.ClearDisplay);
+    custom::SliderFloat("Stretch Screen", &Config.ExtraMenu.StretchScreen, 0.0f, 100.0f, "%.0f%%");
     Config.Aim.FpsLevel1=frame_rate::Fps(Config.Aim.FpsLevel1,60);
     Config.Aim.FpsLevelUltra1=frame_rate::Fps(Config.Aim.FpsLevelUltra1,240,60);
     custom::Checkbox("Custom FPS",&Config.Aim.FpsLevel);
@@ -17,7 +18,6 @@ inline void Draw() {
 #ifdef __ANDROID__
     if(options.Active()&&!frame_rate::available.load()) ImGui::TextDisabled("Waiting for compatible FPS hooks");
 #endif
-    custom::SliderFloat("Stretch Screen", &Config.ExtraMenu.StretchScreen, 0.0f, 100.0f, "%.0f%%");
     ImGui::Separator();
     bool effects=ui_sounds::Enabled();
     if(custom::Checkbox("Creamy UI sounds",&effects)) ui_sounds::SetEnabled(effects);
