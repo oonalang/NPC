@@ -13,7 +13,10 @@
 #include <cerrno>
 #include "FileUtils.h"
 
-#include "../foxcheats/include/json.hpp"
+#include "../../foxcheats/include/json.hpp"
+#include "../../Trigger/TriggerRuntime.h"
+#include <array>
+#include <algorithm>
 #include "../../Hacks/Feature/Init_Hacks.h"
 #include "../../BlueprintTierFilter.h"
 #include "../../Trigger/TriggerDotStyle.h"
@@ -41,6 +44,13 @@ inline nlohmann::json CaptureConfiguration() {
     config["FrameRate"]["Ultra"]=frames.ultra;
     config["FrameRate"]["High"]=frames.high;
 
+    config["ESPMenu"]["isPlayerLine"] = Config.ESPMenu.isPlayerLine;
+    config["ESPMenu"]["Skeleton"] = Config.ESPMenu.Skeleton;
+    config["ESPMenu"]["Count"] = Config.ESPMenu.Count;
+    config["ESPMenu"]["Aimline"] = Config.ESPMenu.Aimline;
+    config["ESPMenu"]["Alert"] = Config.ESPMenu.Alert;
+    config["ESPMenu"]["BRClass"] = Config.ESPMenu.BRClass;
+    config["ESPMenu"]["ShowFov"] = Config.ESPMenu.ShowFov;
     config["ESPMenu"]["Box"] = Config.ESPMenu.Box;
     config["ESPMenu"]["Name"] = Config.ESPMenu.Name;
     config["ESPMenu"]["Health"] = Config.ESPMenu.Health;
@@ -58,19 +68,29 @@ inline nlohmann::json CaptureConfiguration() {
     config["Aim"]["Trigger"] = static_cast<int>(Config.Aim.Trigger);
     config["Aim"]["By"] = static_cast<int>(Config.Aim.By);
     config["Aim"]["size"] = Config.Aim.size;
+    config["Aim"]["Cross"] = Config.Aim.Cross;
 
+    config["ExtraMenu"]["SmartReload"] = Config.ExtraMenu.SmartReload;
+    config["ExtraMenu"]["ClearTerrain"] = Config.ExtraMenu.ClearTerrain;
+    config["ExtraMenu"]["NoSmoke"] = Config.ExtraMenu.NoSmoke;
+    config["ExtraMenu"]["RedWallhack"] = Config.ExtraMenu.RedWallhack;
+    config["ExtraMenu"]["WallHack"] = Config.ExtraMenu.WallHack;
+    config["ExtraMenu"]["AutoJumpFire"] = Config.ExtraMenu.AutoJumpFire;
+    config["ExtraMenu"]["CameraPov"] = Config.ExtraMenu.CameraPov;
+    config["ExtraMenu"]["CameraPovSize"] = Config.ExtraMenu.CameraPovSize;
+    config["ExtraMenu"]["UnlimitedFly"] = Config.ExtraMenu.UnlimitedFly;
+    config["ExtraMenu"]["FlySpeed"] = Config.ExtraMenu.FlySpeed;
+    config["ExtraMenu"]["ClearDisplay"] = Config.ExtraMenu.ClearDisplay;
     config["ExtraMenu"]["Flash"] = Config.ExtraMenu.Flash;
     config["ExtraMenu"]["Diving"] = Config.ExtraMenu.Diving;
     config["ExtraMenu"]["Fire"] = Config.ExtraMenu.Fire;
     config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
     config["ExtraMenu"]["HitboxScale"] = hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
-    config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
     config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
     config["ExtraMenu"]["NoSlideFatigue"] = Config.ExtraMenu.NoSlideFatigue;
     config["ExtraMenu"]["Recoil"] = Config.ExtraMenu.Recoil;
-    config["ExtraMenu"]["Shake"] = Config.ExtraMenu.Shake;
     config["ExtraMenu"]["Spread"] = Config.ExtraMenu.Spread;
     config["ExtraMenu"]["Reload"] = Config.ExtraMenu.Reload;
     config["ExtraMenu"]["Scope"] = Config.ExtraMenu.Scope;
@@ -94,6 +114,13 @@ inline nlohmann::json CaptureConfiguration() {
     config["isSpeedHackEnabled"] = isSpeedHackEnabled;
     config["speedHackMultiplier"] = speedHackMultiplier;
 
+    const auto trigger = PhantomTrigger::GetSettings();
+    config["Trigger"]["enabled"] = trigger.enabled;
+    config["Trigger"]["showDot"] = trigger.showDot;
+    config["Trigger"]["mode"] = trigger.mode == PhantomTrigger::Mode::ADSOnly ? 1 : 0;
+    const auto colors = [](const float* rgba) { return nlohmann::json::array({rgba[0],rgba[1],rgba[2],rgba[3]}); };
+    if (Config.sColorsESPPLAYER.LinePLAYER) config["ESPColors"]["Player"] = colors(Config.sColorsESPPLAYER.LinePLAYER);
+    if (Config.sColorsESPBOT.LineBOT) config["ESPColors"]["Bot"] = colors(Config.sColorsESPBOT.LineBOT);
     config["menu"][0] = menu[0];
     config["menu"][1] = menu[1];
     config["menu"][2] = menu[2];
@@ -104,6 +131,14 @@ inline nlohmann::json CaptureConfiguration() {
 inline bool ApplyConfiguration(const nlohmann::json& config) {
     try {
         if (config.contains("ESPMenu")) {
+            const auto& esp = config["ESPMenu"];
+            Config.ESPMenu.isPlayerLine = esp.value("isPlayerLine",Config.ESPMenu.isPlayerLine);
+            Config.ESPMenu.Skeleton = esp.value("Skeleton",Config.ESPMenu.Skeleton);
+            Config.ESPMenu.Count = esp.value("Count",Config.ESPMenu.Count);
+            Config.ESPMenu.Aimline = esp.value("Aimline",Config.ESPMenu.Aimline);
+            Config.ESPMenu.Alert = esp.value("Alert",Config.ESPMenu.Alert);
+            Config.ESPMenu.BRClass = esp.value("BRClass",Config.ESPMenu.BRClass);
+            Config.ESPMenu.ShowFov = esp.value("ShowFov",Config.ESPMenu.ShowFov);
             Config.ESPMenu.Box = config["ESPMenu"]["Box"].get<bool>();
             Config.ESPMenu.Name = config["ESPMenu"]["Name"].get<bool>();
             Config.ESPMenu.Health = config["ESPMenu"]["Health"].get<bool>();
@@ -116,6 +151,7 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
         }
 
         if (config.contains("Aim")) {
+            Config.Aim.Cross = std::clamp(config["Aim"].value("Cross",Config.Aim.Cross),0.f,100.f);
             Config.Aim.Aimbot360 = config["Aim"]["Aimbot360"].get<bool>();
             Config.Aim.AimSilent = config["Aim"]["AimSilent"].get<bool>();
             Config.Aim.AimAssistSize = config["Aim"]["AimAssistSize"].get<float>();
@@ -126,6 +162,18 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
         }
 
         if (config.contains("ExtraMenu")) {
+            const auto& extra = config["ExtraMenu"];
+            Config.ExtraMenu.SmartReload = extra.value("SmartReload",Config.ExtraMenu.SmartReload);
+            Config.ExtraMenu.ClearTerrain = extra.value("ClearTerrain",Config.ExtraMenu.ClearTerrain);
+            Config.ExtraMenu.NoSmoke = extra.value("NoSmoke",Config.ExtraMenu.NoSmoke);
+            Config.ExtraMenu.RedWallhack = extra.value("RedWallhack",Config.ExtraMenu.RedWallhack);
+            Config.ExtraMenu.WallHack = extra.value("WallHack",Config.ExtraMenu.WallHack);
+            Config.ExtraMenu.AutoJumpFire = extra.value("AutoJumpFire",Config.ExtraMenu.AutoJumpFire);
+            Config.ExtraMenu.CameraPov = extra.value("CameraPov",Config.ExtraMenu.CameraPov);
+            Config.ExtraMenu.CameraPovSize = std::clamp(extra.value("CameraPovSize",Config.ExtraMenu.CameraPovSize),0.f,150.f);
+            Config.ExtraMenu.UnlimitedFly = extra.value("UnlimitedFly",Config.ExtraMenu.UnlimitedFly);
+            Config.ExtraMenu.FlySpeed = std::clamp(extra.value("FlySpeed",Config.ExtraMenu.FlySpeed),1.f,10.f);
+            Config.ExtraMenu.ClearDisplay = extra.value("ClearDisplay",Config.ExtraMenu.ClearDisplay);
             Config.ExtraMenu.Flash = config["ExtraMenu"]["Flash"].get<bool>();
             Config.ExtraMenu.Diving = config["ExtraMenu"]["Diving"].get<bool>();
             Config.ExtraMenu.Fire = config["ExtraMenu"]["Fire"].get<bool>();
@@ -133,13 +181,13 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
             Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(config["ExtraMenu"].value("HitboxScale",hitbox::defaultScale));
             hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-            Config.ExtraMenu.Rpd = config["ExtraMenu"]["Rpd"].get<bool>();
+            Config.ExtraMenu.Rpd = false;
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
             Config.ExtraMenu.NoCrouch = config["ExtraMenu"].value("NoCrouch", false);
             Config.ExtraMenu.NoSlideFatigue = config["ExtraMenu"].value("NoSlideFatigue", false);
             slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
             Config.ExtraMenu.Recoil = config["ExtraMenu"]["Recoil"].get<bool>();
-            Config.ExtraMenu.Shake = config["ExtraMenu"]["Shake"].get<bool>();
+            Config.ExtraMenu.Shake = false;
             Config.ExtraMenu.Spread = config["ExtraMenu"]["Spread"].get<bool>();
             Config.ExtraMenu.Reload = config["ExtraMenu"]["Reload"].get<bool>();
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
@@ -189,6 +237,25 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
         if (config.contains("speedHackMultiplier"))
             speedHackMultiplier = config["speedHackMultiplier"].get<float>();
 
+        if (config.contains("Trigger") && config["Trigger"].is_object()) {
+            auto trigger = PhantomTrigger::GetSettings();
+            const auto& saved = config["Trigger"];
+            trigger.enabled = saved.value("enabled",trigger.enabled);
+            trigger.showDot = saved.value("showDot",trigger.showDot);
+            trigger.mode = saved.value("mode",0) == 1 ? PhantomTrigger::Mode::ADSOnly : PhantomTrigger::Mode::Both;
+            PhantomTrigger::SetSettings(trigger);
+        }
+        if (config.contains("ESPColors") && config["ESPColors"].is_object()) {
+            const auto restore = [](const nlohmann::json& value, std::array<float*,6> linked) {
+                if (!value.is_array() || value.size()!=4) return;
+                for (size_t i=0;i<4;++i) if (!value[i].is_number()) return;
+                for (float* rgba : linked) if (rgba) for (size_t i=0;i<4;++i)
+                    rgba[i] = std::clamp(value[i].get<float>(),0.f,1.f);
+            };
+            const auto& saved = config["ESPColors"];
+            if (saved.contains("Player")) restore(saved["Player"],{Config.sColorsESPPLAYER.LinePLAYER,Config.sColorsESPPLAYER.BoxPLAYER,Config.sColorsESPPLAYER.NamePLAYER,Config.sColorsESPPLAYER.HealthPLAYER,Config.sColorsESPPLAYER.DistancePLAYER,Config.sColorsESPPLAYER.SkeletonPLAYER});
+            if (saved.contains("Bot")) restore(saved["Bot"],{Config.sColorsESPBOT.LineBOT,Config.sColorsESPBOT.BoxBOT,Config.sColorsESPBOT.NameBOT,Config.sColorsESPBOT.HealthBOT,Config.sColorsESPBOT.DistanceBOT,Config.sColorsESPBOT.SkeletonBOT});
+        }
         if (config.contains("menu")) {
             menu[0] = config["menu"][0].get<float>();
             menu[1] = config["menu"][1].get<float>();
