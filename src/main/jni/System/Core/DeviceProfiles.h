@@ -3,6 +3,7 @@
 #include "AndroidConfigExchange.h"
 #include <dirent.h>
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -100,6 +101,7 @@ inline bool MergeAllowed(nlohmann::json& target, const nlohmann::json& incoming,
 
 inline bool Decode(const std::string& text, nlohmann::json& settings, std::string* profileName=nullptr) {
     if (text.empty() || text.size()>131072) return false;
+    try {
     const auto document=nlohmann::json::parse(text,nullptr,false);
     if (document.is_discarded() || !document.is_object()) return false;
     const nlohmann::json* input=&document;
@@ -114,6 +116,7 @@ inline bool Decode(const std::string& text, nlohmann::json& settings, std::strin
     if (profileName && document.contains("name") && document["name"].is_string())
         *profileName=NormalizeName(document["name"].get<std::string>());
     return true;
+    } catch (const std::exception&) { return false; }
 }
 
 inline nlohmann::json Package(const std::string& name, const nlohmann::json& settings) {
