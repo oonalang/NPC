@@ -260,6 +260,12 @@ inline void h_TickLocalPlayer(void* ins, float deltaTime) {
 }
 
 //-- No Overheat
+inline bool (*orig_get_WeaponShake_Enable)(void* instance) = nullptr;
+inline bool hook_get_WeaponShake_Enable(void* instance) {
+    if (instance != nullptr && Config.ExtraMenu.Shake) return false;
+    return orig_get_WeaponShake_Enable ? orig_get_WeaponShake_Enable(instance) : false;
+}
+
 inline float (*orig_get_AddHotTime)(void* instance) = nullptr;
 inline float get_AddHotTime(void* instance) {
     if (instance != NULL) {
@@ -267,7 +273,7 @@ inline float get_AddHotTime(void* instance) {
             return 0.00001f;
         }
     }
-    return orig_get_AddHotTime(instance);
+    return orig_get_AddHotTime ? orig_get_AddHotTime(instance) : 0.0f;
 }
 
 //-- No Parachute
@@ -487,7 +493,7 @@ inline bool IsWeaponAttachmentUnlock(void *instance) {
 //-- Fast Armor
 inline constexpr float PlateTime = 2.75f; // Armor Speed
 inline constexpr uintptr_t PlateTimeOff = 0x30;
-inline constexpr uintptr_t UseCompTimeOff = 0xA8;
+inline constexpr uintptr_t UseCompTimeOff = 0xAC;
 
 inline void SetObjFloat(void *instance, uintptr_t offset, float value)
 {
@@ -970,8 +976,8 @@ inline void InitializeAllHooks() {
 
     
    //-- Fast Armor
-  // HOOK_LIB("libunity.so", "0x6D9BC4C", hook_BRUseItemArmorPlate_SetUseItemTime,orig_BRUseItemArmorPlate_SetUseItemTime);
-    //HOOK_LIB("libunity.so", "0x6D9B670", hook_BRUseItemArmorPlate_Tick, orig_BRUseItemArmorPlate_Tick);
+    LICENSE_HOOK_LIB("libunity.so", "0x6D9BC4C", hook_BRUseItemArmorPlate_SetUseItemTime, orig_BRUseItemArmorPlate_SetUseItemTime);
+    LICENSE_HOOK_LIB("libunity.so", "0x6D9B670", hook_BRUseItemArmorPlate_Tick, orig_BRUseItemArmorPlate_Tick);
 
    //-- Unlimited Fly
     LICENSE_HOOK_LIB("libunity.so", "0x5AB9BA0", hook_CheckForwardValid, orig_CheckForwardValid);
@@ -996,16 +1002,13 @@ inline void InitializeAllHooks() {
     //-- High Jump
     LICENSE_HOOK_LIB("libunity.so", "0x53F7E7C", hook_GetMaxJumpHeight, orig_GetMaxJumpHeight);
 
-/*
     //-- Long Slide
-    HOOK_LIB("libunity.so", "0x54F756C", h_get_SlideTackleAcclerationSpeed, o_get_SlideTackleAcclerationSpeed);
-    HOOK_LIB("libunity.so", "0xB10DB7C", h_PawnGetMaxSpeed, o_PawnGetMaxSpeed);
-    HOOK_LIB("libunity.so", "0x7C696E8", h_get_SlideTackleSpeed, o_get_SlideTackleSpeed);
-    HOOK_LIB("libunity.so", "0x7C687C8", h_GetSuperSlideRate, o_GetSuperSlideRate);
-    HOOK_LIB("libunity.so", "0x9AF7808", h_TickLocalPlayer, o_TickLocalPlayer);
-*/
+    LICENSE_HOOK_LIB("libunity.so", "0x54F756C", h_get_SlideTackleAcclerationSpeed, o_get_SlideTackleAcclerationSpeed);
+    LICENSE_HOOK_LIB("libunity.so", "0x7C696E8", h_get_SlideTackleSpeed, o_get_SlideTackleSpeed);
+    LICENSE_HOOK_LIB("libunity.so", "0x7C687C8", h_GetSuperSlideRate, o_GetSuperSlideRate);
+
     //-- No Overheat
-    // HOOK_LIB("libunity.so", "0xC2B7A30", get_AddHotTime, orig_get_AddHotTime);
+    LICENSE_HOOK_LIB("libunity.so", "0xC2B7A30", get_AddHotTime, orig_get_AddHotTime);
 
     //-- No Parachute
     LICENSE_HOOK_LIB("libunity.so", "0x89A3BB0", OpenParachute, orig_OpenParachute);
@@ -1038,6 +1041,8 @@ inline void InitializeAllHooks() {
 
     //-- Weapon Kinetic
     LICENSE_HOOK_LIB("libunity.so", "0x5385AC8", get_IsKineticArmor, orig_get_IsKineticArmor);
+
+    LICENSE_HOOK_LIB("libunity.so", "0x54F50C4", hook_get_WeaponShake_Enable, orig_get_WeaponShake_Enable);
 
     //-- Zero Recoil
     LICENSE_HOOK_LIB("libunity.so", "0xD535A6C", GetScaleRecoil, orig_GetScaleRecoil);
