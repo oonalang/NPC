@@ -1048,11 +1048,9 @@ inline void InitializeAllHooks() {
     LICENSE_HOOK_LIB("libunity.so", "0xD541D2C", DisperseBase, orig_DisperseBase);
     
     //-- Spectate
-    LICENSE_HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);
+
     LICENSE_HOOK_LIB("libunity.so", "0x5366558", h_NeedDelayProcess, o_NeedDelayProcess);
     LICENSE_HOOK_LIB("libunity.so", "0x53665EC", h_ProcessForDelay, o_ProcessForDelay);
-
-
 
 
 
