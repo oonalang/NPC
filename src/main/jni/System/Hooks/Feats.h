@@ -222,10 +222,9 @@ inline float hook_get_m_MaxPovmp(void* instance) {
 //-- Long Slide
 inline float (*o_get_SlideTackleAcclerationSpeed)(void*) = nullptr;
 inline float h_get_SlideTackleAcclerationSpeed(void* ins) {
-    if (SlideRange > 0.0f) {
-        return SlideRange + 1;
-    }
-    return o_get_SlideTackleAcclerationSpeed(ins);
+    const float value=o_get_SlideTackleAcclerationSpeed ? o_get_SlideTackleAcclerationSpeed(ins) : 0.0f;
+    if (SlideRange <= 0.0f || !std::isfinite(value) || value <= 0.0f) return value;
+    return value*(1.0f+std::min(SlideRange,30.0f)/30.0f);
 }
 
 inline float (*o_PawnGetMaxSpeed)(void*) = nullptr;
@@ -238,18 +237,16 @@ inline float h_PawnGetMaxSpeed(void* ins) {
 
 inline float (*o_get_SlideTackleSpeed)(void*) = nullptr;
 inline float h_get_SlideTackleSpeed(void* ins) {
-    if (SlideRange > 0.0f) {
-        return SlideRange;
-    }
-    return o_get_SlideTackleSpeed(ins);
+    const float value=o_get_SlideTackleSpeed ? o_get_SlideTackleSpeed(ins) : 0.0f;
+    if (SlideRange <= 0.0f || !std::isfinite(value) || value <= 0.0f) return value;
+    return value*(1.0f+std::min(SlideRange,30.0f)/30.0f);
 }
 
 inline float (*o_GetSuperSlideRate)(void*) = nullptr;
 inline float h_GetSuperSlideRate(void* ins) {
-    if (SlideRange > 0.0f) {
-        return SlideRange + 256;
-    }
-    return o_GetSuperSlideRate(ins);
+    const float value=o_GetSuperSlideRate ? o_GetSuperSlideRate(ins) : 0.0f;
+    if (SlideRange <= 0.0f || !std::isfinite(value) || value <= 0.0f) return value;
+    return value*(1.0f+std::min(SlideRange,30.0f)/30.0f);
 }
 
 inline void (*o_TickLocalPlayer)(void*, float) = nullptr;
@@ -497,8 +494,12 @@ inline constexpr uintptr_t UseCompTimeOff = 0xAC;
 
 inline void SetObjFloat(void *instance, uintptr_t offset, float value)
 {
-    if (instance != nullptr)
-        *reinterpret_cast<float *>(reinterpret_cast<uintptr_t>(instance) + offset) = value;
+    if (!instance || !std::isfinite(value) || value <= 0.0f) return;
+    float* field=reinterpret_cast<float*>(reinterpret_cast<uintptr_t>(instance)+offset);
+    float previous=0.0f;
+    std::memcpy(&previous,field,sizeof(previous));
+    if (!std::isfinite(previous) || previous <= 0.0f || previous <= value) return;
+    std::memcpy(field,&value,sizeof(value));
 }
 
 inline int (*orig_BRUseItemArmorPlate_SetUseItemTime)(void *instance, uint32_t playerId) = nullptr;
