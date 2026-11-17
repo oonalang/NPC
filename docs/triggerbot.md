@@ -59,7 +59,9 @@ actual `CanFire` virtual function and its metadata, matching the native game's
 dispatch, and requires that function to lie in the verified module's executable
 segments. This preserves subtype restrictions without rejecting every override.
 Burst modes remain unsupported. The ammo query is reused within each input
-decision to avoid a second native call and inconsistent samples.
+decision to avoid a second native call and inconsistent samples. Readiness
+binding validation is separate from invoking the predicate: confirmation waits,
+cleanup, blocked input and incomplete required ADS do not call `CanFire`.
 
 ## Sniper input
 
@@ -77,7 +79,9 @@ A prepared release input follows the native release/up flags regardless of the
 weapon's ordinary single-shot flag. Release input requires completed ADS in either trigger
 setting. An eligible frame arms the press; a later freshly validated frame
 commits its release while the weapon can fire. The controller then waits for
-shot acknowledgement and rearming before another press. A verified decrease in
+shot acknowledgement before another press. Acknowledgement can rearm on that
+same update if native readiness, full ADS and fresh geometry all permit it;
+it no longer reserves an extra idle update for acknowledgement alone. A verified decrease in
 the owning fire component's native clip count can acknowledge a shot whose
 callback was missed. If neither acknowledgement source changes, a named
 500 ms deadline clears the owned input neutrally and permits a new attempt
@@ -87,8 +91,9 @@ smoke/world obstruction, incomplete ADS, disabled trigger or a blocked weapon
 cancels an armed press without generating a shooting release edge. One neutral
 cleanup frame precedes any new press. Physical user input always takes priority.
 
-Press-to-fire rifles, shotguns and single-shot weapons retain their existing
-controller behavior. Live sniper firing still requires device validation.
+Press-to-fire weapons retain their native input semantics. A confirmed single
+press now releases without another target trace; its next press still needs
+fresh geometry and native readiness. Live firing still requires device validation.
 
 ## Reaction and input-work revision
 
@@ -108,7 +113,7 @@ rather than claiming a device diagnosis.
   press-fire. It does not replay a shooting up-edge. Manual ownership,
   weapon/match changes, ammo, native cooldown, completed ADS, world geometry
   and smoke still control whether a fresh attempt may fire.
-- Waiting-confirmation, rejection-cleanup and duplicate updates skip body,
+- Unacknowledged confirmation waits, rejection-cleanup and duplicate updates skip body,
   world and smoke traces. Ordinary target acquisition and every committed
   sniper release still use a fresh exact ray, detailed body hit and obstruction
   checks. Target results are not cached across updates.
@@ -118,8 +123,8 @@ rather than claiming a device diagnosis.
   input thread. Only segment bounds are cached; instruction contents are read
   anew.
 - Physical fire takes a fast passthrough after compatibility/context checks.
-  Hidden dot overlays skip viewport-to-screen conversion; screen validity and
-  fresh camera rays are preserved. No managed impact object is retained between
+  Hidden dot overlays skip screen-coordinate work; visible overlays validate
+  screen dimensions and projection. Fresh camera rays are preserved. No managed impact object is retained between
   queries.
 - The Trigger tab reports useful decision status: full-aim wait, weapon
   recovery, cover/smoke rejection, owned press, confirmation wait and input
@@ -132,6 +137,38 @@ press/up updates and native weapon timing. This is not a forced fire-rate
 change. Current test/build logs are under
 `/workspace/license-hardening/logs/trigger-latency-*.log`. Actual reaction time
 and frame-time improvement still require phone/video verification.
+
+## Both mode and other weapons
+
+The follow-up applies the shared work budget to all supported native weapon
+input modes, in Both and ADS Only. Initial acquisition submits a press on the
+first eligible input update, without an added reaction timer. Release-fire
+weapons retain separate press/release updates and native aim/cooldown rules.
+Zero elapsed time is not possible: input update cadence, native shot processing
+and server timing remain outside this controller's scheduling.
+
+- Both mode skips ADS getters for ordinary press-fire and automatic weapons.
+  ADS Only and release-fire weapons still sample required aim state. The partial
+  ADS percentage getter runs only if the native fully-aimed flag is false.
+- Binding the native `CanFire` method still verifies its executable address and
+  retains its `MethodInfo`. The predicate is invoked when an input decision can
+  use it, rather than during confirmation-only or cleanup updates.
+- Confirmed press-fire cleanup skips body/world/smoke queries. A confirmed
+  release-fire shot can rearm immediately when ready, using a fresh target and
+  obstruction check. Native cooldown, manual input, context changes and rejected
+  releases still prevent new input; timeout/cancellation cleanup stays neutral.
+- A hidden dot performs no screen-width, screen-height or viewport projection
+  calls. Camera origin, direction and clipping planes are sampled afresh;
+  visible dot validation remains unchanged. The camera sampler has no heap
+  allocation or virtual dispatch.
+
+Host tests cover acquisition at 30/60/90/120/144 updates per second, callback
+and clip-based acknowledgement, readiness/aim work suppression, fresh geometry
+on acknowledgement, prepared native button edges and camera call counts.
+Core burst enums are exercised by the state-machine tests; this does not enable
+the excluded native burst or specialized handlers. No FPS gain or device
+reaction time has been measured. Logs are
+`/workspace/license-hardening/logs/trigger-all-weapons-*.log`.
 
 ## Validation
 

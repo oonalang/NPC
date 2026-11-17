@@ -63,6 +63,14 @@ bool ValidHit(const ViewRay& ray, const BodyHit& hit) noexcept {
     return ex * ex + ey * ey + ez * ez <= tolerance * tolerance;
 }
 
+bool NeedsWeaponState(const Settings& settings, const Frame& frame,
+                      const Controller& controller) noexcept {
+    return controller.NeedsFreshTarget(frame) && settings.enabled &&
+        (settings.mode == Mode::Both || settings.mode == Mode::ADSOnly) &&
+        frame.contextValid && frame.bindingsReady && !frame.manualActive &&
+        frame.ammoAvailable && !frame.hardBlocked && frame.fireMode != FireMode::Unsupported;
+}
+
 }
 
 Settings GetSettings() noexcept {
@@ -140,9 +148,9 @@ DecisionStatus ExplainDecision(const Settings& settings, const Frame& frame,
         return DecisionStatus::Recovering;
     if (!frame.ammoAvailable) return DecisionStatus::Empty;
     if (frame.hardBlocked) return DecisionStatus::Blocked;
+    if (frame.fireMode == FireMode::Unsupported) return DecisionStatus::Unsupported;
     if (((settings.mode == Mode::ADSOnly || frame.fireMode == FireMode::SingleRelease)) &&
         (!frame.aiming || !frame.fullyAimed)) return DecisionStatus::Aiming;
-    if (frame.fireMode == FireMode::Unsupported) return DecisionStatus::Unsupported;
     if (!frame.shotReady && !controller.HasOwnedInput()) return DecisionStatus::Cooldown;
     if (target == TargetResult::WorldBlocked) return DecisionStatus::WorldBlocked;
     if (target == TargetResult::SmokeBlocked) return DecisionStatus::SmokeBlocked;
@@ -182,20 +190,29 @@ TargetResult EvaluateTarget(TargetQueries& queries,
     return TargetResult::Eligible;
 }
 
-bool NeedsTargetQuery(const Settings& settings, const Frame& frame,
-                      const Controller& controller) noexcept {
+bool NeedsAimState(const Settings& settings, const Frame& frame,
+                    const Controller& controller) noexcept {
+    return NeedsWeaponState(settings,frame,controller) &&
+        (settings.mode == Mode::ADSOnly || frame.fireMode == FireMode::SingleRelease);
+}
+
+bool NeedsWeaponReadiness(const Settings& settings, const Frame& frame,
+                          const Controller& controller) noexcept {
     const bool modeReady = settings.mode == Mode::Both ||
                            (settings.mode == Mode::ADSOnly && frame.aiming && frame.fullyAimed);
+    const bool releaseAdsReady = frame.fireMode != FireMode::SingleRelease ||
+                                 (frame.aiming && frame.fullyAimed);
+    return NeedsWeaponState(settings,frame,controller) && modeReady && releaseAdsReady;
+}
+
+bool NeedsTargetQuery(const Settings& settings, const Frame& frame,
+                      const Controller& controller) noexcept {
     const bool automatic = frame.fireMode == FireMode::Automatic ||
                            frame.fireMode == FireMode::BurstAutomatic;
     const bool single = frame.fireMode == FireMode::Single ||
                         frame.fireMode == FireMode::BurstSingle ||
                         frame.fireMode == FireMode::SingleRelease;
-    const bool releaseAdsReady = frame.fireMode != FireMode::SingleRelease ||
-                                 (frame.aiming && frame.fullyAimed);
-    return controller.NeedsFreshTarget(frame) && settings.enabled && frame.contextValid && frame.bindingsReady &&
-           !frame.manualActive && frame.ammoAvailable && !frame.hardBlocked &&
-           modeReady && releaseAdsReady && (automatic || (single &&
+    return NeedsWeaponReadiness(settings,frame,controller) && (automatic || (single &&
                (frame.shotReady || controller.HasOwnedInput())));
 }
 

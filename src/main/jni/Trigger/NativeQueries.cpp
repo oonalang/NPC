@@ -1,5 +1,5 @@
 #include "NativeQueries.h"
-#include "TriggerRange.h"
+#include "NativeRay.h"
 
 #include <algorithm>
 #include <cmath>
@@ -27,9 +27,31 @@ Value Read(Address object, std::size_t offset) noexcept {
     return value;
 }
 
-struct NativeRay { Point3 origin, direction; };
-static_assert(sizeof(NativeRay) == 24, "ARM64 camera Ray return layout");
-static_assert(sizeof(Point3) == 12, "ARM64 Vector3 HFA argument layout");
+struct NativeCamera {
+    Address base;
+    Object object;
+    explicit NativeCamera(Address library) noexcept : base(library),
+        object(base ? Bind<Object(*)(Object, Method)>(base,0x52D5CDC)(nullptr,nullptr) : nullptr) {}
+    bool IsValid() const noexcept { return object != nullptr; }
+    float NearPlane() const noexcept {
+        return Bind<float(*)(Object, Method)>(base,0x52D3C60)(object,nullptr);
+    }
+    float FarPlane() const noexcept {
+        return Bind<float(*)(Object, Method)>(base,0x52D3CA8)(object,nullptr);
+    }
+    NativeCameraRay ViewportRay(Point3 center) const noexcept {
+        return Bind<NativeCameraRay(*)(Object, Point3, Method)>(base,0x52D5B44)(object,center,nullptr);
+    }
+    int Width() const noexcept {
+        return Bind<int(*)(Object, Method)>(base,0x530005C)(nullptr,nullptr);
+    }
+    int Height() const noexcept {
+        return Bind<int(*)(Object, Method)>(base,0x53000C0)(nullptr,nullptr);
+    }
+    Point3 ScreenPoint(Point3 center) const noexcept {
+        return Bind<Point3(*)(Object, Point3, Method)>(base,0x52D5AC8)(object,center,nullptr);
+    }
+};
 
 constexpr int LocalBulletTrace = 0x800A;
 constexpr std::size_t MaximumPawnCount = 512;
@@ -77,41 +99,8 @@ bool BodyGroup(int group, bool avatar) noexcept {
 
 bool BuildNativeRay(Address base, ViewRay& ray,
                     float& normalizedX, float& normalizedY, bool sampleViewport) noexcept {
-    normalizedX = normalizedY = 0.5f;
-    ray.maxDistance = 0.f;
-    if (!base) return false;
-    const auto camera = Bind<Object(*)(Object, Method)>(base, 0x52D5CDC)(nullptr, nullptr);
-    if (!camera) return false;
-    using ClipGetter = float(*)(Object, Method);
-    const float nearPlane = Bind<ClipGetter>(base, 0x52D3C60)(camera, nullptr);
-    const float farPlane = Bind<ClipGetter>(base, 0x52D3CA8)(camera, nullptr);
-    const float detectionDistance = VisibleTraceDistance(nearPlane, farPlane);
-    if (detectionDistance <= 0.f) return false;
-    const Point3 center{0.5f, 0.5f, 0};
-    const auto native = Bind<NativeRay(*)(Object, Point3, Method)>(base, 0x52D5B44)(camera, center, nullptr);
-    if (!Finite(native.origin) || !Finite(native.direction)) return false;
-    const double lengthSquared = static_cast<double>(native.direction.x) * native.direction.x +
-                                 static_cast<double>(native.direction.y) * native.direction.y +
-                                 static_cast<double>(native.direction.z) * native.direction.z;
-    if (!std::isfinite(lengthSquared) || lengthSquared < 0.5 || lengthSquared > 1.5) return false;
-    const int width = Bind<int(*)(Object, Method)>(base, 0x530005C)(nullptr, nullptr);
-    const int height = Bind<int(*)(Object, Method)>(base, 0x53000C0)(nullptr, nullptr);
-    if (width <= 0 || height <= 0) return false;
-    if (sampleViewport) {
-        const auto screenCenter = Bind<Point3(*)(Object, Point3, Method)>(base, 0x52D5AC8)(camera, center, nullptr);
-        if (!Finite(screenCenter)) return false;
-        normalizedX = screenCenter.x / static_cast<float>(width);
-        normalizedY = 1.0f - screenCenter.y / static_cast<float>(height);
-        if (!std::isfinite(normalizedX) || !std::isfinite(normalizedY) ||
-            normalizedX < 0 || normalizedX > 1 || normalizedY < 0 || normalizedY > 1) return false;
-    }
-    const float inverseLength = static_cast<float>(1.0 / std::sqrt(lengthSquared));
-    ray.origin = native.origin;
-    ray.maxDistance = detectionDistance;
-    ray.direction = {native.direction.x * inverseLength,
-                     native.direction.y * inverseLength,
-                     native.direction.z * inverseLength};
-    return true;
+    NativeCamera camera(base);
+    return SampleNativeViewRay(camera,ray,normalizedX,normalizedY,sampleViewport);
 }
 
 bool NativeTargetQueries::TraceBody(const ContextIdentity& context,

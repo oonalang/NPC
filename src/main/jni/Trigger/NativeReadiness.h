@@ -6,17 +6,24 @@
 
 namespace PhantomTrigger {
 
-struct NativeReadiness {
-    bool handlerVerified = false;
-    bool shotReady = false;
+struct NativeReadinessBinding {
+    std::uintptr_t entry = 0;
+    const void* metadata = nullptr;
+
+    bool IsVerified() const noexcept { return entry != 0; }
+    bool Sample(std::uintptr_t weapon) const noexcept {
+        if (!weapon || !entry) return false;
+        using CanFire = bool(*)(std::uintptr_t, const void*);
+        return reinterpret_cast<CanFire>(entry)(weapon, metadata);
+    }
 };
 
 template<class VerifyExecutable>
-NativeReadiness QueryNativeReadiness(std::uintptr_t weapon, std::uintptr_t klass,
-                                    VerifyExecutable verifyExecutable) noexcept {
+NativeReadinessBinding BindNativeReadiness(std::uintptr_t klass,
+                                         VerifyExecutable verifyExecutable) noexcept {
     constexpr std::uintptr_t EntryOffset = 0x11F0;
     constexpr std::uintptr_t MetadataOffset = 0x11F8;
-    if (!weapon || !klass ||
+    if (!klass ||
         klass > std::numeric_limits<std::uintptr_t>::max() - MetadataOffset - sizeof(void*))
         return {};
 
@@ -26,8 +33,7 @@ NativeReadiness QueryNativeReadiness(std::uintptr_t weapon, std::uintptr_t klass
     std::memcpy(&metadata, reinterpret_cast<const void*>(klass + MetadataOffset), sizeof(metadata));
     if (!verifyExecutable(entry)) return {};
 
-    using CanFire = bool(*)(std::uintptr_t, const void*);
-    return {true, reinterpret_cast<CanFire>(entry)(weapon, metadata)};
+    return {entry, metadata};
 }
 
 }

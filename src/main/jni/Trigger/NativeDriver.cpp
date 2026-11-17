@@ -280,18 +280,11 @@ void DecidePreparedInput(void* owner, void* param) {
     frame.hardBlocked = !Field<bool>(pawn,0x550) || HardStateBlocked(weapon) ||
         !At<BoolGetter>(0xC914698)(controller,nullptr);
     frame.ammoAvailable = At<BoolGetter>(0x5473F58)(weapon,nullptr);
-    frame.aiming = At<BoolGetter>(0x536BAE0)(pawn,nullptr);
-    const float percentage = At<FloatGetter>(0x549C504)(weapon,nullptr);
-    frame.fullyAimed = frame.aiming &&
-        (At<BoolGetter>(0x54B5D84)(weapon,nullptr) ||
-         (std::isfinite(percentage) && percentage >= 0.995f));
     const auto klass = Field<std::uintptr_t>(weapon,0);
     const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
     const bool knownPrepare = IsSupportedPreparation(library, prepare) &&
         IsVerifiedExecutableAddress(prepare);
-    const auto readiness = QueryNativeReadiness(weapon, klass, IsVerifiedExecutableAddress);
-    const bool knownReadiness = readiness.handlerVerified;
-    frame.shotReady = readiness.shotReady;
+    const auto readiness = BindNativeReadiness(klass, IsVerifiedExecutableAddress);
 
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
@@ -302,8 +295,20 @@ void DecidePreparedInput(void* owner, void* param) {
         At<BoolGetter>(0xC916900)(controller,nullptr);
     const bool release = !knownPrepare || preparedRelease;
     const bool single = At<BoolGetter>(0x5474278)(weapon,nullptr);
-    frame.fireMode = PreparedFireMode(knownPrepare, knownReadiness, frame.ammoAvailable,
+    frame.fireMode = PreparedFireMode(knownPrepare, readiness.IsVerified(), frame.ammoAvailable,
                                      burst, single, preparedRelease);
+    if (NeedsAimState(settings,frame,local.controller)) {
+        frame.aiming = At<BoolGetter>(0x536BAE0)(pawn,nullptr);
+        if (frame.aiming) {
+            frame.fullyAimed = At<BoolGetter>(0x54B5D84)(weapon,nullptr);
+            if (!frame.fullyAimed) {
+                const float percentage = At<FloatGetter>(0x549C504)(weapon,nullptr);
+                frame.fullyAimed = std::isfinite(percentage) && percentage >= 0.995f;
+            }
+        }
+    }
+    if (NeedsWeaponReadiness(settings,frame,local.controller))
+        frame.shotReady = readiness.Sample(weapon);
     const bool allowReleaseSequence = frame.fireMode == FireMode::SingleRelease;
     if (installation.load(std::memory_order_acquire) != 2) {
         local.controller.Reset();

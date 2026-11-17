@@ -81,7 +81,9 @@ public:
     bool NeedsFreshTarget(const Frame& frame) const noexcept {
         if (!hasContext_ || identity_ != frame.identity) return true;
         if (hasUpdate_ && frame.updateId <= lastUpdate_) return false;
-        return phase_ != Phase::AwaitShot && phase_ != Phase::RejectedRelease;
+        if (phase_ == Phase::RejectedRelease) return false;
+        if (phase_ == Phase::AwaitShot) return ShotObserved(frame);
+        return !NeedsPressCleanup(frame);
     }
     void RejectPendingShot() noexcept {
         if (phase_ == Phase::AwaitShot) phase_ = Phase::RejectedRelease;
@@ -128,8 +130,12 @@ public:
             } else if (AcknowledgementExpired(frame)) {
                 phase_ = Phase::Rearm;
                 return {false, false, false, false};
-            }
-            return {};
+            } else return {};
+        }
+
+        if (NeedsPressCleanup(frame)) {
+            phase_ = Phase::Rearm;
+            return {false, false, true, false};
         }
 
         if (modeChanged || !Eligible(settings, frame)) {
@@ -153,11 +159,7 @@ public:
         }
 
         if (phase_ == Phase::Held) {
-            if (!ShotObserved(frame) && !AcknowledgementExpired(frame)) {
-                return {true, false, false, false};
-            }
-            phase_ = Phase::Rearm;
-            return {false, false, true, false};
+            return {true, false, false, false};
         }
 
 
@@ -176,6 +178,12 @@ public:
 
 private:
     enum class Phase : std::uint8_t { Idle, Held, AwaitShot, RejectedRelease, Rearm };
+
+    bool NeedsPressCleanup(const Frame& frame) const noexcept {
+        return phase_ == Phase::Held &&
+            (frame.fireMode == FireMode::Single || frame.fireMode == FireMode::BurstSingle) &&
+            (ShotObserved(frame) || AcknowledgementExpired(frame));
+    }
 
     bool ShotObserved(const Frame& frame) const noexcept {
         return frame.shotSerial != submittedShotSerial_ ||

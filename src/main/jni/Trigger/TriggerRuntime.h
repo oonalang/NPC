@@ -96,6 +96,9 @@ TargetResult EvaluateTarget(TargetQueries& queries,
 bool NeedsTargetQuery(const Settings& settings, const Frame& frame,
                       const Controller& controller) noexcept;
 
+bool NeedsAimState(const Settings&, const Frame&, const Controller&) noexcept;
+bool NeedsWeaponReadiness(const Settings&, const Frame&, const Controller&) noexcept;
+
 
 
 

@@ -95,6 +95,23 @@ int main() {
     Require(controller.Step(enabled, frame).passthrough,
             "release shot rearmed without acknowledgement");
 
+    ++frame.updateId;
+    ++frame.shotSerial;
+    native.Prepare();
+    intent = controller.Step(enabled,frame);
+    decision = cancellation.Resolve(frame.identity,false,true,intent,true);
+    native.Merge(decision.input);
+    Require(native.param[0x18] && native.param[0x1C] && !native.NativeReleaseShot() &&
+            native.result[0x15] && !native.result[0x16],
+            "ready acknowledgement did not merge one clean new press immediately");
+    ++frame.updateId;
+    native.Prepare();
+    intent = controller.Step(enabled,frame);
+    decision = cancellation.Resolve(frame.identity,false,true,intent,true);
+    native.Merge(decision.input);
+    Require(native.NativeReleaseShot() && !native.result[0x15] && native.result[0x16],
+            "immediate rearm must still release in a separate update");
+
     controller.Reset();
     cancellation.Reset();
     frame = Ready();
