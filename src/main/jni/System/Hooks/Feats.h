@@ -956,6 +956,10 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
+    LICENSE_HOOK_LIB("libunity.so", "0x64FA604", world_esp::HookNormalTick, world_esp::originalNormalTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x8A06D60", world_esp::HookBRTick, world_esp::originalBRTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x9819C8C", world_esp::HookStickTick, world_esp::originalStickTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x6ED61B8", world_esp::HookTripMineTick, world_esp::originalTripMineTick);
 
             //--MP VIEW
     LICENSE_HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);
