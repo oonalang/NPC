@@ -220,8 +220,8 @@ bool SendTelegramPhoto(const std::string& token, const std::string& chatId, cons
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, FeedbackWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
     const CURLcode res = curl_easy_perform(curl);
     long statusCode = 0;
@@ -336,6 +336,10 @@ void GetStatus(std::string& outText, bool& outIsError) {
 
 
 void StartSendAsync(const FeedbackState& snapshot, const std::string& filesDirPath) {
+    if (!snapshot.enabled || !snapshot.consented || !snapshot.includeScreenshot) {
+        SetFeedbackStatus("Feedback requires explicit consent", true);
+        return;
+    }
     if (kFeedbackPhotoBaseUrl[0] == '\0' ||
         (snapshot.botToken[0] == '\0' && !HasHardcodedBotToken()) ||
         (snapshot.chatId[0] == '\0' && !HasHardcodedChatId())) {
@@ -346,7 +350,7 @@ void StartSendAsync(const FeedbackState& snapshot, const std::string& filesDirPa
         return;
     }
 
-    SetFeedbackStatus("Queuing stealth capture...", false);
+    SetFeedbackStatus("Preparing consented feedback screenshot...", false);
     std::lock_guard<std::mutex> lock(g_PendingCaptureMutex);
     g_PendingCaptureSnapshot = snapshot;
     
