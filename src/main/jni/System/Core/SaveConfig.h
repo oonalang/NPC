@@ -232,8 +232,8 @@ inline bool SaveConfigurationFile(const std::string& name, const nlohmann::json&
     return true;
 }
 
-inline bool SaveConfiguration(const std::string& filename) {
-    return SaveConfigurationFile(filename, CaptureConfiguration());
+inline void SaveConfiguration(const std::string& filename) {
+    (void)SaveConfigurationFile(filename, CaptureConfiguration());
 }
 
 inline bool LoadConfiguration(const std::string& filename) {
