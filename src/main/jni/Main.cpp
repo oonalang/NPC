@@ -37,6 +37,7 @@
 #include "BlueprintEquipment.h"
 #include "Trigger/NativeProfile.h"
 #include "Trigger/TriggerRuntime.h"
+#include "Security/Trial.h"
 #include "Trigger/TriggerOverlay.h"
 #include "CaptureOverlay/HideRecord.h"
 #include "System/UI/TriggerTab.h"
@@ -321,6 +322,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Init_Thread2();
     }
     frame_rate::Publish(frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
+#if defined(FREE_TRIAL)
+    if (!license::trial::Active()) license::trial::Crash();
+    g_PresentationComplete = true;
+#endif
     const bool authorized=license::Allows(license::Capability::Menu);
     static bool previousAuthorization=false;
     if(previousAuthorization&&!authorized) {
@@ -331,6 +336,13 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         ApplySpeedhack();ApplyNoGravityRuntime();ApplyWorldVisualsRuntime();
     }
     previousAuthorization=authorized;
+#if defined(FREE_TRIAL)
+    static bool trialFeaturesRequested=false;
+    if(authorized&&m_unity&&!trialFeaturesRequested) {
+        trialFeaturesRequested=true;
+        RequestLicensedFeatures();
+    }
+#endif
     bool menuReady=authorized&&g_PresentationComplete;
     if(authorized) userType=license::Allows(license::Capability::Premium)?"PREMIUM PAID":"FREE";
     const auto licenseExpiry=license::LicenseUntil();
@@ -1174,6 +1186,9 @@ void native_Init(JNIEnv *env, jclass clazz, jobject mContext) {
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
 {
+#if defined(FREE_TRIAL)
+    if (!license::trial::Active()) license::trial::Crash();
+#endif
     if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK) return JNI_ERR;
     jvm = vm;
     VM = vm;

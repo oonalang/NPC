@@ -1,4 +1,5 @@
 #include "LicenseRuntime.h"
+#include "Trial.h"
 #include <openssl/rand.h>
 #include <condition_variable>
 #include <ctime>
@@ -72,8 +73,20 @@ struct Service {
 };
 Service& Engine() {static Service service;return service;}
 }
-bool Allows(Capability capability) noexcept {return Engine().session.Allows(capability,BootMillis());}
-std::uint64_t LicenseUntil() noexcept {return Engine().session.LicenseUntil();}
+bool Allows(Capability capability) noexcept {
+#if defined(FREE_TRIAL)
+    return capability != Capability::Premium && trial::Active();
+#else
+    return Engine().session.Allows(capability,BootMillis());
+#endif
+}
+std::uint64_t LicenseUntil() noexcept {
+#if defined(FREE_TRIAL)
+    return trial::Expiry();
+#else
+    return Engine().session.LicenseUntil();
+#endif
+}
 std::string LastError() {auto& service=Engine();std::lock_guard<std::mutex> lock(service.mutex);return service.error;}
 std::string Authenticate(const std::string& key, const std::string& serial, Transport transport) {
     auto& service=Engine();

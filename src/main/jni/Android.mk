@@ -73,6 +73,7 @@ LOCAL_ASFLAGS          += -DDRIVE_CA_FILE='"$(LOCAL_PATH)/Assets/drive-ca.pem"'
 LOCAL_CPPFLAGS         := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w -Werror -s -std=c++17
 LOCAL_CPPFLAGS         += -fstack-protector-strong -D_FORTIFY_SOURCE=2
 LOCAL_CPPFLAGS         += -Wno-error=c++11-narrowing -fms-extensions -fno-rtti -fno-exceptions -fpermissive
+LOCAL_CPPFLAGS         += -DFREE_TRIAL
 
 
 LOCAL_LDFLAGS          += -Wl,--gc-sections,--strip-all,--exclude-libs,ALL,-z,relro,-z,now,-z,noexecstack
@@ -89,6 +90,7 @@ FILE_LIST              += $(wildcard $(LOCAL_PATH)/*.c*)
 FILE_LIST              += $(LOCAL_PATH)/System/Audio/DriveMusic.cpp
 FILE_LIST              += $(LOCAL_PATH)/System/Audio/UiSounds.cpp
 FILE_LIST              += $(LOCAL_PATH)/Security/LicenseRuntime.cpp
+FILE_LIST              += $(LOCAL_PATH)/Security/Trial.cpp
 FILE_LIST              += $(LOCAL_PATH)/System/Hooks/Hitbox.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerRuntime.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerCompatibility.cpp
