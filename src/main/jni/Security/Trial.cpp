@@ -95,6 +95,18 @@ std::string StatePath() {
     return path;
 }
 
+std::string BackupPath() {
+    static const std::string path = [] {
+        const auto directory = LibraryDirectory();
+        if (!directory.empty() && ::access(directory.c_str(), W_OK) == 0)
+            return directory + "/.trial-hw";
+        const char* temporary = std::getenv("TMPDIR");
+        if (temporary && *temporary) return std::string(temporary) + "/.trial-hw";
+        return std::string{};
+    }();
+    return path;
+}
+
 struct State {
     std::uint64_t start = 0;
     std::uint64_t highWater = 0;
@@ -102,35 +114,45 @@ struct State {
 
 State LoadState() {
     State state;
-    const auto path = StatePath();
-    if (path.empty()) return state;
-    const int descriptor = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
-    if (descriptor < 0) return state;
-    char buffer[64]{};
-    const auto count = ::read(descriptor, buffer, sizeof(buffer) - 1);
-    ::close(descriptor);
-    if (count <= 0) return state;
-    unsigned long long start = 0;
-    unsigned long long highWater = 0;
-    if (std::sscanf(buffer, "%llu %llu", &start, &highWater) != 2) return {};
-    state.start = start;
-    state.highWater = highWater;
+    auto readPair = [&](const std::string& path) {
+        if (path.empty()) return;
+        const int descriptor = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        if (descriptor < 0) return;
+        char buffer[64]{};
+        const auto count = ::read(descriptor, buffer, sizeof(buffer) - 1);
+        ::close(descriptor);
+        if (count <= 0) return;
+        unsigned long long start = 0;
+        unsigned long long highWater = 0;
+        if (std::sscanf(buffer, "%llu %llu", &start, &highWater) == 2) {
+            if (start > state.start) state.start = start;
+            if (highWater > state.highWater) state.highWater = highWater;
+        }
+    };
+    readPair(StatePath());
+    readPair(BackupPath());
     return state;
 }
 
 bool SaveState(const State& state) {
     const auto path = StatePath();
-    if (path.empty()) return false;
-    const int descriptor = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
-    if (descriptor < 0) return false;
-    char buffer[64];
-    const int length = std::snprintf(buffer, sizeof(buffer), "%llu %llu",
-        static_cast<unsigned long long>(state.start),
-        static_cast<unsigned long long>(state.highWater));
-    const bool written = length > 0 &&
-        ::write(descriptor, buffer, static_cast<std::size_t>(length)) == length;
-    ::close(descriptor);
-    return written;
+    const auto backup = BackupPath();
+    bool written = false;
+    auto writePair = [&](const std::string& target) {
+        if (target.empty()) return;
+        const int descriptor = ::open(target.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+        if (descriptor < 0) return;
+        char buffer[64];
+        const int length = std::snprintf(buffer, sizeof(buffer), "%llu %llu",
+            static_cast<unsigned long long>(state.start),
+            static_cast<unsigned long long>(state.highWater));
+        if (length > 0 && ::write(descriptor, buffer, static_cast<std::size_t>(length)) == length)
+            written = true;
+        ::close(descriptor);
+    };
+    writePair(path);
+    writePair(backup);
+    return written || !path.empty();
 }
 
 std::uint64_t LibraryMtime() {
@@ -163,25 +185,17 @@ Config Build() {
         persisted.store(wall, std::memory_order_relaxed);
         return config;
     }
-    auto state = LoadState();
-    bool stored = state.start != 0;
-    if (!stored) {
-        const State fresh{wall, wall};
-        stored = SaveState(fresh);
-        if (stored) state = fresh;
-        else state = {wall, wall};
-    }
+    const auto state = LoadState();
     std::uint64_t anchor = buildEpoch;
-    if (stored) {
-        anchor = state.start;
-    } else {
-        const auto mtime = LibraryMtime();
-        if (mtime > anchor) anchor = mtime;
-    }
+    const auto mtime = LibraryMtime();
+    if (mtime > anchor) anchor = mtime;
+    if (state.start > anchor) anchor = state.start;
+    if (wall > anchor) anchor = wall;
     config.window = MakeWindow(buildEpoch, anchor);
     const auto high = state.highWater > wall ? state.highWater : wall;
     highWater.store(high, std::memory_order_relaxed);
-    persisted.store(state.highWater, std::memory_order_relaxed);
+    persisted.store(high, std::memory_order_relaxed);
+    SaveState({anchor, high});
     return config;
 }
 
