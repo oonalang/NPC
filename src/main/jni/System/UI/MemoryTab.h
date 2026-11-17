@@ -49,9 +49,12 @@ inline void Movement() {
 inline void MovementTuning() {
     if(Config.ExtraMenu.UnlimitedFly) custom::SliderFloat("Fly Speed",&Config.ExtraMenu.FlySpeed,1.f,10.f,"%.0f");
     custom::SliderFloat("Snowboard Speed",&SnowBsize,0.f,100.f,"%.1f");
+    ImGui::BeginDisabled(true);
     custom::SliderFloat("Slide Distance",&SlideRange,0.f,30.f,"%.1f");
-    custom::SliderFloat("Speed Multiplier",&speedHackMultiplier,.5f,2.f,"%.1fx");
-    custom::SliderFloat("High Jump",&jumpHeightMultiplier,.5f,5.f,"%.2fx");
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Slide Distance unavailable for this game build");
+    custom::SliderFloat("Speed Multiplier",&speedHackMultiplier,1.f,2.f,"%.1fx");
+    custom::SliderFloat("High Jump",&jumpHeightMultiplier,1.f,5.f,"%.2fx");
 }
 inline void WeaponControl() {
     custom::Checkbox("Hitbox",&Config.ExtraMenu.Hit);
@@ -64,8 +67,14 @@ inline void WeaponControl() {
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     custom::Checkbox("No Recoil",&Config.ExtraMenu.Recoil);
     custom::Checkbox("No Spread",&Config.ExtraMenu.Spread);
+    ImGui::BeginDisabled(true);
     custom::Checkbox("No Shake",&Config.ExtraMenu.Shake);
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("No Shake requires a verified implementation");
+    ImGui::BeginDisabled(true);
     custom::Checkbox("No Overheat",&Config.ExtraMenu.Rpd);
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("No Overheat unavailable for this game build");
     custom::Checkbox("Fire Rate",&Config.ExtraMenu.Fire);
 }
 inline void WeaponHandling() {
@@ -77,7 +86,10 @@ inline void WeaponHandling() {
     custom::Checkbox("Weapon Kinetic",&Config.ExtraMenu.Kinetic);
 }
 inline void Protection() {
+    ImGui::BeginDisabled(true);
     custom::Checkbox("Fast Armor Plate",&Config.ExtraMenu.FastArmorPlate);
+    ImGui::EndDisabled();
+    ImGui::TextDisabled("Fast Armor Plate unavailable for this game build");
     custom::Checkbox("Anti Flashbang",&Config.ExtraMenu.Flash);
     custom::Checkbox("No Smoke",&Config.ExtraMenu.NoSmoke);
     custom::Checkbox("Clear Terrain",&Config.ExtraMenu.ClearTerrain);
