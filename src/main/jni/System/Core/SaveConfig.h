@@ -44,6 +44,16 @@ inline nlohmann::json CaptureConfiguration() {
     config["FrameRate"]["Ultra"]=frames.ultra;
     config["FrameRate"]["High"]=frames.high;
 
+    config["ESPMenu"]["ItemESP"] = Config.ESPMenu.ItemESP;
+    config["ESPMenu"]["ItemWeapons"] = Config.ESPMenu.ItemWeapons;
+    config["ESPMenu"]["ItemAmmo"] = Config.ESPMenu.ItemAmmo;
+    config["ESPMenu"]["ItemMods"] = Config.ESPMenu.ItemMods;
+    config["ESPMenu"]["ItemEquipment"] = Config.ESPMenu.ItemEquipment;
+    config["ESPMenu"]["ItemOther"] = Config.ESPMenu.ItemOther;
+    config["ESPMenu"]["ItemDistance"] = Config.ESPMenu.ItemDistance;
+    config["ESPMenu"]["PlacedNadesESP"] = Config.ESPMenu.PlacedNadesESP;
+    config["ESPMenu"]["PlacedEnemyOnly"] = Config.ESPMenu.PlacedEnemyOnly;
+    config["ESPMenu"]["PlacedDistance"] = Config.ESPMenu.PlacedDistance;
     config["ESPMenu"]["isPlayerLine"] = Config.ESPMenu.isPlayerLine;
     config["ESPMenu"]["Skeleton"] = Config.ESPMenu.Skeleton;
     config["ESPMenu"]["Count"] = Config.ESPMenu.Count;
@@ -134,6 +144,16 @@ inline bool ApplyConfiguration(const nlohmann::json& config) {
     try {
         if (config.contains("ESPMenu")) {
             const auto& esp = config["ESPMenu"];
+            Config.ESPMenu.ItemESP = esp.value("ItemESP",Config.ESPMenu.ItemESP);
+            Config.ESPMenu.ItemWeapons = esp.value("ItemWeapons",Config.ESPMenu.ItemWeapons);
+            Config.ESPMenu.ItemAmmo = esp.value("ItemAmmo",Config.ESPMenu.ItemAmmo);
+            Config.ESPMenu.ItemMods = esp.value("ItemMods",Config.ESPMenu.ItemMods);
+            Config.ESPMenu.ItemEquipment = esp.value("ItemEquipment",Config.ESPMenu.ItemEquipment);
+            Config.ESPMenu.ItemOther = esp.value("ItemOther",Config.ESPMenu.ItemOther);
+            Config.ESPMenu.ItemDistance = std::clamp(esp.value("ItemDistance",Config.ESPMenu.ItemDistance),20.0f,250.0f);
+            Config.ESPMenu.PlacedNadesESP = esp.value("PlacedNadesESP",Config.ESPMenu.PlacedNadesESP);
+            Config.ESPMenu.PlacedEnemyOnly = esp.value("PlacedEnemyOnly",Config.ESPMenu.PlacedEnemyOnly);
+            Config.ESPMenu.PlacedDistance = std::clamp(esp.value("PlacedDistance",Config.ESPMenu.PlacedDistance),10.0f,120.0f);
             Config.ESPMenu.isPlayerLine = esp.value("isPlayerLine",Config.ESPMenu.isPlayerLine);
             Config.ESPMenu.Skeleton = esp.value("Skeleton",Config.ESPMenu.Skeleton);
             Config.ESPMenu.Count = esp.value("Count",Config.ESPMenu.Count);
