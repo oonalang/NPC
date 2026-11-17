@@ -16,6 +16,16 @@ constexpr Window MakeWindow(std::uint64_t buildEpoch, std::uint64_t anchorEpoch)
     return {start, start + windowSeconds};
 }
 
+constexpr std::uint64_t FirstRunStart(std::uint64_t storedStart,
+                                      std::uint64_t storedHighWater,
+                                      std::uint64_t wall) noexcept {
+    if (storedStart == 0) return wall;
+    if (storedStart > wall && storedHighWater != 0 &&
+        storedHighWater <= wall && storedStart - wall <= 12 * 3600)
+        return storedHighWater;
+    return storedStart;
+}
+
 constexpr bool Within(const Window& window, std::uint64_t now) noexcept {
     return now >= window.start && now < window.expiry;
 }
@@ -31,5 +41,4 @@ constexpr std::uint64_t EffectiveNow(std::uint64_t wall, std::uint64_t boot,
 
 std::uint64_t Expiry() noexcept;
 bool Active() noexcept;
-void Crash() noexcept;
 }

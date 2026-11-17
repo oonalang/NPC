@@ -125,6 +125,7 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(MainActivity.this,Class.forName(GameActivity)));
                 return;
             } catch (GeneralSecurityException | IOException | ClassNotFoundException | LinkageError | RuntimeException failure) {
+                if (failure instanceof LinkageError) error = "Free trial expired or native library could not load.";
                 new AlertDialog.Builder(MainActivity.this).setMessage(error).setPositiveButton("Close",new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface dialog,int which) {finish();}
                 }).show();

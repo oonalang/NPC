@@ -2,7 +2,6 @@
 
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -18,50 +17,6 @@ namespace {
 
 constexpr std::uint64_t expiryOverride = 0;
 constexpr std::uint64_t persistInterval = 300;
-
-constexpr int MonthNumber(const char* date) noexcept {
-    return date[0] == 'J' ? (date[1] == 'a' ? 1 : (date[2] == 'n' ? 6 : 7))
-         : date[0] == 'F' ? 2
-         : date[0] == 'M' ? (date[2] == 'r' ? 3 : 5)
-         : date[0] == 'A' ? (date[1] == 'p' ? 4 : 8)
-         : date[0] == 'S' ? 9
-         : date[0] == 'O' ? 10
-         : date[0] == 'N' ? 11 : 12;
-}
-
-constexpr unsigned DayOfMonth(const char* date) noexcept {
-    return date[4] == ' ' ? static_cast<unsigned>(date[5] - '0')
-                          : static_cast<unsigned>((date[4] - '0') * 10 + (date[5] - '0'));
-}
-
-constexpr int Year(const char* date) noexcept {
-    return (date[7] - '0') * 1000 + (date[8] - '0') * 100 +
-           (date[9] - '0') * 10 + (date[10] - '0');
-}
-
-constexpr std::uint64_t DaysFromCivil(int year, unsigned month, unsigned day) noexcept {
-    year -= month <= 2u;
-    const int era = (year >= 0 ? year : year - 399) / 400;
-    const unsigned yearOfEra = static_cast<unsigned>(year - era * 400);
-    const unsigned adjustedMonth = month > 2u ? month - 3u : month + 9u;
-    const unsigned dayOfYear = (153u * adjustedMonth + 2u) / 5u + day - 1u;
-    const unsigned dayOfEra = yearOfEra * 365u + yearOfEra / 4u - yearOfEra / 100u + dayOfYear;
-    return static_cast<std::uint64_t>(era) * 146097u + dayOfEra - 719468u;
-}
-
-constexpr std::uint64_t BuildEpoch() noexcept {
-    const char* time = __TIME__;
-    const unsigned seconds = static_cast<unsigned>(time[0] - '0') * 36000u +
-                             static_cast<unsigned>(time[1] - '0') * 3600u +
-                             static_cast<unsigned>(time[3] - '0') * 600u +
-                             static_cast<unsigned>(time[4] - '0') * 60u +
-                             static_cast<unsigned>(time[6] - '0') * 10u +
-                             static_cast<unsigned>(time[7] - '0');
-    return DaysFromCivil(Year(__DATE__), MonthNumber(__DATE__), DayOfMonth(__DATE__)) *
-               secondsPerDay + seconds;
-}
-
-const std::uint64_t buildEpoch = BuildEpoch();
 
 std::uint64_t WallNow() noexcept {
     const std::time_t value = std::time(nullptr);
@@ -152,15 +107,7 @@ bool SaveState(const State& state) {
     };
     writePair(path);
     writePair(backup);
-    return written || !path.empty();
-}
-
-std::uint64_t LibraryMtime() {
-    Dl_info info{};
-    if (!dladdr(reinterpret_cast<void*>(&WallNow), &info) || !info.dli_fname) return 0;
-    struct stat status{};
-    if (::stat(info.dli_fname, &status) != 0) return 0;
-    return status.st_mtime > 0 ? static_cast<std::uint64_t>(status.st_mtime) : 0;
+    return written;
 }
 
 struct Config {
@@ -179,23 +126,20 @@ Config Build() {
     const auto boot = BootNow();
     config.sessionWall = wall;
     config.sessionBoot = boot;
+    if (wall == 0 || boot == 0) return config;
     if (expiryOverride) {
-        config.window = {buildEpoch, expiryOverride};
+        config.window = {wall, expiryOverride};
         highWater.store(wall, std::memory_order_relaxed);
         persisted.store(wall, std::memory_order_relaxed);
         return config;
     }
     const auto state = LoadState();
-    std::uint64_t anchor = buildEpoch;
-    const auto mtime = LibraryMtime();
-    if (mtime > anchor) anchor = mtime;
-    if (state.start > anchor) anchor = state.start;
-    if (wall > anchor) anchor = wall;
-    config.window = MakeWindow(buildEpoch, anchor);
+    const auto start = FirstRunStart(state.start, state.highWater, wall);
     const auto high = state.highWater > wall ? state.highWater : wall;
+    if (!SaveState({start, high})) return config;
+    config.window = {start, start + windowSeconds};
     highWater.store(high, std::memory_order_relaxed);
     persisted.store(high, std::memory_order_relaxed);
-    SaveState({anchor, high});
     return config;
 }
 
@@ -212,6 +156,7 @@ std::uint64_t Expiry() noexcept {
 
 bool Active() noexcept {
     auto& config = Current();
+    if (config.window.start == 0) return false;
     const auto wall = WallNow();
     const auto boot = BootNow();
     const auto high = highWater.load(std::memory_order_relaxed);
@@ -222,16 +167,13 @@ bool Active() noexcept {
         if (now >= saved + persistInterval) {
             std::lock_guard<std::mutex> lock(persistMutex);
             if (now >= persisted.load(std::memory_order_relaxed) + persistInterval) {
+                if (!SaveState({config.window.start, now})) return false;
                 persisted.store(now, std::memory_order_relaxed);
-                SaveState({config.window.start, now});
             }
         }
     }
     return Within(config.window, now);
 }
 
-void Crash() noexcept {
-    __builtin_trap();
-}
 
 }

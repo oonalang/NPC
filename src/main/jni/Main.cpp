@@ -323,8 +323,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     }
     frame_rate::Publish(frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
 #if defined(FREE_TRIAL)
-    if (!license::trial::Active()) license::trial::Crash();
-    g_PresentationComplete = true;
+    const bool trialActive = license::trial::Active();
+    g_PresentationComplete = trialActive;
 #endif
     const bool authorized=license::Allows(license::Capability::Menu);
     static bool previousAuthorization=false;
@@ -336,6 +336,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         ApplySpeedhack();ApplyNoGravityRuntime();ApplyWorldVisualsRuntime();
     }
     previousAuthorization=authorized;
+#if defined(FREE_TRIAL)
+    if (!trialActive) err = "Free trial expired or unavailable.";
+#endif
 #if defined(FREE_TRIAL)
     static bool trialFeaturesRequested=false;
     if(authorized&&m_unity&&!trialFeaturesRequested) {
@@ -1187,7 +1190,7 @@ void native_Init(JNIEnv *env, jclass clazz, jobject mContext) {
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
 {
 #if defined(FREE_TRIAL)
-    if (!license::trial::Active()) license::trial::Crash();
+    if (!license::trial::Active()) return JNI_ERR;
 #endif
     if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK) return JNI_ERR;
     jvm = vm;

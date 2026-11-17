@@ -3,6 +3,7 @@
 #include <cstdio>
 
 using license::trial::EffectiveNow;
+using license::trial::FirstRunStart;
 using license::trial::MakeWindow;
 using license::trial::Within;
 using license::trial::windowSeconds;
@@ -67,6 +68,20 @@ void Override() {
     Require(!Within(dead, build - day), "an expiry before the build stamp never opens");
 }
 
+void FirstLaunchAndRestart() {
+    const std::uint64_t first = build + 100 * day;
+    Require(FirstRunStart(0, 0, first) == first,
+            "first launch starts at actual wall clock time");
+    Require(FirstRunStart(first, first + day, first + 2 * day) == first,
+            "restart preserves the first trial start");
+    Require(FirstRunStart(first + 8 * 3600, first, first) == first,
+            "legacy UTC offset start is corrected using high-water time");
+    Require(FirstRunStart(first + 13 * 3600, first, first) == first + 13 * 3600,
+            "unrelated future timestamps are not silently reset");
+    Require(FirstRunStart(first + 8 * 3600, first + day, first) == first + 8 * 3600,
+            "clock rollback does not reset a persisted trial");
+}
+
 void ClockRollback() {
     const std::uint64_t sessionWall = 1794879171;
     const std::uint64_t sessionBoot = 500;
@@ -98,6 +113,7 @@ int main() {
     StaleBuild();
     MissingEmulation();
     Override();
+    FirstLaunchAndRestart();
     ClockRollback();
     RestartRollback();
     if (failures) {
