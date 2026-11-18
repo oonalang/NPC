@@ -68,6 +68,8 @@ struct LocalState {
     Frame lastFrame{};
     bool hasFrame = false;
     NativeCancellation cancellation;
+    VerifiedEntryCache prepareCache;
+    VerifiedEntryCache readinessCache;
     bool stopAfterUpdate = false;
     bool syntheticInput = false;
     bool releaseSequence = false;
@@ -102,12 +104,7 @@ bool InputHotfixActive() noexcept {
     return false;
 }
 
-bool HardStateBlocked(std::uintptr_t weapon) noexcept {
-    const auto machine = Field<std::uintptr_t>(weapon, 0x170);
-    if (!machine) return true;
-    const auto current = Field<std::uintptr_t>(machine, 0x18);
-    if (!current) return true;
-    const int type = Field<int>(current, 0x20);
+bool HardStateBlocked(int type) noexcept {
     switch (type) {
 
 
@@ -135,6 +132,8 @@ ContextIdentity Identity(std::uintptr_t match, std::uintptr_t pawn,
     if (local.epoch != epoch) {
         local.controller.Reset();
         local.cancellation.Reset();
+        local.prepareCache.Reset();
+        local.readinessCache.Reset();
         local.epoch = epoch;
         for (auto& generation : local.generations) ++generation;
     }
@@ -251,7 +250,8 @@ void DecidePreparedInput(void* owner, void* param) {
         return;
     }
     const auto stateMachine = Field<std::uintptr_t>(weapon,0x170);
-    if (!stateMachine || !Field<std::uintptr_t>(stateMachine,0x18)) {
+    const auto activeState = stateMachine ? Field<std::uintptr_t>(stateMachine,0x18) : 0;
+    if (!activeState) {
         local.controller.Reset();
         local.cancellation.Reset();
         observedComponent.store(0,std::memory_order_release);
@@ -277,14 +277,15 @@ void DecidePreparedInput(void* owner, void* param) {
     frame.contextValid = component != 0;
     frame.bindingsReady = true;
     frame.manualActive = local.manualActive;
-    frame.hardBlocked = !Field<bool>(pawn,0x550) || HardStateBlocked(weapon) ||
+    frame.hardBlocked = HardStateBlocked(Field<int>(activeState,0x20)) ||
         !At<BoolGetter>(0xC914698)(controller,nullptr);
     frame.ammoAvailable = At<BoolGetter>(0x5473F58)(weapon,nullptr);
     const auto klass = Field<std::uintptr_t>(weapon,0);
     const auto prepare = klass ? Field<std::uintptr_t>(klass,0xD70) : 0;
     const bool knownPrepare = IsSupportedPreparation(library, prepare) &&
-        IsVerifiedExecutableAddress(prepare);
-    const auto readiness = BindNativeReadiness(klass, IsVerifiedExecutableAddress);
+        local.prepareCache.Check(klass, prepare, IsVerifiedExecutableAddress);
+    const auto readiness = BindNativeReadiness(klass, IsVerifiedExecutableAddress,
+                                               &local.readinessCache);
 
 
     frame.shotSerial = committedShots.load(std::memory_order_acquire);
