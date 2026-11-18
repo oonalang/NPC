@@ -3,6 +3,7 @@
 #include "NativeCancellation.h"
 #include "NativeProfile.h"
 #include "NativeReadiness.h"
+#include "BRQueryBudget.h"
 #include "NativeInputStage.h"
 #include "TriggerCompatibility.h"
 #include <atomic>
@@ -72,6 +73,10 @@ struct LocalState {
     bool syntheticInput = false;
     bool releaseSequence = false;
     bool committedRelease = false;
+    std::uintptr_t brMatch = 0;
+    std::uint64_t brEpoch = 0;
+    bool brGame = false;
+    BRQueryBudget brBudget;
 };
 thread_local LocalState local;
 
@@ -273,6 +278,14 @@ void DecidePreparedInput(void* owner, void* param) {
     observedComponent.store(component,std::memory_order_release);
     Frame frame;
     frame.identity = Identity(match,pawn,weapon,component,controller);
+    if (local.brMatch != match || local.brEpoch != local.epoch) {
+        local.brMatch = match;
+        local.brEpoch = local.epoch;
+        const std::uintptr_t modeGetter = library + 0x8012FAC;
+        local.brGame = IsVerifiedExecutableAddress(modeGetter) &&
+            reinterpret_cast<BoolGetter>(modeGetter)(0,nullptr);
+        local.brBudget.Clear();
+    }
     frame.updateId = local.update;
     frame.contextValid = component != 0;
     frame.bindingsReady = true;
@@ -318,14 +331,18 @@ void DecidePreparedInput(void* owner, void* param) {
     status.store(RuntimeStatus::Ready,std::memory_order_release);
     ViewRay ray;
     const bool needTarget = NeedsTargetQuery(settings,frame,local.controller);
-    const bool rayReady = PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
-    frame.contextValid = frame.contextValid && (!needTarget || rayReady);
+    const bool queryNow = local.brBudget.ShouldTrace(frame.identity,frame.nowMillis,
+        local.brGame,needTarget,local.controller.HasOwnedInput());
+    const bool rayReady = PrepareViewRay(settings.showDot || queryNow,settings.showDot,ray);
+    frame.contextValid = frame.contextValid && (!queryNow || rayReady);
     NativeTargetQueries queries(library,match,pawn);
     TargetResult target = TargetResult::InvalidRay;
     frame.targetValid = false;
-    if (needTarget && rayReady) {
+    if (queryNow && rayReady) {
+        ray.maxDistance = BRTraceDistance(ray.maxDistance, local.brGame);
         target = EvaluateTarget(queries,frame.identity,ray);
         frame.targetValid = target == TargetResult::Eligible;
+        local.brBudget.Observed(frame.identity,frame.nowMillis,frame.targetValid,local.brGame);
     }
     const auto intent = local.controller.Step(settings,frame);
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,

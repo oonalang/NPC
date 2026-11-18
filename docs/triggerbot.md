@@ -204,3 +204,17 @@ automatic target entry/exit, single-shot rearming, ADS transitions, reload,
 death/respawn and weapon changes. Record the runtime status if verification
 rejects the loaded library. No live accuracy or performance benchmark has been
 performed in this environment.
+
+## BR performance budget (1.6.59)
+
+The larger BR scene can increase the cost of repeated physics checks while no target is under the reticle. The original trigger obtains its maximum trace distance from the camera far clipping plane, and checks for a target on every eligible input update.
+
+The new BR-specific budget uses the game's `get_IsInBRGame` getter (RVA `0x8012FAC`, from the supplied 1.6.59 dump) after the pinned native module profile is accepted and the getter is in a verified executable range. If the getter is unavailable or BR is not active, the input path retains the original MP behavior.
+
+- Empty-reticle acquisition checks are spaced by at least 32 ms in BR, reducing an idle 120 Hz query stream to about 31 Hz. This adds at most approximately 32 ms to initial target acquisition, in addition to native frame timing.
+- A newly eligible target stays on full update cadence. Held input always requests fresh target validation, and every subsequent committed release follows the normal native readiness and collision checks.
+- BR collision traces cap at 600 game-world units rather than the entire far camera clipping range. This can exclude targets beyond the cap. MP retains the native clipping distance.
+- No target, hit, or physics result is cached across frames. Match and weapon-context changes reset the budget. Manual input and the existing cancellation and release state machine keep priority.
+- The new regression suite checks MP passthrough, BR idle cadence, active-target fast path, ownership, context reset, time reset, and distance limits.
+
+This optimization is source-reviewed but not device-benchmarked. Verify BR frame times, aiming responsiveness, automatic fire, single-shot release, match transitions, and MP behavior on a real phone before merging. Measure the BR gameplay FPS with the feature disabled and enabled under the same map location, view direction, graphics preset, and device temperature.
