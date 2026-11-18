@@ -55,6 +55,12 @@ void LoadConfig() {
         else if (key == "ESPMenu.ItemMods") Config.ESPMenu.ItemMods = (valueStr == "1");
         else if (key == "ESPMenu.ItemEquipment") Config.ESPMenu.ItemEquipment = (valueStr == "1");
         else if (key == "ESPMenu.ItemOther") Config.ESPMenu.ItemOther = (valueStr == "1");
+        else if (key == "ESPMenu.ItemMedical") Config.ESPMenu.ItemMedical = (valueStr == "1");
+        else if (key == "ESPMenu.ItemThrowables") Config.ESPMenu.ItemThrowables = (valueStr == "1");
+        else if (key == "ESPMenu.ItemSkills") Config.ESPMenu.ItemSkills = (valueStr == "1");
+        else if (key == "ESPMenu.ItemPerks") Config.ESPMenu.ItemPerks = (valueStr == "1");
+        else if (key == "ESPMenu.ItemWeaponClassMask") Config.ESPMenu.ItemWeaponClassMask = static_cast<unsigned int>(std::stoul(valueStr));
+        else if (key == "ESPMenu.ItemModQualityMask") Config.ESPMenu.ItemModQualityMask = static_cast<unsigned int>(std::stoul(valueStr));
         else if (key == "ESPMenu.ItemDistance") Config.ESPMenu.ItemDistance = std::stof(valueStr);
         else if (key == "ESPMenu.PlacedNadesESP") Config.ESPMenu.PlacedNadesESP = (valueStr == "1");
         else if (key == "ESPMenu.PlacedEnemyOnly") Config.ESPMenu.PlacedEnemyOnly = (valueStr == "1");
@@ -129,6 +135,12 @@ void SaveConfig() {
     file << "ESPMenu.ItemMods " << Config.ESPMenu.ItemMods << "\n";
     file << "ESPMenu.ItemEquipment " << Config.ESPMenu.ItemEquipment << "\n";
     file << "ESPMenu.ItemOther " << Config.ESPMenu.ItemOther << "\n";
+    file << "ESPMenu.ItemMedical " << Config.ESPMenu.ItemMedical << "\n";
+    file << "ESPMenu.ItemThrowables " << Config.ESPMenu.ItemThrowables << "\n";
+    file << "ESPMenu.ItemSkills " << Config.ESPMenu.ItemSkills << "\n";
+    file << "ESPMenu.ItemPerks " << Config.ESPMenu.ItemPerks << "\n";
+    file << "ESPMenu.ItemWeaponClassMask " << Config.ESPMenu.ItemWeaponClassMask << "\n";
+    file << "ESPMenu.ItemModQualityMask " << Config.ESPMenu.ItemModQualityMask << "\n";
     file << "ESPMenu.ItemDistance " << Config.ESPMenu.ItemDistance << "\n";
     file << "ESPMenu.PlacedNadesESP " << Config.ESPMenu.PlacedNadesESP << "\n";
     file << "ESPMenu.PlacedEnemyOnly " << Config.ESPMenu.PlacedEnemyOnly << "\n";

@@ -966,6 +966,8 @@ inline void InitializeAllHooks() {
     //-- ESP Items (BR) / ESP Placed Nades (MP)
     LICENSE_HOOK_LIB("libunity.so", "0x64FA604", world_esp::HookLootTick, world_esp::origLootTick);
     LICENSE_HOOK_LIB("libunity.so", "0x8A06D60", world_esp::HookBRPickupTick, world_esp::origBRPickupTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x94DE944", world_esp::HookLootEnabled, world_esp::origLootEnabled);
+    LICENSE_HOOK_LIB("libunity.so", "0x94DE990", world_esp::HookLootDisabled, world_esp::origLootDisabled);
     LICENSE_HOOK_LIB("libunity.so", "0x9819C8C", world_esp::HookStickTick, world_esp::origStickTick);
     LICENSE_HOOK_LIB("libunity.so", "0x6ED61B8", world_esp::HookTripMineTick, world_esp::origTripMineTick);
     LICENSE_HOOK_LIB("libunity.so", "0xB483440", world_esp::HookTripWireTick, world_esp::origTripWireTick);

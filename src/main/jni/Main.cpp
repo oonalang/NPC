@@ -291,6 +291,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Config.ESPMenu.ItemMods = true;
         Config.ESPMenu.ItemEquipment = true;
         Config.ESPMenu.ItemOther = false;
+        Config.ESPMenu.ItemMedical = false;
+        Config.ESPMenu.ItemThrowables = false;
+        Config.ESPMenu.ItemSkills = false;
+        Config.ESPMenu.ItemPerks = false;
+        Config.ESPMenu.ItemWeaponClassMask = 0;
+        Config.ESPMenu.ItemModQualityMask = 0;
         Config.ESPMenu.ItemDistance = 150.0f;
         Config.ESPMenu.PlacedEnemyOnly = true;
         Config.ESPMenu.PlacedTripMines = true;
@@ -825,15 +831,103 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Combo("Health Position", (int *)&Config.ESPMenu.HealthPosition, healthPositions, IM_ARRAYSIZE(healthPositions), -1);
                                 custom::Combo("ESP Style", (int *)&Config.ESPMenu.EspStyle, espStyles, IM_ARRAYSIZE(espStyles), -1);
 
-                                if (Config.ESPMenu.ItemESP && ImGui::TreeNode("BR loot filters")) {
-                                    custom::Checkbox("Weapons", &Config.ESPMenu.ItemWeapons);
-                                    custom::Checkbox("Ammo", &Config.ESPMenu.ItemAmmo);
-                                    custom::Checkbox("Mods / attachments", &Config.ESPMenu.ItemMods);
-                                    custom::Checkbox("Equipment", &Config.ESPMenu.ItemEquipment);
-                                    custom::Checkbox("Other loot", &Config.ESPMenu.ItemOther);
+                                if (Config.ESPMenu.ItemESP) {
+                                    ImGui::Separator();
+                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BR ITEM FILTERS");
+                                    const int enabledCategories =
+                                        static_cast<int>(Config.ESPMenu.ItemWeapons) +
+                                        static_cast<int>(Config.ESPMenu.ItemAmmo) +
+                                        static_cast<int>(Config.ESPMenu.ItemMods) +
+                                        static_cast<int>(Config.ESPMenu.ItemEquipment) +
+                                        static_cast<int>(Config.ESPMenu.ItemMedical) +
+                                        static_cast<int>(Config.ESPMenu.ItemThrowables) +
+                                        static_cast<int>(Config.ESPMenu.ItemSkills) +
+                                        static_cast<int>(Config.ESPMenu.ItemPerks) +
+                                        static_cast<int>(Config.ESPMenu.ItemOther);
+                                    const std::string categorySummary = enabledCategories == 0 ? "None selected" :
+                                        std::to_string(enabledCategories) + " categories selected";
+                                    ImGui::SetNextItemWidth(-FLT_MIN);
+                                    if (ImGui::BeginCombo("Loot categories", categorySummary.c_str())) {
+                                        ImGui::Selectable("Weapons", &Config.ESPMenu.ItemWeapons, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Ammo", &Config.ESPMenu.ItemAmmo, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Mods / attachments", &Config.ESPMenu.ItemMods, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Equipment", &Config.ESPMenu.ItemEquipment, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Medical items", &Config.ESPMenu.ItemMedical, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Throwables", &Config.ESPMenu.ItemThrowables, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Class upgrades", &Config.ESPMenu.ItemSkills, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Perks", &Config.ESPMenu.ItemPerks, ImGuiSelectableFlags_DontClosePopups);
+                                        ImGui::Selectable("Other loot", &Config.ESPMenu.ItemOther, ImGuiSelectableFlags_DontClosePopups);
+                                        if (ImGui::SmallButton("Select all##BRloot")) {
+                                            Config.ESPMenu.ItemWeapons = true;
+                                            Config.ESPMenu.ItemAmmo = true;
+                                            Config.ESPMenu.ItemMods = true;
+                                            Config.ESPMenu.ItemEquipment = true;
+                                            Config.ESPMenu.ItemMedical = true;
+                                            Config.ESPMenu.ItemThrowables = true;
+                                            Config.ESPMenu.ItemSkills = true;
+                                            Config.ESPMenu.ItemPerks = true;
+                                            Config.ESPMenu.ItemOther = true;
+                                        }
+                                        ImGui::SameLine();
+                                        if (ImGui::SmallButton("Clear##BRloot")) {
+                                            Config.ESPMenu.ItemWeapons = false;
+                                            Config.ESPMenu.ItemAmmo = false;
+                                            Config.ESPMenu.ItemMods = false;
+                                            Config.ESPMenu.ItemEquipment = false;
+                                            Config.ESPMenu.ItemMedical = false;
+                                            Config.ESPMenu.ItemThrowables = false;
+                                            Config.ESPMenu.ItemSkills = false;
+                                            Config.ESPMenu.ItemPerks = false;
+                                            Config.ESPMenu.ItemOther = false;
+                                        }
+                                        ImGui::EndCombo();
+                                    }
+                                    if (Config.ESPMenu.ItemWeapons) {
+                                        const char* classNames[] = {
+                                            "Assault rifles", "Sniper rifles", "SMGs", "LMGs",
+                                            "Shotguns", "Pistols", "Melee", "Throwing",
+                                            "Launchers", "Controllable", "Special", "Continuous cast", "Marksman rifles"
+                                        };
+                                        ImGui::SetNextItemWidth(-FLT_MIN);
+                                        const unsigned int classMask = Config.ESPMenu.ItemWeaponClassMask;
+                                        const char* classSummary = classMask == 0 ? "All weapon classes" : "Custom classes";
+                                        if (ImGui::BeginCombo("Weapon classes", classSummary)) {
+                                            if (ImGui::Selectable("All weapon classes", classMask == 0))
+                                                Config.ESPMenu.ItemWeaponClassMask = 0;
+                                            for (int idx = 0; idx < 13; ++idx) {
+                                                const unsigned int bit = 1u << (idx + 1);
+                                                const unsigned int currentMask = Config.ESPMenu.ItemWeaponClassMask;
+                                                const bool selected = currentMask == 0 || (currentMask & bit) != 0;
+                                                if (ImGui::Selectable(classNames[idx], selected, ImGuiSelectableFlags_DontClosePopups))
+                                                    Config.ESPMenu.ItemWeaponClassMask = currentMask == 0 ? bit : currentMask ^ bit;
+                                            }
+                                            ImGui::EndCombo();
+                                        }
+                                    }
+                                    if (Config.ESPMenu.ItemMods) {
+                                        const char* qualityNames[] = {
+                                            "White (common)", "Green (uncommon)", "Blue (rare)",
+                                            "Purple (epic)", "Gold (legendary)"
+                                        };
+                                        ImGui::SetNextItemWidth(-FLT_MIN);
+                                        const unsigned int qualityMask = Config.ESPMenu.ItemModQualityMask;
+                                        const char* qualitySummary = qualityMask == 0 ? "All mod rarities" : "Custom rarities";
+                                        if (ImGui::BeginCombo("Mod rarity", qualitySummary)) {
+                                            if (ImGui::Selectable("All mod rarities", qualityMask == 0))
+                                                Config.ESPMenu.ItemModQualityMask = 0;
+                                            for (int idx = 0; idx < 5; ++idx) {
+                                                const unsigned int bit = 1u << idx;
+                                                const unsigned int currentMask = Config.ESPMenu.ItemModQualityMask;
+                                                const bool selected = currentMask == 0 || (currentMask & bit) != 0;
+                                                if (ImGui::Selectable(qualityNames[idx], selected, ImGuiSelectableFlags_DontClosePopups))
+                                                    Config.ESPMenu.ItemModQualityMask = currentMask == 0 ? bit : currentMask ^ bit;
+                                            }
+                                            ImGui::EndCombo();
+                                        }
+                                    }
                                     ImGui::InputText("Find item", Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch));
                                     custom::SliderFloat("Loot range", &Config.ESPMenu.ItemDistance, 20.0f, 250.0f, "%.0fm");
-                                    ImGui::TreePop();
+                                    ImGui::TextDisabled("Tracked pickups: %u", world_esp::TrackedLootCount());
                                 }
                                 if (Config.ESPMenu.PlacedNadesESP && ImGui::TreeNode("Placed device filters")) {
                                     custom::Checkbox("Enemy devices only", &Config.ESPMenu.PlacedEnemyOnly);

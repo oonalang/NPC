@@ -47,6 +47,12 @@ void SaveConfiguration(const std::string& filename) {
     config["ESPMenu"]["ItemMods"] = Config.ESPMenu.ItemMods;
     config["ESPMenu"]["ItemEquipment"] = Config.ESPMenu.ItemEquipment;
     config["ESPMenu"]["ItemOther"] = Config.ESPMenu.ItemOther;
+    config["ESPMenu"]["ItemMedical"] = Config.ESPMenu.ItemMedical;
+    config["ESPMenu"]["ItemThrowables"] = Config.ESPMenu.ItemThrowables;
+    config["ESPMenu"]["ItemSkills"] = Config.ESPMenu.ItemSkills;
+    config["ESPMenu"]["ItemPerks"] = Config.ESPMenu.ItemPerks;
+    config["ESPMenu"]["ItemWeaponClassMask"] = Config.ESPMenu.ItemWeaponClassMask;
+    config["ESPMenu"]["ItemModQualityMask"] = Config.ESPMenu.ItemModQualityMask;
     config["ESPMenu"]["ItemSearch"] = std::string(Config.ESPMenu.ItemSearch);
     config["ESPMenu"]["ItemDistance"] = Config.ESPMenu.ItemDistance;
     config["ESPMenu"]["PlacedNadesESP"] = Config.ESPMenu.PlacedNadesESP;
@@ -143,6 +149,12 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ESPMenu.ItemMods = config["ESPMenu"].value("ItemMods", Config.ESPMenu.ItemMods);
             Config.ESPMenu.ItemEquipment = config["ESPMenu"].value("ItemEquipment", Config.ESPMenu.ItemEquipment);
             Config.ESPMenu.ItemOther = config["ESPMenu"].value("ItemOther", Config.ESPMenu.ItemOther);
+            Config.ESPMenu.ItemMedical = config["ESPMenu"].value("ItemMedical", Config.ESPMenu.ItemMedical);
+            Config.ESPMenu.ItemThrowables = config["ESPMenu"].value("ItemThrowables", Config.ESPMenu.ItemThrowables);
+            Config.ESPMenu.ItemSkills = config["ESPMenu"].value("ItemSkills", Config.ESPMenu.ItemSkills);
+            Config.ESPMenu.ItemPerks = config["ESPMenu"].value("ItemPerks", Config.ESPMenu.ItemPerks);
+            Config.ESPMenu.ItemWeaponClassMask = config["ESPMenu"].value("ItemWeaponClassMask", Config.ESPMenu.ItemWeaponClassMask);
+            Config.ESPMenu.ItemModQualityMask = config["ESPMenu"].value("ItemModQualityMask", Config.ESPMenu.ItemModQualityMask);
             if (config["ESPMenu"].contains("ItemSearch") && config["ESPMenu"]["ItemSearch"].is_string()) {
                 const std::string stored = config["ESPMenu"]["ItemSearch"].get<std::string>();
                 std::snprintf(Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch), "%s", stored.c_str());

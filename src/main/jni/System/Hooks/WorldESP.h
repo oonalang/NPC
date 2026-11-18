@@ -26,6 +26,13 @@ namespace LootField {
     constexpr uintptr_t IsInBox = 0x30;       // OpenWorldDroppedPickUpData.IsInBox
     constexpr uintptr_t Position = 0x4C;      // OpenWorldDroppedPickUpData.Pos
     constexpr uintptr_t Config = 0xD8;        // OpenWorldDroppedPickUpNormal.mDroppedPickUpConfig
+    constexpr uintptr_t ServerPosition = 0x60;
+    constexpr uintptr_t NormalItemType = 0xA0;
+    constexpr uintptr_t NormalCount = 0xAC;
+    constexpr uintptr_t NormalInBox = 0xC1;
+    constexpr uintptr_t BaseItemId = 0x5C;
+    constexpr uintptr_t WeaponCategory = 0x24;
+    constexpr uintptr_t ModQuality = 0x60;
 }
 
 namespace ProjectileField {
@@ -39,6 +46,8 @@ struct Loot {
     int kind = 0;
     int item = 0;
     int count = 0;
+    int weaponClass = -1;
+    int modQuality = -1;
     char name[64] = {};
     int nameTries = 0;
     Clock::time_point seen;
@@ -63,6 +72,9 @@ inline std::atomic<bool> wantDevices{false};
 
 inline Tick origLootTick = nullptr;
 inline Tick origBRPickupTick = nullptr;
+using Lifecycle = void (*)(void *);
+inline Lifecycle origLootEnabled = nullptr;
+inline Lifecycle origLootDisabled = nullptr;
 inline Tick origStickTick = nullptr;
 inline Tick origTripMineTick = nullptr;
 inline Tick origTripWireTick = nullptr;
@@ -199,47 +211,92 @@ inline const char *ItemCategory(int type) {
     }
 }
 
-inline bool ItemEnabled(int type) {
+inline bool ItemEnabled(const Loot &item) {
     if (!Config.ESPMenu.ItemESP) return false;
-    switch (type) {
-        case 1: return Config.ESPMenu.ItemWeapons;
+    switch (item.kind) {
+        case 1:
+            return Config.ESPMenu.ItemWeapons &&
+                (Config.ESPMenu.ItemWeaponClassMask == 0 ||
+                (item.weaponClass >= 1 && item.weaponClass <= 13 &&
+                (Config.ESPMenu.ItemWeaponClassMask & (1u << item.weaponClass)) != 0));
         case 2: case 9: return Config.ESPMenu.ItemAmmo;
         case 3: return Config.ESPMenu.ItemEquipment;
-        case 4: return Config.ESPMenu.ItemMods;
+        case 4:
+            return Config.ESPMenu.ItemMods &&
+                (Config.ESPMenu.ItemModQualityMask == 0 ||
+                (item.modQuality >= 0 && item.modQuality <= 4 &&
+                (Config.ESPMenu.ItemModQualityMask & (1u << item.modQuality)) != 0));
+        case 5: return Config.ESPMenu.ItemMedical;
+        case 6: return Config.ESPMenu.ItemThrowables;
+        case 7: return Config.ESPMenu.ItemSkills;
+        case 8: return Config.ESPMenu.ItemPerks;
         default: return Config.ESPMenu.ItemOther;
     }
 }
 
 inline void TrackLoot(void *instance) {
     if (!wantLoot.load(std::memory_order_relaxed) || !Tools::IsPtrValid(instance)) return;
-    void *data = *reinterpret_cast<void **>(reinterpret_cast<uintptr_t>(instance) + LootField::ItemData);
-    if (!Tools::IsPtrValid(data)) return;
-    const auto *bytes = reinterpret_cast<const uint8_t *>(data);
-    Loot entry;
-    std::memcpy(&entry.kind, bytes + LootField::ItemType, 4);
-    std::memcpy(&entry.item, bytes + LootField::ItemId, 4);
-    std::memcpy(&entry.count, bytes + LootField::Count, 4);
-    std::memcpy(&entry.pos, bytes + LootField::Position, sizeof(Vector3));
-    if (bytes[LootField::IsInBox] != 0 || entry.kind <= 0 || entry.kind > 21 ||
-        entry.item <= 0 || !ValidWorld(entry.pos)) return;
+    const uintptr_t address = reinterpret_cast<uintptr_t>(instance);
+    const char *instanceName = ClassName(instance);
+    const bool normalPickup = instanceName && std::strstr(instanceName, "DroppedPickUpNormal");
+    void *data = *reinterpret_cast<void **>(address + LootField::ItemData);
+    const bool hasData = Tools::IsPtrValid(data);
+    if (!hasData && !normalPickup) return;
 
-    const uintptr_t key = reinterpret_cast<uintptr_t>(instance);
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        const auto existing = lootEntries.find(key);
-        if (existing != lootEntries.end()) {
-            std::memcpy(entry.name, existing->second.name, sizeof(entry.name));
-            entry.nameTries = existing->second.nameTries;
+    Loot entry;
+    bool isInBox = false;
+    if (hasData) {
+        const auto *bytes = reinterpret_cast<const uint8_t *>(data);
+        std::memcpy(&entry.kind, bytes + LootField::ItemType, 4);
+        std::memcpy(&entry.item, bytes + LootField::ItemId, 4);
+        std::memcpy(&entry.count, bytes + LootField::Count, 4);
+        std::memcpy(&entry.pos, bytes + LootField::Position, sizeof(Vector3));
+        isInBox = bytes[LootField::IsInBox] != 0;
+    }
+    if (normalPickup) {
+        if (entry.kind <= 0 || entry.kind > 21)
+            std::memcpy(&entry.kind, reinterpret_cast<const void *>(address + LootField::NormalItemType), sizeof(int));
+        if (entry.item <= 0)
+            std::memcpy(&entry.item, reinterpret_cast<const void *>(address + LootField::BaseItemId), sizeof(int));
+        if (entry.count <= 0)
+            std::memcpy(&entry.count, reinterpret_cast<const void *>(address + LootField::NormalCount), sizeof(int));
+        isInBox = isInBox || *reinterpret_cast<const uint8_t *>(address + LootField::NormalInBox) != 0;
+    }
+    if (!ValidWorld(entry.pos) || entry.pos == Vector3::zero())
+        std::memcpy(&entry.pos, reinterpret_cast<const void *>(address + LootField::ServerPosition), sizeof(Vector3));
+    if (isInBox || entry.kind <= 0 || entry.kind > 21 || entry.item <= 0 ||
+        !ValidWorld(entry.pos) || entry.pos == Vector3::zero()) return;
+
+    if (normalPickup) {
+        void *config = *reinterpret_cast<void **>(address + LootField::Config);
+        if (Tools::IsPtrValid(config)) {
+            const char *configName = ClassName(config);
+            if (configName && !std::strcmp(configName, "BRWeaponConfig"))
+                std::memcpy(&entry.weaponClass, reinterpret_cast<const uint8_t *>(config) + LootField::WeaponCategory, sizeof(int));
+            if (configName && !std::strcmp(configName, "BREquipPartConfig"))
+                std::memcpy(&entry.modQuality, reinterpret_cast<const uint8_t *>(config) + LootField::ModQuality, sizeof(int));
         }
     }
-    if (!entry.name[0] && entry.nameTries < 3) {
+
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        const auto existing = lootEntries.find(address);
+        if (existing != lootEntries.end() && existing->second.item == entry.item &&
+            existing->second.kind == entry.kind) {
+            std::memcpy(entry.name, existing->second.name, sizeof(entry.name));
+            entry.nameTries = existing->second.nameTries;
+            if (entry.weaponClass < 0) entry.weaponClass = existing->second.weaponClass;
+            if (entry.modQuality < 0) entry.modQuality = existing->second.modQuality;
+        }
+    }
+    if (!entry.name[0] && entry.nameTries < 8 && normalPickup) {
         ++entry.nameTries;
         CopyItemName(instance, entry.name);
     }
     entry.seen = Clock::now();
     std::lock_guard<std::mutex> lock(mutex);
-    if (lootEntries.size() >= 400 && lootEntries.find(key) == lootEntries.end()) return;
-    lootEntries[key] = entry;
+    if (lootEntries.size() >= 400 && lootEntries.find(address) == lootEntries.end()) return;
+    lootEntries[address] = entry;
 }
 
 inline void TrackPlaced(void *instance) {
@@ -268,13 +325,26 @@ inline void TrackPlaced(void *instance) {
 }
 
 inline void HookLootTick(void *instance, float dt) {
-    TrackLoot(instance);
     if (origLootTick) origLootTick(instance, dt);
+    TrackLoot(instance);
 }
 
 inline void HookBRPickupTick(void *instance, float dt) {
-    TrackLoot(instance);
     if (origBRPickupTick) origBRPickupTick(instance, dt);
+    TrackLoot(instance);
+}
+
+inline void HookLootEnabled(void *instance) {
+    if (origLootEnabled) origLootEnabled(instance);
+    TrackLoot(instance);
+}
+
+inline void HookLootDisabled(void *instance) {
+    if (Tools::IsPtrValid(instance)) {
+        std::lock_guard<std::mutex> lock(mutex);
+        lootEntries.erase(reinterpret_cast<uintptr_t>(instance));
+    }
+    if (origLootDisabled) origLootDisabled(instance);
 }
 
 inline void HookStickTick(void *instance, float dt) {
@@ -311,6 +381,11 @@ inline bool Projection(Camera *cam, const Vector3 &world, int width, int height,
         screen.x <= width + 80.0f && screen.y <= height + 40.0f;
 }
 
+inline unsigned int TrackedLootCount() {
+    std::lock_guard<std::mutex> lock(mutex);
+    return static_cast<unsigned int>(lootEntries.size());
+}
+
 inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPosition, Pawn *localPawn) {
     wantLoot.store(Config.ESPMenu.ItemESP, std::memory_order_relaxed);
     wantDevices.store(Config.ESPMenu.PlacedNadesESP, std::memory_order_relaxed);
@@ -325,10 +400,10 @@ inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPo
     {
         std::lock_guard<std::mutex> lock(mutex);
         for (auto it = lootEntries.begin(); it != lootEntries.end();) {
-            if (now - it->second.seen > std::chrono::milliseconds(1800)) {
+            if (now - it->second.seen > std::chrono::seconds(8)) {
                 it = lootEntries.erase(it);
             } else {
-                if (Config.ESPMenu.ItemESP && ItemEnabled(it->second.kind) && nearbyLoot.size() < 120)
+                if (Config.ESPMenu.ItemESP && ItemEnabled(it->second) && nearbyLoot.size() < 120)
                     nearbyLoot.push_back(it->second);
                 ++it;
             }
