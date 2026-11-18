@@ -46,6 +46,7 @@ void DrawTextWithBorder1(ImDrawList *draw, const std::string &text, const Vector
 }
 
 #include "System/Hooks/ThrowableAlert.h"
+#include "System/Hooks/WorldESP.h"
 #include "System/Hooks/ArmorEsp.h"
 #include "BRClassEsp.h"
 #include "NoGravity.h"
@@ -714,6 +715,7 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
     }
     
     DrawThrowableAlert(draw, sWidth, sHeight, pLocalPawn_rootPos);
+    world_esp::Draw(draw, sWidth, sHeight, pLocalPawn_rootPos, get_LocalPawn);
 
     totalBots = 0, totalEnemies = 0;
     List<Pawn *> *EnemyPawns = get_MatchGame->EnemyPawns();

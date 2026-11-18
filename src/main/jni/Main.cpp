@@ -286,6 +286,20 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Config.sColorsESPBOT.SkeletonBOT = CREATE_COLOR(0, 255, 0, 180);
         Config.sColorsESPOTHERS.PovOTHERS = CREATE_COLOR(225, 0, 0, 180);
 
+        Config.ESPMenu.ItemWeapons = true;
+        Config.ESPMenu.ItemAmmo = true;
+        Config.ESPMenu.ItemMods = true;
+        Config.ESPMenu.ItemEquipment = true;
+        Config.ESPMenu.ItemOther = false;
+        Config.ESPMenu.ItemDistance = 150.0f;
+        Config.ESPMenu.PlacedEnemyOnly = true;
+        Config.ESPMenu.PlacedTripMines = true;
+        Config.ESPMenu.PlacedC4 = true;
+        Config.ESPMenu.PlacedSensors = true;
+        Config.ESPMenu.PlacedTrophies = true;
+        Config.ESPMenu.PlacedOther = true;
+        Config.ESPMenu.PlacedDistance = 80.0f;
+
         Config.ExtraMenu.NoGravityScale = 1.0f;
         Config.Aim.AimAssistSize = 0.0f;
         Config.Aim.Cross = 45.0f;
@@ -725,7 +739,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             Config.ESPMenu.isPlayerLine, Config.ESPMenu.Box, Config.ESPMenu.Skeleton,
                             Config.ESPMenu.Health, Config.ESPMenu.Name, Config.ESPMenu.Distance,
                             Config.ESPMenu.Count, Config.ESPMenu.Alert, Config.ESPMenu.BRClass,
-                            Config.ESPMenu.Aimline, Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
+                            Config.ESPMenu.Aimline, Config.ESPMenu.ItemESP, Config.ESPMenu.PlacedNadesESP,
+                            Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
                             Config.Aim.Aimbot360, Config.Aim.AimSilent, Config.ESPMenu.ShowFov,
                             Config.ExtraMenu.Blueprints, Config.ExtraMenu.AutoJumpFire, Config.ExtraMenu.FastArmorPlate,
                             Config.ExtraMenu.CameraPov, Config.ExtraMenu.SmartReload, Config.ExtraMenu.NoSmoke,
@@ -767,6 +782,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
                                 custom::Checkbox("360 Alert", &Config.ESPMenu.Alert);                                               custom::Checkbox("BRClass", &Config.ESPMenu.BRClass);
                                 custom::Checkbox("Show AimLine", &Config.ESPMenu.Aimline);
+                                custom::Checkbox("ESP Items (BR)", &Config.ESPMenu.ItemESP);
+                                custom::Checkbox("ESP Placed Nades (MP)", &Config.ESPMenu.PlacedNadesESP);
                                 custom::Checkbox("Yellow Wallhack", &Config.ExtraMenu.WallHack);
                                 custom::Checkbox("Red Wallhack", &Config.ExtraMenu.RedWallhack);
                                 ImGui::Dummy(ImVec2(0.0f, 5.0f));
@@ -807,6 +824,27 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Combo("Line Position", (int *)&Config.ESPMenu.Target, linePositions, IM_ARRAYSIZE(linePositions), -1);
                                 custom::Combo("Health Position", (int *)&Config.ESPMenu.HealthPosition, healthPositions, IM_ARRAYSIZE(healthPositions), -1);
                                 custom::Combo("ESP Style", (int *)&Config.ESPMenu.EspStyle, espStyles, IM_ARRAYSIZE(espStyles), -1);
+
+                                if (Config.ESPMenu.ItemESP && ImGui::TreeNode("BR loot filters")) {
+                                    custom::Checkbox("Weapons", &Config.ESPMenu.ItemWeapons);
+                                    custom::Checkbox("Ammo", &Config.ESPMenu.ItemAmmo);
+                                    custom::Checkbox("Mods / attachments", &Config.ESPMenu.ItemMods);
+                                    custom::Checkbox("Equipment", &Config.ESPMenu.ItemEquipment);
+                                    custom::Checkbox("Other loot", &Config.ESPMenu.ItemOther);
+                                    ImGui::InputText("Find item", Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch));
+                                    custom::SliderFloat("Loot range", &Config.ESPMenu.ItemDistance, 20.0f, 250.0f, "%.0fm");
+                                    ImGui::TreePop();
+                                }
+                                if (Config.ESPMenu.PlacedNadesESP && ImGui::TreeNode("Placed device filters")) {
+                                    custom::Checkbox("Enemy devices only", &Config.ESPMenu.PlacedEnemyOnly);
+                                    custom::Checkbox("Trip mines", &Config.ESPMenu.PlacedTripMines);
+                                    custom::Checkbox("C4", &Config.ESPMenu.PlacedC4);
+                                    custom::Checkbox("Trip sensors / wires", &Config.ESPMenu.PlacedSensors);
+                                    custom::Checkbox("Trophy systems", &Config.ESPMenu.PlacedTrophies);
+                                    custom::Checkbox("Other deployables", &Config.ESPMenu.PlacedOther);
+                                    custom::SliderFloat("Device range", &Config.ESPMenu.PlacedDistance, 10.0f, 120.0f, "%.0fm");
+                                    ImGui::TreePop();
+                                }
 
                                 EndContentChild(options);
                             }

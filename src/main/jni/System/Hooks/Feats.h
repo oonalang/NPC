@@ -6,6 +6,7 @@
 #define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
 #include "SlideFatigue.h"
 #include "Hitbox.h"
+#include "WorldESP.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -961,6 +962,15 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
+
+    //-- ESP Items (BR) / ESP Placed Nades (MP)
+    LICENSE_HOOK_LIB("libunity.so", "0x64FA604", world_esp::HookLootTick, world_esp::origLootTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x8A06D60", world_esp::HookBRPickupTick, world_esp::origBRPickupTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x9819C8C", world_esp::HookStickTick, world_esp::origStickTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x6ED61B8", world_esp::HookTripMineTick, world_esp::origTripMineTick);
+    LICENSE_HOOK_LIB("libunity.so", "0xB483440", world_esp::HookTripWireTick, world_esp::origTripWireTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x6ED3370", world_esp::HookTrapChipTick, world_esp::origTrapChipTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x6EBD438", world_esp::HookPermeateTick, world_esp::origPermeateTick);
 
             //--MP VIEW
     LICENSE_HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);

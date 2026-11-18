@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdio>
 #include <iomanip>
 #include "../Hooks/FrameRate.h"
 #include "../Hooks/SlideFatigue.h"
@@ -40,6 +41,22 @@ void SaveConfiguration(const std::string& filename) {
     config["ESPMenu"]["HealthPosition"] = static_cast<int>(Config.ESPMenu.HealthPosition);
     config["ESPMenu"]["CrosshairType"] = static_cast<int>(Config.ESPMenu.CrosshairType);
     config["ESPMenu"]["EspStyle"] = static_cast<int>(Config.ESPMenu.EspStyle);
+    config["ESPMenu"]["ItemESP"] = Config.ESPMenu.ItemESP;
+    config["ESPMenu"]["ItemWeapons"] = Config.ESPMenu.ItemWeapons;
+    config["ESPMenu"]["ItemAmmo"] = Config.ESPMenu.ItemAmmo;
+    config["ESPMenu"]["ItemMods"] = Config.ESPMenu.ItemMods;
+    config["ESPMenu"]["ItemEquipment"] = Config.ESPMenu.ItemEquipment;
+    config["ESPMenu"]["ItemOther"] = Config.ESPMenu.ItemOther;
+    config["ESPMenu"]["ItemSearch"] = std::string(Config.ESPMenu.ItemSearch);
+    config["ESPMenu"]["ItemDistance"] = Config.ESPMenu.ItemDistance;
+    config["ESPMenu"]["PlacedNadesESP"] = Config.ESPMenu.PlacedNadesESP;
+    config["ESPMenu"]["PlacedEnemyOnly"] = Config.ESPMenu.PlacedEnemyOnly;
+    config["ESPMenu"]["PlacedTripMines"] = Config.ESPMenu.PlacedTripMines;
+    config["ESPMenu"]["PlacedC4"] = Config.ESPMenu.PlacedC4;
+    config["ESPMenu"]["PlacedSensors"] = Config.ESPMenu.PlacedSensors;
+    config["ESPMenu"]["PlacedTrophies"] = Config.ESPMenu.PlacedTrophies;
+    config["ESPMenu"]["PlacedOther"] = Config.ESPMenu.PlacedOther;
+    config["ESPMenu"]["PlacedDistance"] = Config.ESPMenu.PlacedDistance;
     
     config["Aim"]["Aimbot360"] = Config.Aim.Aimbot360;
     config["Aim"]["AimSilent"] = Config.Aim.AimSilent;
@@ -120,6 +137,25 @@ bool LoadConfiguration(const std::string& filename) {
             if (config["ESPMenu"].contains("HealthPosition")) Config.ESPMenu.HealthPosition = static_cast<EspHealthPosition>(config["ESPMenu"]["HealthPosition"].get<int>());
             if (config["ESPMenu"].contains("CrosshairType")) Config.ESPMenu.CrosshairType = static_cast<CrosshairTarget>(config["ESPMenu"]["CrosshairType"].get<int>());
             if (config["ESPMenu"].contains("EspStyle")) Config.ESPMenu.EspStyle = static_cast<EspStyleTarget>(config["ESPMenu"]["EspStyle"].get<int>());
+            Config.ESPMenu.ItemESP = config["ESPMenu"].value("ItemESP", Config.ESPMenu.ItemESP);
+            Config.ESPMenu.ItemWeapons = config["ESPMenu"].value("ItemWeapons", Config.ESPMenu.ItemWeapons);
+            Config.ESPMenu.ItemAmmo = config["ESPMenu"].value("ItemAmmo", Config.ESPMenu.ItemAmmo);
+            Config.ESPMenu.ItemMods = config["ESPMenu"].value("ItemMods", Config.ESPMenu.ItemMods);
+            Config.ESPMenu.ItemEquipment = config["ESPMenu"].value("ItemEquipment", Config.ESPMenu.ItemEquipment);
+            Config.ESPMenu.ItemOther = config["ESPMenu"].value("ItemOther", Config.ESPMenu.ItemOther);
+            if (config["ESPMenu"].contains("ItemSearch") && config["ESPMenu"]["ItemSearch"].is_string()) {
+                const std::string stored = config["ESPMenu"]["ItemSearch"].get<std::string>();
+                std::snprintf(Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch), "%s", stored.c_str());
+            }
+            Config.ESPMenu.ItemDistance = config["ESPMenu"].value("ItemDistance", Config.ESPMenu.ItemDistance);
+            Config.ESPMenu.PlacedNadesESP = config["ESPMenu"].value("PlacedNadesESP", Config.ESPMenu.PlacedNadesESP);
+            Config.ESPMenu.PlacedEnemyOnly = config["ESPMenu"].value("PlacedEnemyOnly", Config.ESPMenu.PlacedEnemyOnly);
+            Config.ESPMenu.PlacedTripMines = config["ESPMenu"].value("PlacedTripMines", Config.ESPMenu.PlacedTripMines);
+            Config.ESPMenu.PlacedC4 = config["ESPMenu"].value("PlacedC4", Config.ESPMenu.PlacedC4);
+            Config.ESPMenu.PlacedSensors = config["ESPMenu"].value("PlacedSensors", Config.ESPMenu.PlacedSensors);
+            Config.ESPMenu.PlacedTrophies = config["ESPMenu"].value("PlacedTrophies", Config.ESPMenu.PlacedTrophies);
+            Config.ESPMenu.PlacedOther = config["ESPMenu"].value("PlacedOther", Config.ESPMenu.PlacedOther);
+            Config.ESPMenu.PlacedDistance = config["ESPMenu"].value("PlacedDistance", Config.ESPMenu.PlacedDistance);
         }
 
         if (config.contains("Aim")) {
