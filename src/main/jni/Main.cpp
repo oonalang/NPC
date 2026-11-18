@@ -271,6 +271,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         ImGui_ImplOpenGL3_CreateFontsTexture();
 
         memset(&Config, 0, sizeof(sConfig));
+        Config.ESPMenu.HealthPosition = EspHealthPosition::HealthSide;
 
         Config.sColorsESPPLAYER.LinePLAYER = CREATE_COLOR(255, 0, 0, 255);
         Config.sColorsESPPLAYER.BoxPLAYER = CREATE_COLOR(255, 0, 0, 255);
@@ -743,7 +744,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         homeStats.keySaved = g_LoginTextLoaded;
                         const bool enabledOptions[]{
                             Config.ESPMenu.isPlayerLine, Config.ESPMenu.Box, Config.ESPMenu.Skeleton,
-                            Config.ESPMenu.Health, Config.ESPMenu.Name, Config.ESPMenu.Distance,
+                            Config.ESPMenu.Health, Config.ESPMenu.Armor, Config.ESPMenu.Name, Config.ESPMenu.Distance,
                             Config.ESPMenu.Count, Config.ESPMenu.Alert, Config.ESPMenu.BRClass,
                             Config.ESPMenu.Aimline, Config.ESPMenu.ItemESP, Config.ESPMenu.PlacedNadesESP,
                             Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
@@ -783,6 +784,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Checkbox("ESP Box", &Config.ESPMenu.Box);
                                 custom::Checkbox("ESP Skeleton", &Config.ESPMenu.Skeleton);
                                 custom::Checkbox("ESP Health", &Config.ESPMenu.Health);
+                                custom::Checkbox("ESP Armor (BR)", &Config.ESPMenu.Armor);
                                 custom::Checkbox("ESP Name", &Config.ESPMenu.Name);
                                 custom::Checkbox("ESP Distance", &Config.ESPMenu.Distance);
                                 custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
@@ -952,6 +954,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             espPreview.count = Config.ESPMenu.Count;
                             espPreview.alert = Config.ESPMenu.Alert;
                             espPreview.brClass = Config.ESPMenu.BRClass;
+                            espPreview.armor = Config.ESPMenu.Armor;
                             espPreview.boxType = (int)Config.ESPMenu.BoxType;
                             espPreview.healthPosition = (int)Config.ESPMenu.HealthPosition;
                             espPreview.espStyle = (int)Config.ESPMenu.EspStyle;

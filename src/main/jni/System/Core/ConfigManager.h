@@ -39,6 +39,7 @@ void LoadConfig() {
         if (key == "ESPMenu.isPlayerLine") Config.ESPMenu.isPlayerLine = (valueStr == "1");
         else if (key == "ESPMenu.Box") Config.ESPMenu.Box = (valueStr == "1");
         else if (key == "ESPMenu.Health") Config.ESPMenu.Health = (valueStr == "1");
+        else if (key == "ESPMenu.Armor") Config.ESPMenu.Armor = (valueStr == "1");
         else if (key == "ESPMenu.Name") Config.ESPMenu.Name = (valueStr == "1");
         else if (key == "ESPMenu.Distance") Config.ESPMenu.Distance = (valueStr == "1");
         else if (key == "ESPMenu.Count") Config.ESPMenu.Count = (valueStr == "1");
@@ -119,6 +120,7 @@ void SaveConfig() {
     file << "ESPMenu.isPlayerLine " << Config.ESPMenu.isPlayerLine << "\n";
     file << "ESPMenu.Box " << Config.ESPMenu.Box << "\n";
     file << "ESPMenu.Health " << Config.ESPMenu.Health << "\n";
+    file << "ESPMenu.Armor " << Config.ESPMenu.Armor << "\n";
     file << "ESPMenu.Name " << Config.ESPMenu.Name << "\n";
     file << "ESPMenu.Distance " << Config.ESPMenu.Distance << "\n";
     file << "ESPMenu.Count " << Config.ESPMenu.Count << "\n";

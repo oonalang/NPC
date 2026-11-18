@@ -396,8 +396,9 @@ static inline void DrawEspBoxOutline(ImDrawList *draw, float x, float y, float w
 
 static inline void DrawEspBoxFilled(ImDrawList *draw, float x, float y, float w, float h, ImU32 color, float thickness) {
     ImVec4 c = ImGui::ColorConvertU32ToFloat4(color);
-    draw->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 0.16f)));
-    draw->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), color, 0.0f, 0, thickness);
+    const float radius = ImMin(8.0f, ImMin(w, h) * 0.18f);
+    draw->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, c.w * 0.16f)), radius);
+    draw->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), color, radius, 0, thickness);
 }
 
 static inline void DrawEspBoxCorner(ImDrawList *draw, float x, float y, float w, float h, ImU32 color, float thickness) {

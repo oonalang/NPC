@@ -35,6 +35,7 @@ void SaveConfiguration(const std::string& filename) {
     config["ESPMenu"]["Box"] = Config.ESPMenu.Box;
     config["ESPMenu"]["Name"] = Config.ESPMenu.Name;
     config["ESPMenu"]["Health"] = Config.ESPMenu.Health;
+    config["ESPMenu"]["Armor"] = Config.ESPMenu.Armor;
     config["ESPMenu"]["Distance"] = Config.ESPMenu.Distance;
     config["ESPMenu"]["Target"] = static_cast<int>(Config.ESPMenu.Target);
     config["ESPMenu"]["BoxType"] = static_cast<int>(Config.ESPMenu.BoxType);
@@ -137,6 +138,7 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ESPMenu.Box = config["ESPMenu"]["Box"].get<bool>();
             Config.ESPMenu.Name = config["ESPMenu"]["Name"].get<bool>();
             Config.ESPMenu.Health = config["ESPMenu"]["Health"].get<bool>();
+            Config.ESPMenu.Armor = config["ESPMenu"].value("Armor", Config.ESPMenu.Armor);
             Config.ESPMenu.Distance = config["ESPMenu"]["Distance"].get<bool>();
             if (config["ESPMenu"].contains("Target")) Config.ESPMenu.Target = static_cast<LineTarget>(config["ESPMenu"]["Target"].get<int>());
             if (config["ESPMenu"].contains("BoxType")) Config.ESPMenu.BoxType = static_cast<EspBoxType>(config["ESPMenu"]["BoxType"].get<int>());

@@ -19,21 +19,23 @@ inline bool GetArmorEspData(Pawn* pawn, ArmorEspData& data)
 
     data.value = info->m_VestValue();
     data.maxValue = info->m_VestMaxValue();
-    return data.value > 0 && data.maxValue > 0;
+    return data.value >= 0 && data.maxValue > 0;
 }
 
 inline void DrawArmorEspBar(ImDrawList* draw, float x, float y, float h, const ArmorEspData& data)
 {
-    if (data.maxValue <= 0 || data.value <= 0)
+    if (!draw || h <= 0.0f || data.maxValue <= 0 || data.value < 0)
         return;
 
     const float ratio = ImClamp(data.value / (float)data.maxValue, 0.0f, 1.0f);
     constexpr float barW = 4.0f;
     constexpr ImU32 armorColor = IM_COL32(70, 155, 255, 255);
 
-    draw->AddRectFilled(ImVec2(x, y), ImVec2(x + barW, y + h), IM_COL32(0, 0, 0, 120));
-    draw->AddRect(ImVec2(x, y), ImVec2(x + barW, y + h), IM_COL32(0, 0, 0, 220), 0.0f, 0, 1.0f);
-    draw->AddRectFilled(ImVec2(x, y + h * (1.0f - ratio)), ImVec2(x + barW, y + h), armorColor);
+    const float radius = ImMin(barW * 0.5f, h * 0.5f);
+    draw->AddRectFilled(ImVec2(x, y), ImVec2(x + barW, y + h), IM_COL32(0, 0, 0, 120), radius);
+    draw->AddRect(ImVec2(x, y), ImVec2(x + barW, y + h), IM_COL32(0, 0, 0, 220), radius, 0, 1.0f);
+    if (ratio > 0.0f)
+        draw->AddRectFilled(ImVec2(x, y + h * (1.0f - ratio)), ImVec2(x + barW, y + h), armorColor, radius);
 }
 
 inline void DrawArmorEsp(ImDrawList* draw, Pawn* pawn, const Rect& rect)

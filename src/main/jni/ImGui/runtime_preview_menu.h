@@ -469,13 +469,14 @@ struct EspPreviewState {
     bool box = false;
     bool skeleton = false;
     bool health = false;
+    bool armor = false;
     bool name = false;
     bool distance = false;
     bool count = false;
     bool alert = false;
     bool brClass = false;
     int boxType = 1;
-    int healthPosition = 0;
+    int healthPosition = 1;
     int espStyle = 0;
     int lineTarget = 0;
 };
@@ -565,8 +566,9 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
 
     if (state.box) {
         if (state.boxType == 0) {
-            drawList->AddRectFilled(bMin, bMax, IM_COL32(255, 72, 72, 28), 2.0f);
-            drawList->AddRect(bMin, bMax, enemy, 2.0f, 0, 1.4f);
+            const float round = ImMin(8.0f, ImMin(bMax.x - bMin.x, bMax.y - bMin.y) * 0.18f);
+            drawList->AddRectFilled(bMin, bMax, IM_COL32(255, 72, 72, 28), round);
+            drawList->AddRect(bMin, bMax, enemy, round, 0, 1.4f);
         } else if (state.boxType == 1) {
             drawList->AddRect(bMin, bMax, enemy, 1.0f, 0, 1.5f);
         } else if (state.boxType == 2) {
@@ -617,6 +619,16 @@ inline void DrawRuntimeEspPreviewPanel(const ImVec2 &min, const ImVec2 &size, co
             const float filled = (hMax.y - hMin.y) * ratio;
             drawList->AddRectFilled(ImVec2(hMin.x, hMax.y - filled), hMax, healthGreen, 2.0f);
         }
+    }
+
+    if (state.armor) {
+        const float ratio = 0.82f;
+        const float barX = bMin.x - (state.health && state.healthPosition == 1 ? 15.0f : 9.0f);
+        const ImVec2 aMin(barX, bMin.y);
+        const ImVec2 aMax(barX + 4.0f, bMax.y);
+        drawList->AddRectFilled(aMin, aMax, IM_COL32(30, 30, 38, 235), 2.0f);
+        drawList->AddRectFilled(ImVec2(barX, aMax.y - (aMax.y - aMin.y) * ratio), aMax,
+                                IM_COL32(70, 155, 255, 255), 2.0f);
     }
 
     if (state.name) {
