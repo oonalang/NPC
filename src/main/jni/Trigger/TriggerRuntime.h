@@ -54,6 +54,7 @@ struct BodyHit {
     std::uint64_t targetGeneration = 0;
     Point3 point{};
     float distance = 0.0f;
+    float glassAdvance = 0.0f;
 };
 
 enum class Occlusion : std::uint8_t { Unavailable, Clear, Blocked };
