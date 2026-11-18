@@ -19,6 +19,7 @@ run_test() {
 run_test 'Trigger runtime' \
     "$project_dir/tests/trigger_tests.cpp" \
     "$project_dir/src/main/jni/Trigger/TriggerRuntime.cpp"
+run_test 'BR query budget' "$project_dir/tests/br_trigger_budget_test.cpp"
 run_test 'Trigger dot appearance' "$project_dir/tests/trigger_dot_style_test.cpp"
 run_test 'Prepared sniper input' "$project_dir/tests/sniper_input_test.cpp"
 
