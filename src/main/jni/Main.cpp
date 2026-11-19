@@ -891,6 +891,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             const float leftWidth = compact ? contentRegion.x : ImFloor((contentRegion.x - gap) * 0.5f);
                             const ChildFrame licenseChild = BeginContentChild("LITE LICENSE", ImVec2(leftWidth, childHeight));
                             settings_tab::RenderLicenseCard();
+                            if (compact) {
+                                ImGui::Separator();
+                                settings_tab::RenderConfigCard();
+                            }
                             EndContentChild(licenseChild);
                             if (!compact) {
                                 ImGui::SameLine(0.0f, gap);
