@@ -846,6 +846,13 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     ImGui::Separator();
                                     ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BR ITEM FILTERS");
                                     ImGui::TextDisabled("Tracked pickups: %u", world_esp::TrackedLootCount());
+                                    const auto lootStatus = world_esp::GetLootDiagnostics();
+                                    ImGui::TextDisabled("Loot callbacks: %llu | Accepted: %llu",
+                                        static_cast<unsigned long long>(lootStatus.callbacks),
+                                        static_cast<unsigned long long>(lootStatus.accepted));
+                                    ImGui::TextDisabled("Rejected: %llu | Labels: %u | Grouped: %u",
+                                        static_cast<unsigned long long>(lootStatus.rejected),
+                                        lootStatus.drawn, lootStatus.grouped);
                                     const int enabledCategories =
                                         static_cast<int>(Config.ESPMenu.ItemWeapons) +
                                         static_cast<int>(Config.ESPMenu.ItemAmmo) +
@@ -936,6 +943,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     }
                                     ImGui::InputText("Find item", Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch));
                                     custom::SliderFloat("Loot range", &Config.ESPMenu.ItemDistance, 20.0f, 250.0f, "%.0fm");
+                                    custom::Checkbox("Group overlapping loot labels", &Config.ESPMenu.ItemClusterLabels);
                                 }
                                 if (Config.ESPMenu.PlacedNadesESP && ImGui::TreeNode("Placed device filters")) {
                                     custom::Checkbox("Enemy devices only", &Config.ESPMenu.PlacedEnemyOnly);
