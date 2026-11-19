@@ -272,6 +272,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
         memset(&Config, 0, sizeof(sConfig));
         Config.ESPMenu.HealthPosition = EspHealthPosition::HealthSide;
+        Config.ExtraMenu.PickupRange = 6.0f;
         Config.ESPMenu.OccludedColor[0] = 1.0f;
         Config.ESPMenu.OccludedColor[1] = 1.0f;
         Config.ESPMenu.OccludedColor[2] = 1.0f;
@@ -385,7 +386,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
     if (menuReady)
-        DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
+        pickup_tweaks::Publish(Config.ExtraMenu.FastPickup, Config.ExtraMenu.ExtendedPickupRange,
+                           Config.ExtraMenu.PickupRange);
+    DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
     if(menuReady) {
         PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
         floating_info::Render(draw, screenWidth, screenHeight);
@@ -945,6 +948,18 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     custom::SliderFloat("Loot range", &Config.ESPMenu.ItemDistance, 20.0f, 250.0f, "%.0fm");
                                     custom::Checkbox("Group overlapping loot labels", &Config.ESPMenu.ItemClusterLabels);
                                 }
+                                ImGui::Separator();
+                                ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BR PICKUP");
+                                custom::Checkbox("Fast Pickup (BR)", &Config.ExtraMenu.FastPickup);
+                                custom::Checkbox("Extended Pickup Range (BR)", &Config.ExtraMenu.ExtendedPickupRange);
+                                if (Config.ExtraMenu.ExtendedPickupRange) {
+                                    custom::SliderFloat("Pickup Range", &Config.ExtraMenu.PickupRange,
+                                                        3.0f, 15.0f, "%.1fm");
+                                }
+                                ImGui::TextDisabled("Auto pickup checks: %llu | Range updates: %llu",
+                                    static_cast<unsigned long long>(pickup_tweaks::intervalCalls.load(std::memory_order_relaxed)),
+                                    static_cast<unsigned long long>(pickup_tweaks::rangeWrites.load(std::memory_order_relaxed)));
+
                                 if (Config.ESPMenu.PlacedNadesESP && ImGui::TreeNode("Placed device filters")) {
                                     custom::Checkbox("Enemy devices only", &Config.ESPMenu.PlacedEnemyOnly);
                                     custom::Checkbox("Trip mines", &Config.ESPMenu.PlacedTripMines);
