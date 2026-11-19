@@ -86,6 +86,9 @@ void LoadConfig() {
         else if (key == "Aim.Target") Config.Aim.Target = static_cast<EAimTarget>(std::stoi(valueStr));
         else if (key == "Aim.Trigger") Config.Aim.Trigger = static_cast<EAimTrigger>(std::stoi(valueStr));
         else if (key == "Aim.By") Config.Aim.By = static_cast<EAim>(std::stoi(valueStr));
+        else if (key == "ExtraMenu.FastPickup") Config.ExtraMenu.FastPickup = (valueStr == "1");
+        else if (key == "ExtraMenu.ExtendedPickupRange") Config.ExtraMenu.ExtendedPickupRange = (valueStr == "1");
+        else if (key == "ExtraMenu.PickupRange") Config.ExtraMenu.PickupRange = std::stof(valueStr);
         else if (key == "ExtraMenu.Kinetic") Config.ExtraMenu.Kinetic = (valueStr == "1");
         else if (key == "ExtraMenu.Recoil") Config.ExtraMenu.Recoil = (valueStr == "1");
         else if (key == "ExtraMenu.Spread") Config.ExtraMenu.Spread = (valueStr == "1");
@@ -113,6 +116,10 @@ void LoadConfig() {
         else if (key == "TriggerDot.Blue") TriggerDotStyle::appearance.color[2] = std::stof(valueStr);
     }
     file.close();
+    if (!std::isfinite(Config.ExtraMenu.PickupRange))
+        Config.ExtraMenu.PickupRange = 6.0f;
+    else
+        Config.ExtraMenu.PickupRange = std::clamp(Config.ExtraMenu.PickupRange, 3.0f, 15.0f);
     for (float& color : Config.ESPMenu.OccludedColor)
         color = std::isfinite(color) ? std::clamp(color, 0.0f, 1.0f) : 1.0f;
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
@@ -175,6 +182,9 @@ void SaveConfig() {
     file << "Aim.Target " << Config.Aim.Target << "\n";
     file << "Aim.Trigger " << Config.Aim.Trigger << "\n";
     file << "Aim.By " << Config.Aim.By << "\n";
+    file << "ExtraMenu.FastPickup " << Config.ExtraMenu.FastPickup << "\n";
+    file << "ExtraMenu.ExtendedPickupRange " << Config.ExtraMenu.ExtendedPickupRange << "\n";
+    file << "ExtraMenu.PickupRange " << Config.ExtraMenu.PickupRange << "\n";
     file << "ExtraMenu.Kinetic " << Config.ExtraMenu.Kinetic << "\n";
     file << "ExtraMenu.Recoil " << Config.ExtraMenu.Recoil << "\n";
     file << "ExtraMenu.Spread " << Config.ExtraMenu.Spread << "\n";
