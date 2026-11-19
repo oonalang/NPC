@@ -94,6 +94,9 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Reload"] = Config.ExtraMenu.Reload;
     config["ExtraMenu"]["Scope"] = Config.ExtraMenu.Scope;
     config["ExtraMenu"]["Switch"] = Config.ExtraMenu.Switch;
+    config["ExtraMenu"]["FastPickup"] = Config.ExtraMenu.FastPickup;
+    config["ExtraMenu"]["ExtendedPickupRange"] = Config.ExtraMenu.ExtendedPickupRange;
+    config["ExtraMenu"]["PickupRange"] = Config.ExtraMenu.PickupRange;
     config["ExtraMenu"]["KineticArmor"] = Config.ExtraMenu.Kinetic;
     config["ExtraMenu"]["Blueprints"] = Config.ExtraMenu.Blueprints;
     config["ExtraMenu"]["BlueprintTiers"] = BlueprintTierFilter::GetMask();
@@ -216,6 +219,10 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Reload = config["ExtraMenu"]["Reload"].get<bool>();
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
             Config.ExtraMenu.Switch = config["ExtraMenu"]["Switch"].get<bool>();
+            Config.ExtraMenu.FastPickup = config["ExtraMenu"].value("FastPickup", Config.ExtraMenu.FastPickup);
+            Config.ExtraMenu.ExtendedPickupRange = config["ExtraMenu"].value("ExtendedPickupRange", Config.ExtraMenu.ExtendedPickupRange);
+            const float pickupRange = config["ExtraMenu"].value("PickupRange", Config.ExtraMenu.PickupRange);
+            Config.ExtraMenu.PickupRange = std::isfinite(pickupRange) ? std::clamp(pickupRange, 3.0f, 15.0f) : 6.0f;
             Config.ExtraMenu.Kinetic = config["ExtraMenu"].value("Kinetic",config["ExtraMenu"].value("KineticArmor",false));
             if (config["ExtraMenu"].contains("Blueprints"))
                 Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();
