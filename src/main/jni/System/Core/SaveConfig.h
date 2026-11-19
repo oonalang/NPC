@@ -1,8 +1,5 @@
 #pragma once
 
-#include <cstdio>
-#include <cmath>
-#include <algorithm>
 #include <iomanip>
 #include "../Hooks/FrameRate.h"
 #include "../Hooks/SlideFatigue.h"
@@ -37,38 +34,12 @@ void SaveConfiguration(const std::string& filename) {
     config["ESPMenu"]["Box"] = Config.ESPMenu.Box;
     config["ESPMenu"]["Name"] = Config.ESPMenu.Name;
     config["ESPMenu"]["Health"] = Config.ESPMenu.Health;
-    config["ESPMenu"]["Armor"] = Config.ESPMenu.Armor;
-    config["ESPMenu"]["VisibilityCheck"] = Config.ESPMenu.VisibilityCheck;
-    config["ESPMenu"]["OccludedColor"] = {Config.ESPMenu.OccludedColor[0], Config.ESPMenu.OccludedColor[1], Config.ESPMenu.OccludedColor[2], Config.ESPMenu.OccludedColor[3]};
-    config["ESPMenu"]["ItemClusterLabels"] = Config.ESPMenu.ItemClusterLabels;
     config["ESPMenu"]["Distance"] = Config.ESPMenu.Distance;
     config["ESPMenu"]["Target"] = static_cast<int>(Config.ESPMenu.Target);
     config["ESPMenu"]["BoxType"] = static_cast<int>(Config.ESPMenu.BoxType);
     config["ESPMenu"]["HealthPosition"] = static_cast<int>(Config.ESPMenu.HealthPosition);
     config["ESPMenu"]["CrosshairType"] = static_cast<int>(Config.ESPMenu.CrosshairType);
     config["ESPMenu"]["EspStyle"] = static_cast<int>(Config.ESPMenu.EspStyle);
-    config["ESPMenu"]["ItemESP"] = Config.ESPMenu.ItemESP;
-    config["ESPMenu"]["ItemWeapons"] = Config.ESPMenu.ItemWeapons;
-    config["ESPMenu"]["ItemAmmo"] = Config.ESPMenu.ItemAmmo;
-    config["ESPMenu"]["ItemMods"] = Config.ESPMenu.ItemMods;
-    config["ESPMenu"]["ItemEquipment"] = Config.ESPMenu.ItemEquipment;
-    config["ESPMenu"]["ItemOther"] = Config.ESPMenu.ItemOther;
-    config["ESPMenu"]["ItemMedical"] = Config.ESPMenu.ItemMedical;
-    config["ESPMenu"]["ItemThrowables"] = Config.ESPMenu.ItemThrowables;
-    config["ESPMenu"]["ItemSkills"] = Config.ESPMenu.ItemSkills;
-    config["ESPMenu"]["ItemPerks"] = Config.ESPMenu.ItemPerks;
-    config["ESPMenu"]["ItemWeaponClassMask"] = Config.ESPMenu.ItemWeaponClassMask;
-    config["ESPMenu"]["ItemModQualityMask"] = Config.ESPMenu.ItemModQualityMask;
-    config["ESPMenu"]["ItemSearch"] = std::string(Config.ESPMenu.ItemSearch);
-    config["ESPMenu"]["ItemDistance"] = Config.ESPMenu.ItemDistance;
-    config["ESPMenu"]["PlacedNadesESP"] = Config.ESPMenu.PlacedNadesESP;
-    config["ESPMenu"]["PlacedEnemyOnly"] = Config.ESPMenu.PlacedEnemyOnly;
-    config["ESPMenu"]["PlacedTripMines"] = Config.ESPMenu.PlacedTripMines;
-    config["ESPMenu"]["PlacedC4"] = Config.ESPMenu.PlacedC4;
-    config["ESPMenu"]["PlacedSensors"] = Config.ESPMenu.PlacedSensors;
-    config["ESPMenu"]["PlacedTrophies"] = Config.ESPMenu.PlacedTrophies;
-    config["ESPMenu"]["PlacedOther"] = Config.ESPMenu.PlacedOther;
-    config["ESPMenu"]["PlacedDistance"] = Config.ESPMenu.PlacedDistance;
     
     config["Aim"]["Aimbot360"] = Config.Aim.Aimbot360;
     config["Aim"]["AimSilent"] = Config.Aim.AimSilent;
@@ -94,9 +65,6 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Reload"] = Config.ExtraMenu.Reload;
     config["ExtraMenu"]["Scope"] = Config.ExtraMenu.Scope;
     config["ExtraMenu"]["Switch"] = Config.ExtraMenu.Switch;
-    config["ExtraMenu"]["FastPickup"] = Config.ExtraMenu.FastPickup;
-    config["ExtraMenu"]["ExtendedPickupRange"] = Config.ExtraMenu.ExtendedPickupRange;
-    config["ExtraMenu"]["PickupRange"] = Config.ExtraMenu.PickupRange;
     config["ExtraMenu"]["KineticArmor"] = Config.ExtraMenu.Kinetic;
     config["ExtraMenu"]["Blueprints"] = Config.ExtraMenu.Blueprints;
     config["ExtraMenu"]["BlueprintTiers"] = BlueprintTierFilter::GetMask();
@@ -146,48 +114,12 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ESPMenu.Box = config["ESPMenu"]["Box"].get<bool>();
             Config.ESPMenu.Name = config["ESPMenu"]["Name"].get<bool>();
             Config.ESPMenu.Health = config["ESPMenu"]["Health"].get<bool>();
-            Config.ESPMenu.Armor = config["ESPMenu"].value("Armor", Config.ESPMenu.Armor);
-            Config.ESPMenu.VisibilityCheck = config["ESPMenu"].value("VisibilityCheck", Config.ESPMenu.VisibilityCheck);
-            Config.ESPMenu.ItemClusterLabels = config["ESPMenu"].value("ItemClusterLabels", Config.ESPMenu.ItemClusterLabels);
-            if (config["ESPMenu"].contains("OccludedColor") && config["ESPMenu"]["OccludedColor"].is_array() && config["ESPMenu"]["OccludedColor"].size() == 4) {
-                const auto& colors = config["ESPMenu"]["OccludedColor"];
-                for (int i = 0; i < 4; ++i) {
-                    if (!colors[i].is_number()) continue;
-                    const float v = colors[i].get<float>();
-                    if (std::isfinite(v)) Config.ESPMenu.OccludedColor[i] = std::clamp(v, 0.0f, 1.0f);
-                }
-            }
             Config.ESPMenu.Distance = config["ESPMenu"]["Distance"].get<bool>();
             if (config["ESPMenu"].contains("Target")) Config.ESPMenu.Target = static_cast<LineTarget>(config["ESPMenu"]["Target"].get<int>());
             if (config["ESPMenu"].contains("BoxType")) Config.ESPMenu.BoxType = static_cast<EspBoxType>(config["ESPMenu"]["BoxType"].get<int>());
             if (config["ESPMenu"].contains("HealthPosition")) Config.ESPMenu.HealthPosition = static_cast<EspHealthPosition>(config["ESPMenu"]["HealthPosition"].get<int>());
             if (config["ESPMenu"].contains("CrosshairType")) Config.ESPMenu.CrosshairType = static_cast<CrosshairTarget>(config["ESPMenu"]["CrosshairType"].get<int>());
             if (config["ESPMenu"].contains("EspStyle")) Config.ESPMenu.EspStyle = static_cast<EspStyleTarget>(config["ESPMenu"]["EspStyle"].get<int>());
-            Config.ESPMenu.ItemESP = config["ESPMenu"].value("ItemESP", Config.ESPMenu.ItemESP);
-            Config.ESPMenu.ItemWeapons = config["ESPMenu"].value("ItemWeapons", Config.ESPMenu.ItemWeapons);
-            Config.ESPMenu.ItemAmmo = config["ESPMenu"].value("ItemAmmo", Config.ESPMenu.ItemAmmo);
-            Config.ESPMenu.ItemMods = config["ESPMenu"].value("ItemMods", Config.ESPMenu.ItemMods);
-            Config.ESPMenu.ItemEquipment = config["ESPMenu"].value("ItemEquipment", Config.ESPMenu.ItemEquipment);
-            Config.ESPMenu.ItemOther = config["ESPMenu"].value("ItemOther", Config.ESPMenu.ItemOther);
-            Config.ESPMenu.ItemMedical = config["ESPMenu"].value("ItemMedical", Config.ESPMenu.ItemMedical);
-            Config.ESPMenu.ItemThrowables = config["ESPMenu"].value("ItemThrowables", Config.ESPMenu.ItemThrowables);
-            Config.ESPMenu.ItemSkills = config["ESPMenu"].value("ItemSkills", Config.ESPMenu.ItemSkills);
-            Config.ESPMenu.ItemPerks = config["ESPMenu"].value("ItemPerks", Config.ESPMenu.ItemPerks);
-            Config.ESPMenu.ItemWeaponClassMask = config["ESPMenu"].value("ItemWeaponClassMask", Config.ESPMenu.ItemWeaponClassMask);
-            Config.ESPMenu.ItemModQualityMask = config["ESPMenu"].value("ItemModQualityMask", Config.ESPMenu.ItemModQualityMask);
-            if (config["ESPMenu"].contains("ItemSearch") && config["ESPMenu"]["ItemSearch"].is_string()) {
-                const std::string stored = config["ESPMenu"]["ItemSearch"].get<std::string>();
-                std::snprintf(Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch), "%s", stored.c_str());
-            }
-            Config.ESPMenu.ItemDistance = config["ESPMenu"].value("ItemDistance", Config.ESPMenu.ItemDistance);
-            Config.ESPMenu.PlacedNadesESP = config["ESPMenu"].value("PlacedNadesESP", Config.ESPMenu.PlacedNadesESP);
-            Config.ESPMenu.PlacedEnemyOnly = config["ESPMenu"].value("PlacedEnemyOnly", Config.ESPMenu.PlacedEnemyOnly);
-            Config.ESPMenu.PlacedTripMines = config["ESPMenu"].value("PlacedTripMines", Config.ESPMenu.PlacedTripMines);
-            Config.ESPMenu.PlacedC4 = config["ESPMenu"].value("PlacedC4", Config.ESPMenu.PlacedC4);
-            Config.ESPMenu.PlacedSensors = config["ESPMenu"].value("PlacedSensors", Config.ESPMenu.PlacedSensors);
-            Config.ESPMenu.PlacedTrophies = config["ESPMenu"].value("PlacedTrophies", Config.ESPMenu.PlacedTrophies);
-            Config.ESPMenu.PlacedOther = config["ESPMenu"].value("PlacedOther", Config.ESPMenu.PlacedOther);
-            Config.ESPMenu.PlacedDistance = config["ESPMenu"].value("PlacedDistance", Config.ESPMenu.PlacedDistance);
         }
 
         if (config.contains("Aim")) {
@@ -219,10 +151,6 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Reload = config["ExtraMenu"]["Reload"].get<bool>();
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
             Config.ExtraMenu.Switch = config["ExtraMenu"]["Switch"].get<bool>();
-            Config.ExtraMenu.FastPickup = config["ExtraMenu"].value("FastPickup", Config.ExtraMenu.FastPickup);
-            Config.ExtraMenu.ExtendedPickupRange = config["ExtraMenu"].value("ExtendedPickupRange", Config.ExtraMenu.ExtendedPickupRange);
-            const float pickupRange = config["ExtraMenu"].value("PickupRange", Config.ExtraMenu.PickupRange);
-            Config.ExtraMenu.PickupRange = std::isfinite(pickupRange) ? std::clamp(pickupRange, 3.0f, 15.0f) : 6.0f;
             Config.ExtraMenu.Kinetic = config["ExtraMenu"].value("Kinetic",config["ExtraMenu"].value("KineticArmor",false));
             if (config["ExtraMenu"].contains("Blueprints"))
                 Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();

@@ -4,8 +4,6 @@
 #include <string>
 #include <fstream>
 #include <sstream>
-#include <algorithm>
-#include <cmath>
 #include <jni.h>
 #include "FileUtils.h"
 #include "Hacks/Hacks.h"
@@ -41,13 +39,6 @@ void LoadConfig() {
         if (key == "ESPMenu.isPlayerLine") Config.ESPMenu.isPlayerLine = (valueStr == "1");
         else if (key == "ESPMenu.Box") Config.ESPMenu.Box = (valueStr == "1");
         else if (key == "ESPMenu.Health") Config.ESPMenu.Health = (valueStr == "1");
-        else if (key == "ESPMenu.Armor") Config.ESPMenu.Armor = (valueStr == "1");
-        else if (key == "ESPMenu.VisibilityCheck") Config.ESPMenu.VisibilityCheck = (valueStr == "1");
-        else if (key == "ESPMenu.ItemClusterLabels") Config.ESPMenu.ItemClusterLabels = (valueStr == "1");
-        else if (key == "ESPMenu.OccludedRed") Config.ESPMenu.OccludedColor[0] = std::stof(valueStr);
-        else if (key == "ESPMenu.OccludedGreen") Config.ESPMenu.OccludedColor[1] = std::stof(valueStr);
-        else if (key == "ESPMenu.OccludedBlue") Config.ESPMenu.OccludedColor[2] = std::stof(valueStr);
-        else if (key == "ESPMenu.OccludedAlpha") Config.ESPMenu.OccludedColor[3] = std::stof(valueStr);
         else if (key == "ESPMenu.Name") Config.ESPMenu.Name = (valueStr == "1");
         else if (key == "ESPMenu.Distance") Config.ESPMenu.Distance = (valueStr == "1");
         else if (key == "ESPMenu.Count") Config.ESPMenu.Count = (valueStr == "1");
@@ -58,27 +49,6 @@ void LoadConfig() {
         else if (key == "ESPMenu.HealthPosition") Config.ESPMenu.HealthPosition = static_cast<EspHealthPosition>(std::stoi(valueStr));
         else if (key == "ESPMenu.CrosshairType") Config.ESPMenu.CrosshairType = static_cast<CrosshairTarget>(std::stoi(valueStr));
         else if (key == "ESPMenu.EspStyle") Config.ESPMenu.EspStyle = static_cast<EspStyleTarget>(std::stoi(valueStr));
-        else if (key == "ESPMenu.ItemESP") Config.ESPMenu.ItemESP = (valueStr == "1");
-        else if (key == "ESPMenu.ItemWeapons") Config.ESPMenu.ItemWeapons = (valueStr == "1");
-        else if (key == "ESPMenu.ItemAmmo") Config.ESPMenu.ItemAmmo = (valueStr == "1");
-        else if (key == "ESPMenu.ItemMods") Config.ESPMenu.ItemMods = (valueStr == "1");
-        else if (key == "ESPMenu.ItemEquipment") Config.ESPMenu.ItemEquipment = (valueStr == "1");
-        else if (key == "ESPMenu.ItemOther") Config.ESPMenu.ItemOther = (valueStr == "1");
-        else if (key == "ESPMenu.ItemMedical") Config.ESPMenu.ItemMedical = (valueStr == "1");
-        else if (key == "ESPMenu.ItemThrowables") Config.ESPMenu.ItemThrowables = (valueStr == "1");
-        else if (key == "ESPMenu.ItemSkills") Config.ESPMenu.ItemSkills = (valueStr == "1");
-        else if (key == "ESPMenu.ItemPerks") Config.ESPMenu.ItemPerks = (valueStr == "1");
-        else if (key == "ESPMenu.ItemWeaponClassMask") Config.ESPMenu.ItemWeaponClassMask = static_cast<unsigned int>(std::stoul(valueStr));
-        else if (key == "ESPMenu.ItemModQualityMask") Config.ESPMenu.ItemModQualityMask = static_cast<unsigned int>(std::stoul(valueStr));
-        else if (key == "ESPMenu.ItemDistance") Config.ESPMenu.ItemDistance = std::stof(valueStr);
-        else if (key == "ESPMenu.PlacedNadesESP") Config.ESPMenu.PlacedNadesESP = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedEnemyOnly") Config.ESPMenu.PlacedEnemyOnly = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedTripMines") Config.ESPMenu.PlacedTripMines = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedC4") Config.ESPMenu.PlacedC4 = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedSensors") Config.ESPMenu.PlacedSensors = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedTrophies") Config.ESPMenu.PlacedTrophies = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedOther") Config.ESPMenu.PlacedOther = (valueStr == "1");
-        else if (key == "ESPMenu.PlacedDistance") Config.ESPMenu.PlacedDistance = std::stof(valueStr);
         else if (key == "Aim.Size") Config.Aim.size = std::stof(valueStr);
         else if (key == "Aim.AimAssistSize") Config.Aim.AimAssistSize = std::stof(valueStr);
         else if (key == "Aim.Aimbot360") Config.Aim.Aimbot360 = (valueStr == "1");
@@ -86,9 +56,6 @@ void LoadConfig() {
         else if (key == "Aim.Target") Config.Aim.Target = static_cast<EAimTarget>(std::stoi(valueStr));
         else if (key == "Aim.Trigger") Config.Aim.Trigger = static_cast<EAimTrigger>(std::stoi(valueStr));
         else if (key == "Aim.By") Config.Aim.By = static_cast<EAim>(std::stoi(valueStr));
-        else if (key == "ExtraMenu.FastPickup") Config.ExtraMenu.FastPickup = (valueStr == "1");
-        else if (key == "ExtraMenu.ExtendedPickupRange") Config.ExtraMenu.ExtendedPickupRange = (valueStr == "1");
-        else if (key == "ExtraMenu.PickupRange") Config.ExtraMenu.PickupRange = std::stof(valueStr);
         else if (key == "ExtraMenu.Kinetic") Config.ExtraMenu.Kinetic = (valueStr == "1");
         else if (key == "ExtraMenu.Recoil") Config.ExtraMenu.Recoil = (valueStr == "1");
         else if (key == "ExtraMenu.Spread") Config.ExtraMenu.Spread = (valueStr == "1");
@@ -116,12 +83,6 @@ void LoadConfig() {
         else if (key == "TriggerDot.Blue") TriggerDotStyle::appearance.color[2] = std::stof(valueStr);
     }
     file.close();
-    if (!std::isfinite(Config.ExtraMenu.PickupRange))
-        Config.ExtraMenu.PickupRange = 6.0f;
-    else
-        Config.ExtraMenu.PickupRange = std::clamp(Config.ExtraMenu.PickupRange, 3.0f, 15.0f);
-    for (float& color : Config.ESPMenu.OccludedColor)
-        color = std::isfinite(color) ? std::clamp(color, 0.0f, 1.0f) : 1.0f;
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
 }
@@ -137,13 +98,6 @@ void SaveConfig() {
     file << "ESPMenu.isPlayerLine " << Config.ESPMenu.isPlayerLine << "\n";
     file << "ESPMenu.Box " << Config.ESPMenu.Box << "\n";
     file << "ESPMenu.Health " << Config.ESPMenu.Health << "\n";
-    file << "ESPMenu.Armor " << Config.ESPMenu.Armor << "\n";
-    file << "ESPMenu.VisibilityCheck " << Config.ESPMenu.VisibilityCheck << "\n";
-    file << "ESPMenu.ItemClusterLabels " << Config.ESPMenu.ItemClusterLabels << "\n";
-    file << "ESPMenu.OccludedRed " << Config.ESPMenu.OccludedColor[0] << "\n";
-    file << "ESPMenu.OccludedGreen " << Config.ESPMenu.OccludedColor[1] << "\n";
-    file << "ESPMenu.OccludedBlue " << Config.ESPMenu.OccludedColor[2] << "\n";
-    file << "ESPMenu.OccludedAlpha " << Config.ESPMenu.OccludedColor[3] << "\n";
     file << "ESPMenu.Name " << Config.ESPMenu.Name << "\n";
     file << "ESPMenu.Distance " << Config.ESPMenu.Distance << "\n";
     file << "ESPMenu.Count " << Config.ESPMenu.Count << "\n";
@@ -154,27 +108,6 @@ void SaveConfig() {
     file << "ESPMenu.HealthPosition " << Config.ESPMenu.HealthPosition << "\n";
     file << "ESPMenu.CrosshairType " << Config.ESPMenu.CrosshairType << "\n";
     file << "ESPMenu.EspStyle " << Config.ESPMenu.EspStyle << "\n";
-    file << "ESPMenu.ItemESP " << Config.ESPMenu.ItemESP << "\n";
-    file << "ESPMenu.ItemWeapons " << Config.ESPMenu.ItemWeapons << "\n";
-    file << "ESPMenu.ItemAmmo " << Config.ESPMenu.ItemAmmo << "\n";
-    file << "ESPMenu.ItemMods " << Config.ESPMenu.ItemMods << "\n";
-    file << "ESPMenu.ItemEquipment " << Config.ESPMenu.ItemEquipment << "\n";
-    file << "ESPMenu.ItemOther " << Config.ESPMenu.ItemOther << "\n";
-    file << "ESPMenu.ItemMedical " << Config.ESPMenu.ItemMedical << "\n";
-    file << "ESPMenu.ItemThrowables " << Config.ESPMenu.ItemThrowables << "\n";
-    file << "ESPMenu.ItemSkills " << Config.ESPMenu.ItemSkills << "\n";
-    file << "ESPMenu.ItemPerks " << Config.ESPMenu.ItemPerks << "\n";
-    file << "ESPMenu.ItemWeaponClassMask " << Config.ESPMenu.ItemWeaponClassMask << "\n";
-    file << "ESPMenu.ItemModQualityMask " << Config.ESPMenu.ItemModQualityMask << "\n";
-    file << "ESPMenu.ItemDistance " << Config.ESPMenu.ItemDistance << "\n";
-    file << "ESPMenu.PlacedNadesESP " << Config.ESPMenu.PlacedNadesESP << "\n";
-    file << "ESPMenu.PlacedEnemyOnly " << Config.ESPMenu.PlacedEnemyOnly << "\n";
-    file << "ESPMenu.PlacedTripMines " << Config.ESPMenu.PlacedTripMines << "\n";
-    file << "ESPMenu.PlacedC4 " << Config.ESPMenu.PlacedC4 << "\n";
-    file << "ESPMenu.PlacedSensors " << Config.ESPMenu.PlacedSensors << "\n";
-    file << "ESPMenu.PlacedTrophies " << Config.ESPMenu.PlacedTrophies << "\n";
-    file << "ESPMenu.PlacedOther " << Config.ESPMenu.PlacedOther << "\n";
-    file << "ESPMenu.PlacedDistance " << Config.ESPMenu.PlacedDistance << "\n";
     file << "Aim.size " << Config.Aim.size << "\n";
     file << "Aim.AimAssistSize " << Config.Aim.AimAssistSize << "\n";
     file << "Aim.Aimbot360 " << Config.Aim.Aimbot360 << "\n";
@@ -182,9 +115,6 @@ void SaveConfig() {
     file << "Aim.Target " << Config.Aim.Target << "\n";
     file << "Aim.Trigger " << Config.Aim.Trigger << "\n";
     file << "Aim.By " << Config.Aim.By << "\n";
-    file << "ExtraMenu.FastPickup " << Config.ExtraMenu.FastPickup << "\n";
-    file << "ExtraMenu.ExtendedPickupRange " << Config.ExtraMenu.ExtendedPickupRange << "\n";
-    file << "ExtraMenu.PickupRange " << Config.ExtraMenu.PickupRange << "\n";
     file << "ExtraMenu.Kinetic " << Config.ExtraMenu.Kinetic << "\n";
     file << "ExtraMenu.Recoil " << Config.ExtraMenu.Recoil << "\n";
     file << "ExtraMenu.Spread " << Config.ExtraMenu.Spread << "\n";

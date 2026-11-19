@@ -46,9 +46,7 @@ void DrawTextWithBorder1(ImDrawList *draw, const std::string &text, const Vector
 }
 
 #include "System/Hooks/ThrowableAlert.h"
-#include "System/Hooks/WorldESP.h"
 #include "System/Hooks/ArmorEsp.h"
-#include "System/Hooks/VisibilityEsp.h"
 #include "BRClassEsp.h"
 #include "NoGravity.h"
 
@@ -397,9 +395,8 @@ static inline void DrawEspBoxOutline(ImDrawList *draw, float x, float y, float w
 
 static inline void DrawEspBoxFilled(ImDrawList *draw, float x, float y, float w, float h, ImU32 color, float thickness) {
     ImVec4 c = ImGui::ColorConvertU32ToFloat4(color);
-    const float radius = ImMin(8.0f, ImMin(w, h) * 0.18f);
-    draw->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, c.w * 0.16f)), radius);
-    draw->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), color, radius, 0, thickness);
+    draw->AddRectFilled(ImVec2(x, y), ImVec2(x + w, y + h), ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 0.16f)));
+    draw->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), color, 0.0f, 0, thickness);
 }
 
 static inline void DrawEspBoxCorner(ImDrawList *draw, float x, float y, float w, float h, ImU32 color, float thickness) {
@@ -716,54 +713,7 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         pLocalPawn_rootPos = get_LocalPawn->get_LastPawnPos();
     }
     
-    visibility_esp::BeginFrame(get_MatchGame);
     DrawThrowableAlert(draw, sWidth, sHeight, pLocalPawn_rootPos);
-    world_esp::Draw(draw, sWidth, sHeight, pLocalPawn_rootPos, get_LocalPawn);
-
-    if (Config.ESPMenu.ShowFov) {
-        ImVec2 center(get_width() / 2, get_height() / 2);
-        float radius = Config.Aim.Cross;
-
-        static float rotation = 0.0f;
-        rotation += 0.02f;
-        if (rotation > 2 * 3.14159f) rotation -= 2 * 3.14159f;
-
-        int segments = 60;
-        float angleStep = (2 * 3.14159f) / segments;
-        float lineThickness = 3.0f;
-
-        for (int i = 0; i < segments; i++) {
-            float angle1 = i * angleStep + rotation;
-            float angle2 = (i + 1) * angleStep + rotation;
-
-            ImVec2 p1(center.x + cosf(angle1) * radius, center.y + sinf(angle1) * radius);
-            ImVec2 p2(center.x + cosf(angle2) * radius, center.y + sinf(angle2) * radius);
-
-            float hue = (float)i / segments;
-            int r2, g2, b2;
-            if (hue < 0.166f) {
-                r2 = 255; g2 = (int)(255 * (hue * 6)); b2 = 0;
-            } else if (hue < 0.333f) {
-                r2 = (int)(255 * (1 - (hue - 0.166f) * 6)); g2 = 255; b2 = 0;
-            } else if (hue < 0.5f) {
-                r2 = 0; g2 = 255; b2 = (int)(255 * ((hue - 0.333f) * 6));
-            } else if (hue < 0.666f) {
-                r2 = 0; g2 = (int)(255 * (1 - (hue - 0.5f) * 6)); b2 = 255;
-            } else if (hue < 0.833f) {
-                r2 = (int)(255 * ((hue - 0.666f) * 6)); g2 = 0; b2 = 255;
-            } else {
-                r2 = 255; g2 = 0; b2 = (int)(255 * (1 - (hue - 0.833f) * 6));
-            }
-
-            draw->AddLine(p1, p2, IM_COL32(r2, g2, b2, 255), lineThickness);
-        }
-    }
-    
-    if (Config.ESPMenu.Aimline) {
-        DrawAimLine(draw, sWidth, sHeight);
-    }
-    
-    if (Config.ESPMenu.Vehicle) DrawVehicleESP(draw, sWidth, sHeight);
 
     totalBots = 0, totalEnemies = 0;
     List<Pawn *> *EnemyPawns = get_MatchGame->EnemyPawns();
@@ -821,14 +771,6 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         float actualHeight = Vector3::Distance(pEnemyPawn_headPos, pEnemyPawn_rootPos);
         
         if (HeadSc.z > 0 && pawn->m_IsAlive()) {
-            if (HeadSc.x >= 0.0f && HeadSc.x <= sWidth &&
-                HeadSc.y >= 0.0f && HeadSc.y <= sHeight &&
-                Config.ESPMenu.VisibilityCheck && visibility_esp::IsBlocked(pawn, pEnemyPawn_headPos)) {
-                const ImU32 hidden = ImGui::ColorConvertFloat4ToU32(ImVec4(
-                    Config.ESPMenu.OccludedColor[0], Config.ESPMenu.OccludedColor[1],
-                    Config.ESPMenu.OccludedColor[2], Config.ESPMenu.OccludedColor[3]));
-                lineColor = boxColor = skeletonColor = hidden;
-            }
             
             AttackableTargetInfo *m_AttackableInfoPtr = pawn->m_AttackableInfo();
             if (m_AttackableInfoPtr != nullptr && isAlive) {
@@ -891,10 +833,57 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
                     draw->AddLine(ImVec2(sWidth / 2, sHeight), ImVec2(HeadSc.x, sHeight - RootSc.y), lineColor, lineThickness);
                 }
 
+                if (Config.ESPMenu.ShowFov) {
+                    ImVec2 center(get_width() / 2, get_height() / 2);
+                    float radius = Config.Aim.Cross;
+
+                    static float rotation = 0.0f;
+                    rotation += 0.02f;
+                    if (rotation > 2 * 3.14159f) rotation -= 2 * 3.14159f;
+
+                    int segments = 60;
+                    float angleStep = (2 * 3.14159f) / segments;
+                    float lineThickness = 3.0f;
+
+                    for (int i = 0; i < segments; i++) {
+                        float angle1 = i * angleStep + rotation;
+                        float angle2 = (i + 1) * angleStep + rotation;
+
+                        ImVec2 p1(center.x + cosf(angle1) * radius, center.y + sinf(angle1) * radius);
+                        ImVec2 p2(center.x + cosf(angle2) * radius, center.y + sinf(angle2) * radius);
+
+                        float hue = (float)i / segments;
+                        int r2, g2, b2;
+                        if (hue < 0.166f) {
+                            r2 = 255; g2 = (int)(255 * (hue * 6)); b2 = 0;
+                        } else if (hue < 0.333f) {
+                            r2 = (int)(255 * (1 - (hue - 0.166f) * 6)); g2 = 255; b2 = 0;
+                        } else if (hue < 0.5f) {
+                            r2 = 0; g2 = 255; b2 = (int)(255 * ((hue - 0.333f) * 6));
+                        } else if (hue < 0.666f) {
+                            r2 = 0; g2 = (int)(255 * (1 - (hue - 0.5f) * 6)); b2 = 255;
+                        } else if (hue < 0.833f) {
+                            r2 = (int)(255 * ((hue - 0.666f) * 6)); g2 = 0; b2 = 255;
+                        } else {
+                            r2 = 255; g2 = 0; b2 = (int)(255 * (1 - (hue - 0.833f) * 6));
+                        }
+
+                        draw->AddLine(p1, p2, IM_COL32(r2, g2, b2, 255), lineThickness);
+                    }
+                }
+                
+                if (Config.ESPMenu.Aimline) {
+                    DrawAimLine(draw, sWidth, sHeight);
+                }
+                
                 if (Config.ESPMenu.Skeleton) {
                     AddSkeletonToDrawESP(draw, pawn, isBot, sHeight);
                 }
                 
+                if (Config.ESPMenu.Vehicle) {
+                    DrawVehicleESP(draw, sWidth, sHeight);
+                }
+
                 if ((Config.ESPMenu.Name || (Config.ESPMenu.Health && Config.ESPMenu.HealthPosition == EspHealthPosition::HealthTop)) && distanceToMe <= 300.0f) {
                     float scaleFactor = 1.0f;
                     if (distanceToMe >= 19.0f) {

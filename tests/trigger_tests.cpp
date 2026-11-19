@@ -114,59 +114,6 @@ void VirtualWeaponReadiness() {
             "missing class metadata leaves readiness unavailable");
     binding = BindNativeReadiness(table, executable);
     Require(!binding.Sample(0) && weapon.calls == 2,"null weapon cannot invoke a bound method");
-
-    VerifiedEntryCache cache;
-    int verificationCount = 0;
-    const auto countingVerifier = [&](std::uintptr_t candidate) noexcept {
-        ++verificationCount;
-        return candidate == reinterpret_cast<std::uintptr_t>(&BaseReadiness) ||
-               candidate == reinterpret_cast<std::uintptr_t>(&RestrictedReadiness);
-    };
-
-    entry = reinterpret_cast<std::uintptr_t>(&BaseReadiness);
-    std::memcpy(klass.data() + 0x11F0, &entry, sizeof(entry));
-    binding = BindNativeReadiness(table, countingVerifier, &cache);
-    Require(binding.IsVerified() && verificationCount == 1,
-            "first readiness binding verifies its executable pointer");
-
-    binding = BindNativeReadiness(table, countingVerifier, &cache);
-    Require(binding.IsVerified() && verificationCount == 1,
-            "unchanged readiness binding skips duplicate verification");
-
-    entry = reinterpret_cast<std::uintptr_t>(&RestrictedReadiness);
-    std::memcpy(klass.data() + 0x11F0, &entry, sizeof(entry));
-    binding = BindNativeReadiness(table, countingVerifier, &cache);
-    Require(binding.IsVerified() && verificationCount == 2,
-            "changed readiness entry is verified immediately");
-
-    entry = reinterpret_cast<std::uintptr_t>(&BaseReadiness);
-    std::memcpy(klass.data() + 0x11F0, &entry, sizeof(entry));
-    const int replacementMethod = 733;
-    const void* replacementMetadata = &replacementMethod;
-    std::memcpy(klass.data() + 0x11F8, &replacementMetadata, sizeof(replacementMetadata));
-    weapon.expectedMetadata = replacementMetadata;
-    binding = BindNativeReadiness(table, countingVerifier, &cache);
-    Require(binding.IsVerified() && verificationCount == 3 &&
-            binding.Sample(object) && weapon.calls == 3,
-            "entry changes revalidate without delaying the next update");
-
-    const int updatedMethod = 834;
-    const void* updatedMetadata = &updatedMethod;
-    std::memcpy(klass.data() + 0x11F8, &updatedMetadata, sizeof(updatedMetadata));
-    weapon.expectedMetadata = updatedMetadata;
-    binding = BindNativeReadiness(table, countingVerifier, &cache);
-    Require(binding.IsVerified() && verificationCount == 3 &&
-            binding.Sample(object) && weapon.calls == 4,
-            "cached entry verification still refreshes native metadata");
-
-    cache.Reset();
-    binding = BindNativeReadiness(table, countingVerifier, &cache);
-    Require(binding.IsVerified() && verificationCount == 4,
-            "lifecycle reset forces fresh entry verification");
-
-    binding = BindNativeReadiness(0, countingVerifier, &cache);
-    Require(!binding.IsVerified(),
-            "invalid class metadata cannot keep using the cached readiness entry");
 }
 
 void SingleShotAcknowledgement() {

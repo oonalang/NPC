@@ -141,7 +141,7 @@ void UpdateAllOffset(){
 #define Class_Pawn_IsFadeOut (0x5C0)
 #define Class_Pawn_m_Mesh (0x630)
 #define Class_Pawn_m_HeadBone (0x310)
-#define Class_PlayerInfo_m_NickName (0x170)
+#define Class_PlayerInfo_m_NickName (0x160)
 #define Class_AttackableTarget_m_AttackableInfo (0x78)
 #define Class_AttackableTarget_m_Health (0x34)
 #define Class_AttackableTarget_m_MaxHealth (0x38)
@@ -177,7 +177,7 @@ void UpdateAllOffset(){
 #define Class_BaseGame_m_World (0x150)
 #define Class_BaseWorld_m_ActorList (0x40)
 
-#define Class_PlayerInfo_m_ProfessionChipID 0x208
+#define Class_PlayerInfo_m_ProfessionChipID 0x1E8
 #define Class_PlayerInfo_m_PreProfessionChipID 0xC4
 #define Class_PlayerInfo_ChipSkinID 0x3F0
 #define Class_BRProfessionChipConfig_ItemID 0x24
@@ -189,15 +189,15 @@ void UpdateAllOffset(){
 //-- ESP Items
 // #define Class_MatchGame_get_DroppedPickUpMgr (m_unity + 0x59B4C80)
 // #define Weapon_GetWeaponId (m_unity + 0x54A25F8)
-#define Class_BRDroppedPickUpNormal_ItemConfigType (0xA0)
+#define Class_BRDroppedPickUpNormal_ItemConfigType (0xB0)
 #define Class_BRDroppedPickUpNormal_mThrowConf (0xE8)
 #define Class_BRDroppedPickUpNormal_mWeaponConf (0xE0)
 #define Class_BRDroppedPickUpNormal_mDroppedPickUpConfig (0xD8)
 #define Class_DroppedPickUpConfig_configID (0x68)
 #define Class_BRDroppedPickUpMgr_mNormalItemEntityDic (0x118)
 #define Class_WeaponConfConfig_LOCID_Name (0x68)
-#define Class_LethalAndTacticalConfConfig_LOCID_Name (0x58)
-#define Class_LethalAndTacticalConfConfig_MarkOfName (0x58)
+#define Class_LethalAndTacticalConfConfig_LOCID_Name (0x68)
+#define Class_LethalAndTacticalConfConfig_MarkOfName (0x50)
 
 }
 
