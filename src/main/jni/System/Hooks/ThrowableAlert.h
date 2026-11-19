@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -34,6 +35,7 @@ struct ThrowInfo {
 inline void (*orig_WeaponProjectileTick)(void*, float) = nullptr;
 inline std::unordered_map<uintptr_t, ThrowInfo> g_Throws;
 inline std::mutex g_ThrowMutex;
+inline std::atomic<bool> g_ThrowEnabled{false};
 
 inline bool ThrowAlertOn() {
     return Config.ESPMenu.GrenadeWarn;
@@ -50,7 +52,7 @@ inline Vector3 GetThrowPos(void* proj) {
 }
 
 inline void TrackThrowable(void* proj) {
-    if (!ThrowAlertOn() || !Tools::IsPtrValid(proj)) return;
+    if (!g_ThrowEnabled.load(std::memory_order_relaxed) || !Tools::IsPtrValid(proj)) return;
     const uintptr_t key = reinterpret_cast<uintptr_t>(proj);
     const bool exploded = *reinterpret_cast<bool*>(key + ThrowAlertCfg::Exploded);
     if (exploded) {
@@ -119,7 +121,9 @@ inline void DrawThrowRadius(ImDrawList* draw, Camera* cam,
 inline void DrawThrowableAlert(ImDrawList* draw, int width, int height,
                               const Vector3& localPos) {
     if (!draw) return;
-    if (!ThrowAlertOn()) {
+    const bool enabled = ThrowAlertOn();
+    g_ThrowEnabled.store(enabled, std::memory_order_relaxed);
+    if (!enabled) {
         std::lock_guard<std::mutex> lock(g_ThrowMutex);
         if (!g_Throws.empty()) g_Throws.clear();
         return;
