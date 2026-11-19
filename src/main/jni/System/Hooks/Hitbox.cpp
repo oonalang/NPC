@@ -15,7 +15,6 @@ using AvatarCapsule = bool(*)(void*, void*, Point, Point, HitResult*, Metadata);
 using AabbRay = bool(*)(void*, Point, Point, Point, Point, float*, Metadata);
 using SphereRay = bool(*)(void*, Point, float, Point, Point, float, HitResult*, Metadata);
 using CapsuleRay = bool(*)(void*, Point, Rotation, float, float, Point, Point, HitResult*, Metadata);
-using Getter = void*(*)(void*, Metadata);
 WeaponTrace originalBase = nullptr, originalInstant = nullptr;
 AvatarCapsule originalAvatarCapsule = nullptr;
 CapsuleRay originalCapsule = nullptr;
@@ -23,7 +22,6 @@ AvatarCapsule originalAvatarSphere = nullptr;
 SphereRay originalSphere = nullptr;
 AvatarCapsule originalAvatarObb = nullptr;
 AabbRay originalAabb = nullptr;
-Getter localPawn = nullptr, matchGame = nullptr;
 
 struct ListHeader {
     const void* list = nullptr;
@@ -43,61 +41,21 @@ bool SameList(const ListHeader& left, const ListHeader& right) noexcept {
            left.count == right.count;
 }
 
-bool ScanEnemy(void* target, ListHeader& enemies, std::size_t& index) noexcept {
-    const auto* match = matchGame ? matchGame(nullptr, nullptr) : nullptr;
-    if (!match) return false;
-    std::array<const void*, 512> list{};
-    std::size_t count = 0;
-    const auto* source = Field<void*>(match, 0x178);
-    if (!CopyList(source, list.data(), list.size(), count) || !ReadListHeader(source, enemies))
-        return false;
-    const auto found = std::find(list.begin(), list.begin() + count, target);
-    if (found == list.begin() + count) return false;
-    index = static_cast<std::size_t>(found - list.begin());
-    return true;
-}
-
-// A single fired round can reach the trace hook more than once (base and
-// instant paths, penetration passes). The enemy scan and the collider copy are
-// cached per (weapon instance, target) and re-validated on every use: the same
-// slot must still hold the target, the list headers must be unchanged and the
-// target must still be alive. Any change - a different pawn, a rebuilt list, a
-// death - falls back to a full read, so a stale answer cannot reach the next
-// bullet or the next frame.
+// The traced pawn's region list is copied into a bounded stack buffer, so the
+// per-shot path allocates nothing. A single fired round reaches the trace hook
+// more than once (base and instant paths, penetration passes), so the copy is
+// cached per target and re-validated on every use: the same list object must
+// still hold the same items, which fails as soon as the regions are rebuilt or
+// belong to another pawn. A stale answer therefore cannot reach the next
+// bullet or the next frame, and no membership lookup is needed.
 struct Lookup {
-    void* instance = nullptr;
     void* target = nullptr;
-    ListHeader enemies{};
-    std::size_t enemyIndex = 0;
     ListHeader regions{};
     std::array<const void*, maximumColliders> colliders{};
     std::size_t count = 0;
     bool collidersReady = false;
 };
 thread_local Lookup lookup;
-thread_local bool fieldScaling = false;
-
-bool EnemyCached(void* instance, void* target) noexcept {
-    if (!localPawn || !matchGame) return false;
-    const auto* local = localPawn(nullptr, nullptr);
-    if (!local || target == local || Field<void*>(instance, 0x28) != local ||
-        Field<unsigned char>(local, 0x550) != 1) return false;
-    if (Field<unsigned char>(target, 0x550) != 1) return false;
-    const auto* match = matchGame ? matchGame(nullptr, nullptr) : nullptr;
-    ListHeader current{};
-    if (match && lookup.instance == instance && lookup.target == target &&
-        lookup.enemies.count > 0 && lookup.enemyIndex < std::size_t(lookup.enemies.count) &&
-        ReadListHeader(Field<void*>(match, 0x178), current) &&
-        SameList(current, lookup.enemies) &&
-        Field<const void*>(lookup.enemies.items,
-                           0x20 + lookup.enemyIndex * sizeof(void*)) == target)
-        return true;
-    lookup = Lookup{};
-    if (!ScanEnemy(target, lookup.enemies, lookup.enemyIndex)) return false;
-    lookup.instance = instance;
-    lookup.target = target;
-    return true;
-}
 
 bool CollidersCached(void* target, TraceContext& context) noexcept {
     const auto* list = static_cast<const void*>(Field<void*>(target, 0xa8));
@@ -122,70 +80,23 @@ bool CollidersCached(void* target, TraceContext& context) noexcept {
     return true;
 }
 
-// The hitbox a shot tests against carries its own size at +0x14. This inflates
-// that field on every hitbox of the traced pawn for the duration of one trace
-// and writes the exact previous values back immediately afterwards, so the
-// pawn is restored before the next shot or frame whatever the trace returns or
-// throws. Scaling the stored fields is what the reference mod does: the size
-// applies to the first trace and to every region, instead of a second attempt
-// that only runs after a miss.
-struct HitboxField {
-    void* hitbox = nullptr;
-    float size = 0.f;
-};
-class HitboxFields {
-    std::array<HitboxField, maximumColliders> fields_{};
-    std::size_t count_ = 0;
-public:
-    HitboxFields() = default;
-    HitboxFields(const HitboxFields&) = delete;
-    HitboxFields& operator=(const HitboxFields&) = delete;
-    ~HitboxFields() { Restore(); }
-    bool Apply(void* target, float scale) noexcept {
-        Restore();
-        if (!target) return false;
-        std::array<const void*, maximumColliders> list{};
-        std::size_t count = 0;
-        if (!CopyList(Field<void*>(target, 0xa8), list.data(), list.size(), count)) return false;
-        for (std::size_t i = 0; i < count; ++i) {
-            auto* hitbox = const_cast<void*>(list[i]);
-            if (!hitbox) continue;
-            const float size = Field<float>(hitbox, 0x14);
-            const float expanded = size * scale;
-            if (!std::isfinite(size) || size <= 0.f || !std::isfinite(expanded)) continue;
-            std::memcpy(static_cast<unsigned char*>(hitbox) + 0x14, &expanded, sizeof(expanded));
-            fields_[count_++] = {hitbox, size};
-        }
-        if (count_ > 0) fieldScaling = true;
-        return count_ > 0;
-    }
-    void Restore() noexcept {
-        for (std::size_t i = 0; i < count_; ++i)
-            std::memcpy(static_cast<unsigned char*>(fields_[i].hitbox) + 0x14,
-                        &fields_[i].size, sizeof(float));
-        count_ = 0;
-        fieldScaling = false;
-    }
-};
-
 bool Weapon(WeaponTrace original, void* instance, int type, void* target, void* collider,
             Point start, Point direction, void* impact, Metadata info) {
     if (!original) return false;
     const auto invoke = [&] { return original(instance, type, target, collider, start, direction, impact, info); };
     const auto options = Read();
     if (!license::Allows(license::Capability::Features) || currentTrace || !available.load(std::memory_order_acquire) || !options.enabled ||
-        options.scale <= 1.f || !instance || !target || !impact || type != 1)
+        options.scale <= 1.f || !instance || !target || !impact || type != 1 ||
+        Field<unsigned char>(target, 0x550) != 1)
         return invoke();
-    // A trace that is already running under inflated fields must not inflate
-    // them again; it simply runs.
-    if (fieldScaling) return invoke();
-    HitboxFields fields;
-    if (fields.Apply(target, options.scale)) return invoke();
-    if (!EnemyCached(instance, target)) return invoke();
     TraceContext context;
     context.scale = options.scale;
     if (!CollidersCached(target, context)) return invoke();
-    return TraceWeapon(context, invoke);
+    // One widened trace, as the reference does: the game's own sweep runs once
+    // against the scaled geometry, with no stock attempt first and no retry on
+    // a miss.
+    TraceScope scope(context);
+    return invoke();
 }
 
 bool Base(void* instance, int type, void* target, void* collider,
@@ -206,8 +117,7 @@ bool Capsule(void* instance, Point center, Rotation rotation, float axisLength, 
 bool Avatar(void* instance, void* collider, Point start, Point end, HitResult* result, Metadata info) {
     if (!originalAvatarCapsule) return false;
     float scale = 1.f;
-    if (available.load(std::memory_order_acquire) && currentTrace && currentTrace->Contains(collider) &&
-        BodyGroup(Field<std::uint16_t>(collider, 0x20)) && Field<unsigned char>(collider, 0x50) == 1)
+    if (available.load(std::memory_order_acquire) && currentTrace && currentTrace->Contains(collider))
         scale = currentTrace->scale;
     PrimitiveScope scope(scale);
     return originalAvatarCapsule(instance, collider, start, end, result, info);
@@ -223,8 +133,7 @@ bool AvatarSphere(void* instance, void* collider, Point start, Point end, HitRes
     if (!originalAvatarSphere) return false;
     float scale = 1.f;
     if (available.load(std::memory_order_acquire) && sphereAvailable.load(std::memory_order_acquire) &&
-        currentTrace && currentTrace->Contains(collider) && BodyGroup(Field<std::uint16_t>(collider, 0x20)) &&
-        Field<unsigned char>(collider, 0x50) == 1) scale = currentTrace->scale;
+        currentTrace && currentTrace->Contains(collider)) scale = currentTrace->scale;
     PrimitiveScope scope(scale);
     return originalAvatarSphere(instance, collider, start, end, result, info);
 }
@@ -238,8 +147,7 @@ bool AvatarObb(void* instance, void* collider, Point start, Point end, HitResult
     if (!originalAvatarObb) return false;
     float scale = 1.f;
     if (available.load(std::memory_order_acquire) && obbAvailable.load(std::memory_order_acquire) &&
-        currentTrace && currentTrace->Contains(collider) && BodyGroup(Field<std::uint16_t>(collider,0x20)) &&
-        Field<unsigned char>(collider,0x50) == 1) scale = currentTrace->scale;
+        currentTrace && currentTrace->Contains(collider)) scale = currentTrace->scale;
     PrimitiveScope scope(scale);
     return originalAvatarObb(instance,collider,start,end,result,info);
 }
@@ -324,8 +232,6 @@ bool Install(std::uintptr_t base, HookInstaller hook) noexcept {
         if (std::memcmp(bytes, entry.bytes.data(), entry.bytes.size()) == 0) return false;
         if (!StackEntry(bytes)) return false;
     }
-    localPawn = reinterpret_cast<Getter>(base + 0x8012814);
-    matchGame = reinterpret_cast<Getter>(base + 0x801191C);
     struct Hook { std::uintptr_t rva; void* replacement; void** original; };
     const Hook hooks[]{
         {0x66F2A78, reinterpret_cast<void*>(Capsule), reinterpret_cast<void**>(&originalCapsule)},

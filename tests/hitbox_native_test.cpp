@@ -33,7 +33,6 @@ struct Fixture {
     bool parentAlive = true, nested = false, throwMath = false, sphere = false, obb = false;
     float fraction = 0.f;
     int weaponCalls = 0, avatarCalls = 0, mathCalls = 0;
-    float fieldDuringShot = 0.f, otherDuringShot = 0.f;
     int type = 1;
     void* queryTarget = target.data();
     void* selected = collider.data();
@@ -60,12 +59,6 @@ struct Fixture {
 };
 Fixture* active = nullptr;
 
-void* Local(void* receiver, const void* info) {
-    assert(!receiver && !info);return active->local.data();
-}
-void* Match(void* receiver, const void* info) {
-    assert(!receiver && !info);return active->match.data();
-}
 bool MathOriginal(void* receiver, Point center, Rotation rotation, float axis, float radius,
                   Point start, Point end, HitResult* output, const void* info) {
     auto& f=*active;++f.mathCalls;
@@ -137,8 +130,6 @@ bool AvatarObbOriginal(void* receiver,void* collider,Point start,Point end,HitRe
 bool WeaponOriginal(void* receiver, int type, void* target, void* collider,
                     Point start, Point direction, void* impact, const void* info) {
     auto& f=*active;++f.weaponCalls;
-    f.fieldDuringShot=Field<float>(collider,0x14);
-    f.otherDuringShot=Field<float>(f.unselected.data(),0x14);
     assert(receiver==f.fire.data() && target==f.queryTarget && collider==f.selected && type==f.type);
     assert(impact==&f.hit && info==f.weaponInfo && Same(start,f.start) && Same(direction,f.direction));
     if(f.nested) {
@@ -153,69 +144,85 @@ void Bind(Fixture& fixture) {
     originalAvatarCapsule=AvatarOriginal;originalCapsule=MathOriginal;
     originalAvatarSphere=AvatarSphereOriginal;originalSphere=SphereMathOriginal;sphereAvailable=true;
     originalAvatarObb=AvatarObbOriginal;originalAabb=AabbOriginal;obbAvailable=true;
-    localPawn=Local;matchGame=Match;Publish(true,1.21f);
+    Publish(true,1.21f);
 }
 void NearMissAndPriority() {
     Fixture f;Bind(f);
     for(bool instant : {false,true}) {
-        assert(f.Shot(instant) && f.weaponCalls==2 && f.avatarCalls==2 && f.mathCalls==2);
-        assert(Near(f.scales[0],1.f) && Near(f.scales[1],1.21f));
+        // The widened query is the primary one: a side shot is one native call.
+        assert(f.Shot(instant) && f.weaponCalls==1 && f.avatarCalls==1 && f.mathCalls==1);
+        assert(Near(f.scales[0],1.21f));
         assert(f.hit.collider==f.collider.data() && f.hit.material==13 && Same(f.hit.location,{f.start.x,4.f,f.hit.distance}));
         assert(Field<std::uint16_t>(f.collider.data(),0x20)==3);
+        assert(Field<float>(f.collider.data(),0x14)==0.f);
+        // A direct hit is the same single query and keeps its own result.
         f.start.x=3.1f;Put(f.collider,0x20,std::uint16_t{1});
-        assert(f.Shot(instant) && f.weaponCalls==1 && f.mathCalls==1 && Near(f.scales[0],1.f));
+        assert(f.Shot(instant) && f.weaponCalls==1 && f.mathCalls==1 && Near(f.scales[0],1.21f));
         assert(Field<std::uint16_t>(f.collider.data(),0x20)==1);
         f.start.x=3.22f;Put(f.collider,0x20,std::uint16_t{3});
     }
+    // A shot that misses even widened stays a single query, never a retry.
     f.start.x=5.f;
-    assert(!f.Shot() && f.weaponCalls==2 && f.mathCalls==2 && f.hit.collider==nullptr);
+    assert(!f.Shot() && f.weaponCalls==1 && f.mathCalls==1 && f.hit.collider==nullptr);
+    // A re-entrant shot does not widen a second time.
     f.start.x=3.22f;f.nested=true;
-    assert(f.Shot() && f.weaponCalls==3 && f.mathCalls==2 && Near(f.scales.back(),1.21f));
+    assert(f.Shot() && f.weaponCalls==2 && Near(f.scales.back(),1.21f));
 }
 void InvalidParentsAndUnselectedRegions() {
     Fixture f;Bind(f);
+    // The avatar method keeps its own validation of the parent transform.
     f.parentAlive=false;
-    assert(!f.Shot() && f.weaponCalls==2 && f.avatarCalls==2 && f.mathCalls==0);
+    assert(!f.Shot() && f.weaponCalls==1 && f.avatarCalls==1 && f.mathCalls==0);
     f.parentAlive=true;Put(f.collider,0x40,static_cast<void*>(nullptr));
     assert(!f.Shot() && f.mathCalls==0);
     Put(f.collider,0x40,f.parent);
+    // Every region is widened: no HitGroup or active-flag filter like the
+    // reference, which scales the whole list.
     for(std::uint16_t group : {0,6,32}) {
         Put(f.collider,0x20,group);
-        assert(!f.Shot() && f.mathCalls==2 && Near(f.scales[1],1.f));
+        assert(f.Shot() && f.mathCalls==1 && Near(f.scales[0],1.21f));
     }
     Put(f.collider,0x20,std::uint16_t{3});Put(f.collider,0x50,std::uint8_t{0});
-    assert(!f.Shot() && Near(f.scales[1],1.f));
-    Put(f.collider,0x50,std::uint8_t{1});f.selected=f.unselected.data();
-    assert(!f.Shot() && Near(f.scales[1],1.f));
+    assert(f.Shot() && Near(f.scales[0],1.21f));
+    Put(f.collider,0x50,std::uint8_t{1});
+    // Whichever region the native query reports, the scale came from the
+    // traced pawn's list.
+    Put(f.regions,0x18,2);Put(f.regionItems,0x18,std::uint64_t{2});
+    Put(f.regionItems,0x20,f.collider.data());Put(f.regionItems,0x28,f.unselected.data());
+    f.selected=f.unselected.data();
+    assert(f.Shot() && Near(f.scales[0],1.21f));
     f.selected=f.collider.data();
-    assert(f.Shot() && Near(f.scales[1],1.21f));
+    assert(f.Shot() && Near(f.scales[0],1.21f));
+    Put(f.regions,0x18,1);Put(f.regionItems,0x18,std::uint64_t{1});
+    Put(f.regionItems,0x28,static_cast<void*>(nullptr));
 }
 void ScopeGating() {
     Fixture f;Bind(f);
     const auto stock=[&] {assert(!f.Shot() && f.weaponCalls==1 && f.mathCalls==1 && Near(f.scales[0],1.f));};
+    const auto widened=[&] {assert(f.Shot() && f.weaponCalls==1 && f.mathCalls==1 && Near(f.scales[0],1.21f));};
     Publish(false,1.21f);stock();Publish(true,1.f);stock();Publish(true,1.21f);
     available=false;stock();available=true;
     license_test::allowed=false;stock();license_test::allowed=true;
-    Put(f.fire,0x28,f.other.data());stock();Put(f.fire,0x28,f.local.data());
-    Put(f.local,0x550,std::uint8_t{0});stock();Put(f.local,0x550,std::uint8_t{1});
+    // No ownership test and no enemy-list membership test: any pawn the local
+    // weapon traces is widened as long as its regions can be read.
+    Put(f.fire,0x28,f.other.data());widened();Put(f.fire,0x28,f.local.data());
+    Put(f.local,0x550,std::uint8_t{0});widened();Put(f.local,0x550,std::uint8_t{1});
+    Put(f.enemies,0x18,0);Put(f.enemyItems,0x18,std::uint64_t{0});widened();
+    Put(f.enemies,0x18,1);Put(f.enemyItems,0x18,std::uint64_t{1});
+    Put(f.enemyItems,0x20,f.other.data());widened();Put(f.enemyItems,0x20,f.target.data());
     Put(f.target,0x550,std::uint8_t{0});stock();Put(f.target,0x550,std::uint8_t{1});
-    Put(f.enemyItems,0x20,f.other.data());stock();Put(f.enemyItems,0x20,f.target.data());
     f.queryTarget=f.local.data();stock();f.queryTarget=f.target.data();
     f.type=2;stock();f.type=1;
-    localPawn=nullptr;stock();localPawn=Local;
-    matchGame=nullptr;stock();matchGame=Match;
     Put(f.regions,0x18,129);stock();Put(f.regions,0x18,1);
     assert(f.Shot());
-    // The lookup cache is re-validated on every use: when the cached slot no
-    // longer holds the target the hook rescans instead of reusing the answer.
-    Put(f.enemies,0x18,2);Put(f.enemyItems,0x18,std::uint64_t{2});
-    Put(f.enemyItems,0x20,f.other.data());Put(f.enemyItems,0x28,f.target.data());
-    assert(f.Shot() && f.weaponCalls==2 && Near(f.scales[1],1.21f));
-    Put(f.enemyItems,0x20,f.other.data());Put(f.enemyItems,0x28,f.other.data());
-    assert(!f.Shot() && f.weaponCalls==1);
-    Put(f.enemies,0x18,1);Put(f.enemyItems,0x18,std::uint64_t{1});
-    Put(f.enemyItems,0x20,f.target.data());
-    assert(f.Shot() && f.weaponCalls==2 && Near(f.scales[1],1.21f));
+    // The bounded copy is re-validated per use: a rebuilt region list is read
+    // again, an unreadable one falls back to the stock query.
+    Put(f.regions,0x18,2);Put(f.regionItems,0x18,std::uint64_t{2});
+    Put(f.regionItems,0x28,f.unselected.data());
+    assert(f.Shot() && f.weaponCalls==1 && Near(f.scales[0],1.21f));
+    Put(f.regionItems,0x28,static_cast<void*>(nullptr));
+    assert(f.Shot() && f.weaponCalls==1 && Near(f.scales[0],1.21f));
+    Put(f.regions,0x18,1);Put(f.regionItems,0x18,std::uint64_t{1});
     f.throwMath=true;
     try {f.Shot();assert(false);} catch(int value) {assert(value==7);}
     assert(!currentTrace && primitiveScale==1.f);
@@ -236,10 +243,10 @@ void SphereSizingAndHeadGroups() {
         for(float scale:{1.f,1.21f,2.f,5.f}) {
             Publish(true,scale);f.start.x=3.22f;
             assert(f.Shot(instant)==(scale>1.f));
-            assert(f.weaponCalls==(scale>1.f?2:1));
-            assert(Near(f.scales.back(),scale));
+            // One widened call for every slider value; 1.00x is stock geometry.
+            assert(f.weaponCalls==1 && Near(f.scales[0],scale));
             assert(Field<std::uint16_t>(f.collider.data(),0x20)==1);
-            f.start.x=3.1f;assert(f.Shot(instant)&&f.weaponCalls==1&&Near(f.scales[0],1.f));
+            f.start.x=3.1f;assert(f.Shot(instant)&&f.weaponCalls==1&&Near(f.scales[0],scale));
         }
     }
     f.start.x=3.5f;Publish(true,1.21f);assert(!f.Shot());
@@ -248,9 +255,9 @@ void SphereSizingAndHeadGroups() {
     assert(!f.Shot()&&Near(f.scales.back(),1.f));
     f.sphere=false;assert(f.Shot());f.sphere=true;sphereAvailable=true;
     f.parentAlive=false;assert(!f.Shot()&&f.mathCalls==0);f.parentAlive=true;
-    Put(f.collider,0x20,std::uint16_t{6});assert(!f.Shot()&&Near(f.scales.back(),1.f));
+    Put(f.collider,0x20,std::uint16_t{6});assert(f.Shot()&&Near(f.scales[0],1.21f));
     Put(f.collider,0x20,std::uint16_t{1});Put(f.collider,0x50,std::uint8_t{0});
-    assert(!f.Shot()&&Near(f.scales.back(),1.f));Put(f.collider,0x50,std::uint8_t{1});
+    assert(f.Shot()&&Near(f.scales[0],1.21f));Put(f.collider,0x50,std::uint8_t{1});
     f.selected=f.unselected.data();assert(!f.Shot()&&Near(f.scales.back(),1.f));f.selected=f.collider.data();
     license_test::allowed=false;assert(!f.Shot()&&f.weaponCalls==1);license_test::allowed=true;
     assert(f.Shot()&&f.hit.collider==f.collider.data());
@@ -259,14 +266,14 @@ void ObbSizingAndHeadGroups() {
     Fixture f;Bind(f);f.obb=true;Put(f.collider,0x20,std::uint16_t{1});
     for(float scale:{1.f,1.21f,2.f,5.f}) {
         Publish(true,scale);f.start.x=3.22f;assert(f.Shot()==(scale>1.f));
-        assert(Near(f.scales.back(),scale)&&Field<std::uint16_t>(f.collider.data(),0x20)==1);
-        f.start.x=3.1f;assert(f.Shot()&&f.weaponCalls==1&&Near(f.scales[0],1.f));
+        assert(f.weaponCalls==1&&Near(f.scales.back(),scale)&&Field<std::uint16_t>(f.collider.data(),0x20)==1);
+        f.start.x=3.1f;assert(f.Shot()&&f.weaponCalls==1&&Near(f.scales[0],scale));
     }
     f.start.x=3.5f;Publish(true,1.21f);assert(!f.Shot());Publish(true,3.f);assert(f.Shot());
     f.start.x=3.22f;Publish(true,1.21f);obbAvailable=false;assert(!f.Shot()&&Near(f.scales.back(),1.f));
     f.obb=false;assert(f.Shot());f.obb=true;obbAvailable=true;
     f.parentAlive=false;assert(!f.Shot()&&f.mathCalls==0);f.parentAlive=true;
-    Put(f.collider,0x20,std::uint16_t{6});assert(!f.Shot()&&Near(f.scales.back(),1.f));
+    Put(f.collider,0x20,std::uint16_t{6});assert(f.Shot()&&Near(f.scales[0],1.21f));
     Put(f.collider,0x20,std::uint16_t{1});license_test::allowed=false;assert(!f.Shot()&&f.weaponCalls==1);license_test::allowed=true;
 }
 bool AlreadyScaledSphere(void*,Point,float radius,Point,Point,float,HitResult*,const void*) {
@@ -299,29 +306,24 @@ void PrimitiveReentry() {
     }
     assert(primitiveScale==1.f);
 }
-void HitboxFieldSizing() {
+void PrimaryTraceSizing() {
     Fixture f;Bind(f);
-    // The stored size of every hitbox is inflated for the single trace and put
-    // back afterwards, without the enemy-list scan.
-    Put(f.collider,0x14,0.5f);Put(f.unselected,0x14,0.25f);
-    Put(f.regions,0x18,2);Put(f.regionItems,0x18,std::uint64_t{2});
-    Put(f.regionItems,0x20,f.collider.data());Put(f.regionItems,0x28,f.unselected.data());
-    Publish(true,2.f);f.start.x=3.1f;
-    assert(f.Shot() && f.weaponCalls==1 && Near(f.fieldDuringShot,1.f) && Near(f.otherDuringShot,.5f));
-    assert(Near(Field<float>(f.collider.data(),0x14),.5f));
-    assert(Near(Field<float>(f.unselected.data(),0x14),.25f));
-    // A shot that hits nothing still restores every field it touched.
-    f.start.x=5.f;
-    assert(!f.Shot() && Near(Field<float>(f.collider.data(),0x14),.5f));
-    assert(Near(Field<float>(f.unselected.data(),0x14),.25f));
-    // A re-entrant shot runs under the same inflated fields, never squared.
-    f.start.x=3.1f;f.nested=true;
-    assert(f.Shot() && f.weaponCalls==2 && Near(f.fieldDuringShot,1.f));
-    assert(Near(Field<float>(f.collider.data(),0x14),.5f));
-    // Without a sized hitbox the primitive retry still applies the slider.
-    Put(f.collider,0x14,0.f);Put(f.unselected,0x14,0.f);f.start.x=3.22f;
-    assert(f.Shot() && f.weaponCalls==2 && f.mathCalls==2 && Near(f.scales.back(),2.f));
-    assert(Near(Field<float>(f.collider.data(),0x14),0.f));
+    // The widened query is the primary one and runs once, against the geometry
+    // the game's own sweep consumes; nothing in the collider is rewritten.
+    f.start.x=3.22f;Publish(true,2.f);
+    assert(f.Shot() && f.weaponCalls==1 && f.mathCalls==1 && Near(f.scales[0],2.f));
+    assert(Field<float>(f.collider.data(),0x14)==0.f && Field<std::uint16_t>(f.collider.data(),0x20)==3);
+    // A pawn that is absent from every enemy list is still widened.
+    Put(f.enemies,0x18,0);Put(f.enemyItems,0x18,std::uint64_t{0});
+    assert(f.Shot() && f.weaponCalls==1 && Near(f.scales[0],2.f));
+    // A target whose regions cannot be enumerated is left stock, once.
+    Put(f.regions,0x18,0);
+    assert(!f.Shot() && f.weaponCalls==1 && Near(f.scales[0],1.f));
+    Put(f.regions,0x18,1);
+    // The slider is never applied twice when the trace re-enters the hook.
+    f.nested=true;
+    assert(f.Shot() && f.weaponCalls==2 && Near(f.scales.back(),2.f));
+    assert(!currentTrace && primitiveScale==1.f);
 }
 }
 
@@ -333,6 +335,6 @@ void NativeDriverPending() noexcept {}
 }
 
 int main() {
-    NearMissAndPriority();InvalidParentsAndUnselectedRegions();ScopeGating();PrimitiveReentry();SphereSizingAndHeadGroups();ObbSizingAndHeadGroups();NestedSphereIsNotScaledTwice();HitboxFieldSizing();
-    std::puts("Hitbox native callbacks: capsule/OBB/sphere slider scaling, head-group preservation, nested end-sphere scaling, 1.21x side shots, direct-hit priority, invalid parents, unchanged rays/results/metadata, ownership gating, per-shot stored hitbox sizing with restore, and nested scope restoration passed (stubbed game methods)");
+    NearMissAndPriority();InvalidParentsAndUnselectedRegions();ScopeGating();PrimitiveReentry();SphereSizingAndHeadGroups();ObbSizingAndHeadGroups();NestedSphereIsNotScaledTwice();PrimaryTraceSizing();
+    std::puts("Hitbox native callbacks: capsule/OBB/sphere slider scaling, head-group preservation, nested end-sphere scaling, 1.21x side shots, direct-hit priority, invalid parents, unchanged rays/results/metadata, single widened primary trace with no enemy-list or ownership gate, whole-list sizing, unenumerable-region fallback, and nested scope restoration passed (stubbed game methods)");
 }
