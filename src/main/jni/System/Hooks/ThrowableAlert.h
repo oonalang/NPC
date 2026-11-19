@@ -190,7 +190,7 @@ namespace world_esp { inline void TrackPlaced(void*); }
 
 inline void hook_WeaponProjectileTick(void* instance, float deltaTime) {
     world_esp::TrackPlaced(instance);
+    TrackThrowable(instance);
     if (orig_WeaponProjectileTick)
         orig_WeaponProjectileTick(instance, deltaTime);
-    TrackThrowable(instance);
 }
