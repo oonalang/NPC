@@ -1,0 +1,25 @@
+name: BR pickup host checks
+
+on:
+  push:
+    branches:
+      - feature/br-fast-pickup-range
+  pull_request:
+    paths:
+      - "src/main/jni/System/Hooks/PickupTweaks.h"
+      - "src/main/jni/Hacks/StructGame/Defines.h"
+      - "tests/pickup_tweaks_test.cpp"
+      - "tests/verify_1659_offsets.py"
+      - ".github/workflows/br-pickup-host-tests.yml"
+
+jobs:
+  cpp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native host pickup tests
+        run: sh tests/run-pickup-tests.sh
+      - name: Verify known 1.6.59 offset constants
+        run: python3 tests/verify_1659_offsets.py
+      - name: ESP loot label grouping tests
+        run: sh tests/run-esp-label-tests.sh
