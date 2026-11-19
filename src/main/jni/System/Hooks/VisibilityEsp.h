@@ -22,14 +22,20 @@ inline Vector3 viewOrigin = Vector3::zero();
 inline bool frameReady = false;
 inline unsigned remainingChecks = 0;
 inline unsigned frameCount = 0;
+inline uintptr_t activeMatch = 0;
 
 inline bool Finite(const Vector3& point) {
     return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
 }
 
-inline void BeginFrame() {
+inline void BeginFrame(const void* match) {
     frameReady = false;
     remainingChecks = 3;
+    const uintptr_t current = reinterpret_cast<uintptr_t>(match);
+    if (activeMatch != current) {
+        records.clear();
+        activeMatch = current;
+    }
     if (!Config.ESPMenu.VisibilityCheck) {
         if (!records.empty()) records.clear();
         return;
