@@ -6,7 +6,7 @@ on:
       - feature/br-fast-pickup-range
   pull_request:
     paths:
-      - "src/main/jni/System/Hooks/PickupTweaks.h"
+      - "src/main/jni/**"
       - "src/main/jni/Hacks/StructGame/Defines.h"
       - "tests/pickup_tweaks_test.cpp"
       - "tests/verify_1659_offsets.py"
@@ -23,3 +23,24 @@ jobs:
         run: python3 tests/verify_1659_offsets.py
       - name: ESP loot label grouping tests
         run: sh tests/run-esp-label-tests.sh
+
+  android-native-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK r22
+        run: sdkmanager "ndk;22.0.7026061"
+      - name: Build ARM64 native library
+        shell: bash
+        run: |
+          "$ANDROID_HOME/ndk/22.0.7026061/ndk-build" \
+            NDK_PROJECT_PATH="$GITHUB_WORKSPACE" \
+            APP_BUILD_SCRIPT="$GITHUB_WORKSPACE/src/main/jni/Android.mk" \
+            NDK_APPLICATION_MK="$GITHUB_WORKSPACE/src/main/jni/Application.mk" \
+            NDK_OUT="$RUNNER_TEMP/npc-ndk-obj" \
+            NDK_LIBS_OUT="$RUNNER_TEMP/npc-ndk-libs" \
+            -j2
+          test -s "$RUNNER_TEMP/npc-ndk-libs/arm64-v8a/libnets.so"
+          file "$RUNNER_TEMP/npc-ndk-libs/arm64-v8a/libnets.so"
