@@ -1,0 +1,55 @@
+name: SHAI ETHNIR Lite
+
+on:
+  push:
+    branches:
+      - variant/shai-ethnir-lite
+  pull_request:
+    paths:
+      - "src/main/jni/**"
+      - "src/main/java/**"
+      - "src/main/res/**"
+      - "tests/lite_profile_test.cpp"
+      - "tests/run-lite-tests.sh"
+      - "build.gradle"
+      - ".github/workflows/shai-lite-native.yml"
+
+jobs:
+  lite-profile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Lite feature allowlist
+        run: sh tests/run-lite-tests.sh
+
+  lite-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Android NDK r22
+        shell: bash
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | head -n 1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "ndk;22.0.7026061"
+      - name: Compile Lite ARM64 library
+        shell: bash
+        run: |
+          "$ANDROID_HOME/ndk/22.0.7026061/ndk-build" \
+            NDK_PROJECT_PATH="$GITHUB_WORKSPACE" \
+            APP_BUILD_SCRIPT="$GITHUB_WORKSPACE/src/main/jni/Android.mk" \
+            NDK_APPLICATION_MK="$GITHUB_WORKSPACE/src/main/jni/Application.mk" \
+            NDK_OUT="$RUNNER_TEMP/shai-lite-obj" \
+            NDK_LIBS_OUT="$RUNNER_TEMP/shai-lite-libs" \
+            -j2
+          test -s "$RUNNER_TEMP/shai-lite-libs/arm64-v8a/libnets.so"
+          file "$RUNNER_TEMP/shai-lite-libs/arm64-v8a/libnets.so"
+      - name: Upload Lite native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: shai-ethnir-lite-arm64
+          path: ${{ runner.temp }}/shai-lite-libs/arm64-v8a/libnets.so
+          retention-days: 7
+          if-no-files-found: error
