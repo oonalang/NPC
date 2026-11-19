@@ -34,6 +34,7 @@
 #include "oxorany/source/oxorany_include.h"
 
 #include "MainFeatureIncludes.h"
+#include "System/Core/LiteProfile.h"
 #include "BlueprintEquipment.h"
 #include "Trigger/NativeProfile.h"
 #include "Trigger/TriggerRuntime.h"
@@ -385,8 +386,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
-    pickup_tweaks::Publish(Config.ExtraMenu.FastPickup, Config.ExtraMenu.ExtendedPickupRange,
-                           Config.ExtraMenu.PickupRange);
+    shai_lite::Apply();
     if (menuReady)
         DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
     if(menuReady) {
@@ -677,7 +677,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     );
 
                     runtimeState.page = ImClamp(runtimeState.page, 1, 7);
-                    runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
+                    if (runtimeState.activeTab != 1 && runtimeState.activeTab != 2 && runtimeState.activeTab != 7)
+                        runtimeState.activeTab = 1;
+                    if (runtimeState.page != 1 && runtimeState.page != 2 && runtimeState.page != 7)
+                        runtimeState.page = 1;
 
                     custom::shell::DrawBrandHeader(headerMin, headerMax);
 
@@ -693,15 +696,12 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     static const char *sidebarIcons[] = {
                         ICON_FA_HOME,
                         ICON_FA_EYE,
-                        ICON_FA_CROSSHAIRS,
-                        ICON_FA_BULLSEYE,
-                        ICON_FA_MICROCHIP,
-                        ICON_FA_MAGIC,
                         ICON_FA_COG
                     };
                     static const char *sidebarLabels[] = {
-                        "Home", "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Settings"
+                        "Home", "ESP", "Settings"
                     };
+                    static constexpr int sidebarPages[] = {1, 2, 7};
                     const int sidebarButtonCount = IM_ARRAYSIZE(sidebarIcons);
                     const float sidebarButtonGap = 6.0f;
                     const float sidebarTopInset = 12.0f;
@@ -712,8 +712,8 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                     const ImVec2 sidebarButtonSize(sidebarWidth, sidebarButtonHeight);
                     for (int i = 0; i < sidebarButtonCount; ++i) {
                         const ImVec2 buttonMin(railMin.x, sidebarStartY + i * (sidebarButtonHeight + sidebarButtonGap));
-                        if (runtime_preview_menu::DrawRuntimeSidebarButton(("##runtime_sidebar_" + std::to_string(i)).c_str(), sidebarIcons[i], sidebarLabels[i], runtimeState.page == (i + 1), buttonMin, sidebarButtonSize)) {
-                            runtimeState.page = i + 1;
+                        if (runtime_preview_menu::DrawRuntimeSidebarButton(("##runtime_sidebar_" + std::to_string(i)).c_str(), sidebarIcons[i], sidebarLabels[i], runtimeState.page == sidebarPages[i], buttonMin, sidebarButtonSize)) {
+                            runtimeState.page = sidebarPages[i];
                         }
                     }
 
@@ -771,228 +771,66 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                         home_tab::Observe(homeStats,ImGui::GetTime());
                         if (runtimeState.activeTab == 1)
                         {
+                            ImGui::TextDisabled("SHAI ETHNIR | LITE EDITION");
                             home_tab::Draw(homeStats,contentRegion);
                         }
 
                         if (runtimeState.activeTab == 2)
                         {
-                            // ESP page redesigned to match the supplied reference. All existing
-                            // feature/config pointers remain unchanged; this block only changes presentation.
-                            const float espGap = 8.0f;
-                            const float espAvailW = ImMax(1.0f, contentRegion.x - espGap * 2.0f);
-                            const float espSettingsW = ImFloor(espAvailW * 0.40f);
-                            const float espOptionsW = ImFloor(espAvailW * 0.32f);
-                            const float espPreviewW = ImMax(1.0f, espAvailW - espSettingsW - espOptionsW);
+                            const bool compact = contentRegion.x < 680.0f;
+                            const float previewGap = 12.0f;
+                            const float controlsWidth = compact ? contentRegion.x : ImFloor(contentRegion.x * 0.55f);
+                            const float previewWidth = ImMax(1.0f, contentRegion.x - controlsWidth - previewGap);
+                            const ChildFrame liteControls = BeginContentChild("LITE ESP", ImVec2(controlsWidth, childHeight));
+                            ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "ESSENTIAL ESP");
+                            ImGui::TextDisabled("Only the essentials. Full features stay in the main edition.");
+                            ImGui::Separator();
+                            custom::Checkbox("ESP Box", &Config.ESPMenu.Box);
+                            custom::Checkbox("ESP Line", &Config.ESPMenu.isPlayerLine);
+                            custom::Checkbox("ESP Name", &Config.ESPMenu.Name);
+                            custom::Checkbox("ESP Health", &Config.ESPMenu.Health);
+                            custom::Checkbox("ESP Armor (BR)", &Config.ESPMenu.Armor);
+                            custom::Checkbox("ESP Distance", &Config.ESPMenu.Distance);
+                            custom::Checkbox("Enemy Count", &Config.ESPMenu.Count);
+                            ImGui::Separator();
+                            static const char *boxTypes[] = {"Fill", "Outline", "Corner"};
+                            static const char *linePositions[] = {"Top", "Mid", "Bottom"};
+                            static const char *healthPositions[] = {"Top", "Side"};
+                            custom::Combo("Box Type", (int *)&Config.ESPMenu.BoxType, boxTypes, IM_ARRAYSIZE(boxTypes), -1);
+                            custom::Combo("Line Position", (int *)&Config.ESPMenu.Target, linePositions, IM_ARRAYSIZE(linePositions), -1);
+                            custom::Combo("Health Position", (int *)&Config.ESPMenu.HealthPosition, healthPositions, IM_ARRAYSIZE(healthPositions), -1);
+                            ImGui::Separator();
+                            runtime_preview_menu::DrawRuntimeEspColorRow("Player ESP Color", Config.sColorsESPPLAYER.LinePLAYER);
+                            runtime_preview_menu::CopyLinkedEspColors(
+                                Config.sColorsESPPLAYER.LinePLAYER, Config.sColorsESPPLAYER.BoxPLAYER,
+                                Config.sColorsESPPLAYER.NamePLAYER, Config.sColorsESPPLAYER.HealthPLAYER,
+                                Config.sColorsESPPLAYER.DistancePLAYER, Config.sColorsESPPLAYER.SkeletonPLAYER
+                            );
+                            runtime_preview_menu::DrawRuntimeEspColorRow("Bot ESP Color", Config.sColorsESPBOT.LineBOT);
+                            runtime_preview_menu::CopyLinkedEspColors(
+                                Config.sColorsESPBOT.LineBOT, Config.sColorsESPBOT.BoxBOT,
+                                Config.sColorsESPBOT.NameBOT, Config.sColorsESPBOT.HealthBOT,
+                                Config.sColorsESPBOT.DistanceBOT, Config.sColorsESPBOT.SkeletonBOT
+                            );
+                            EndContentChild(liteControls);
 
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame settings = BeginContentChild("ESP SETTINGS##RUNTIME_ESP", ImVec2(espSettingsW, childHeight));
-                                custom::Checkbox("ESP Line", &Config.ESPMenu.isPlayerLine);
-                                custom::Checkbox("ESP Box", &Config.ESPMenu.Box);
-                                custom::Checkbox("ESP Skeleton", &Config.ESPMenu.Skeleton);
-                                custom::Checkbox("ESP Health", &Config.ESPMenu.Health);
-                                custom::Checkbox("ESP Armor (BR)", &Config.ESPMenu.Armor);
-                                custom::Checkbox("Visibility Check", &Config.ESPMenu.VisibilityCheck);
-                                custom::Checkbox("ESP Name", &Config.ESPMenu.Name);
-                                custom::Checkbox("ESP Distance", &Config.ESPMenu.Distance);
-                                custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
-                                custom::Checkbox("360 Alert", &Config.ESPMenu.Alert);                                               custom::Checkbox("BRClass", &Config.ESPMenu.BRClass);
-                                custom::Checkbox("Show AimLine", &Config.ESPMenu.Aimline);
-                                custom::Checkbox("ESP Items (BR)", &Config.ESPMenu.ItemESP);
-                                custom::Checkbox("ESP Placed Nades (MP)", &Config.ESPMenu.PlacedNadesESP);
-                                custom::Checkbox("Yellow Wallhack", &Config.ExtraMenu.WallHack);
-                                custom::Checkbox("Red Wallhack", &Config.ExtraMenu.RedWallhack);
-                                ImGui::Dummy(ImVec2(0.0f, 5.0f));
-                                ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "ESP COLORS");
-                                runtime_preview_menu::DrawRuntimeEspColorRow("Player ESP Color", Config.sColorsESPPLAYER.LinePLAYER);
-                                runtime_preview_menu::CopyLinkedEspColors(
-                                    Config.sColorsESPPLAYER.LinePLAYER,
-                                    Config.sColorsESPPLAYER.BoxPLAYER,
-                                    Config.sColorsESPPLAYER.NamePLAYER,
-                                    Config.sColorsESPPLAYER.HealthPLAYER,
-                                    Config.sColorsESPPLAYER.DistancePLAYER,
-                                    Config.sColorsESPPLAYER.SkeletonPLAYER
-                                );
-                                if (Config.ESPMenu.VisibilityCheck) {
-                                    ImGui::ColorEdit4("Blocked ESP Color", Config.ESPMenu.OccludedColor,
-                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
-                                }
-                                runtime_preview_menu::DrawRuntimeEspColorRow("Bot ESP Color", Config.sColorsESPBOT.LineBOT);
-                                runtime_preview_menu::CopyLinkedEspColors(
-                                    Config.sColorsESPBOT.LineBOT,
-                                    Config.sColorsESPBOT.BoxBOT,
-                                    Config.sColorsESPBOT.NameBOT,
-                                    Config.sColorsESPBOT.HealthBOT,
-                                    Config.sColorsESPBOT.DistanceBOT,
-                                    Config.sColorsESPBOT.SkeletonBOT
-                                );
-                                EndContentChild(settings);
+                            if (!compact) {
+                                ImGui::SameLine(0.0f, previewGap);
+                                runtime_preview_menu::EspPreviewState preview;
+                                preview.line = Config.ESPMenu.isPlayerLine;
+                                preview.box = Config.ESPMenu.Box;
+                                preview.health = Config.ESPMenu.Health;
+                                preview.name = Config.ESPMenu.Name;
+                                preview.distance = Config.ESPMenu.Distance;
+                                preview.count = Config.ESPMenu.Count;
+                                preview.armor = Config.ESPMenu.Armor;
+                                preview.boxType = (int)Config.ESPMenu.BoxType;
+                                preview.healthPosition = (int)Config.ESPMenu.HealthPosition;
+                                preview.lineTarget = (int)Config.ESPMenu.Target;
+                                runtime_preview_menu::DrawRuntimeEspPreviewPanel(
+                                    ImGui::GetCursorScreenPos(), ImVec2(previewWidth, childHeight), preview);
+                                ImGui::Dummy(ImVec2(previewWidth, childHeight));
                             }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, espGap);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame options = BeginContentChild("DISPLAY OPTIONS##RUNTIME_DISPLAY_OPTIONS", ImVec2(espOptionsW, childHeight));
-                                static const char *boxTypes[] = {"Fill", "Outline", "Corner", "3D"};
-                                static const char *linePositions[] = {"Top", "Mid", "Bottom"};
-                                static const char *healthPositions[] = {"Top", "Side"};
-                                static const char *espStyles[] = {"None", "3D Sphere", "Player Signal"};
-
-                                custom::Combo("Box Type", (int *)&Config.ESPMenu.BoxType, boxTypes, IM_ARRAYSIZE(boxTypes), -1);
-                                custom::Combo("Line Position", (int *)&Config.ESPMenu.Target, linePositions, IM_ARRAYSIZE(linePositions), -1);
-                                custom::Combo("Health Position", (int *)&Config.ESPMenu.HealthPosition, healthPositions, IM_ARRAYSIZE(healthPositions), -1);
-                                custom::Combo("ESP Style", (int *)&Config.ESPMenu.EspStyle, espStyles, IM_ARRAYSIZE(espStyles), -1);
-
-                                if (Config.ESPMenu.ItemESP) {
-                                    ImGui::Separator();
-                                    ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BR ITEM FILTERS");
-                                    ImGui::TextDisabled("Tracked pickups: %u", world_esp::TrackedLootCount());
-                                    const auto lootStatus = world_esp::GetLootDiagnostics();
-                                    ImGui::TextDisabled("Loot callbacks: %llu | Accepted: %llu",
-                                        static_cast<unsigned long long>(lootStatus.callbacks),
-                                        static_cast<unsigned long long>(lootStatus.accepted));
-                                    ImGui::TextDisabled("Rejected: %llu | Labels: %u | Grouped: %u",
-                                        static_cast<unsigned long long>(lootStatus.rejected),
-                                        lootStatus.drawn, lootStatus.grouped);
-                                    const int enabledCategories =
-                                        static_cast<int>(Config.ESPMenu.ItemWeapons) +
-                                        static_cast<int>(Config.ESPMenu.ItemAmmo) +
-                                        static_cast<int>(Config.ESPMenu.ItemMods) +
-                                        static_cast<int>(Config.ESPMenu.ItemEquipment) +
-                                        static_cast<int>(Config.ESPMenu.ItemMedical) +
-                                        static_cast<int>(Config.ESPMenu.ItemThrowables) +
-                                        static_cast<int>(Config.ESPMenu.ItemSkills) +
-                                        static_cast<int>(Config.ESPMenu.ItemPerks) +
-                                        static_cast<int>(Config.ESPMenu.ItemOther);
-                                    const std::string categorySummary = enabledCategories == 0 ? "None selected" :
-                                        std::to_string(enabledCategories) + " categories selected";
-                                    if (custom::BeginCombo("Loot categories", categorySummary.c_str(), 8, true)) {
-                                        custom::Selectable("Weapons", &Config.ESPMenu.ItemWeapons, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Ammo", &Config.ESPMenu.ItemAmmo, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Mods / attachments", &Config.ESPMenu.ItemMods, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Equipment", &Config.ESPMenu.ItemEquipment, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Medical items", &Config.ESPMenu.ItemMedical, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Throwables", &Config.ESPMenu.ItemThrowables, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Class upgrades", &Config.ESPMenu.ItemSkills, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Perks", &Config.ESPMenu.ItemPerks, ImGuiSelectableFlags_DontClosePopups);
-                                        custom::Selectable("Other loot", &Config.ESPMenu.ItemOther, ImGuiSelectableFlags_DontClosePopups);
-                                        if (ImGui::SmallButton("Select all##BRloot")) {
-                                            Config.ESPMenu.ItemWeapons = true;
-                                            Config.ESPMenu.ItemAmmo = true;
-                                            Config.ESPMenu.ItemMods = true;
-                                            Config.ESPMenu.ItemEquipment = true;
-                                            Config.ESPMenu.ItemMedical = true;
-                                            Config.ESPMenu.ItemThrowables = true;
-                                            Config.ESPMenu.ItemSkills = true;
-                                            Config.ESPMenu.ItemPerks = true;
-                                            Config.ESPMenu.ItemOther = true;
-                                        }
-                                        ImGui::SameLine();
-                                        if (ImGui::SmallButton("Clear##BRloot")) {
-                                            Config.ESPMenu.ItemWeapons = false;
-                                            Config.ESPMenu.ItemAmmo = false;
-                                            Config.ESPMenu.ItemMods = false;
-                                            Config.ESPMenu.ItemEquipment = false;
-                                            Config.ESPMenu.ItemMedical = false;
-                                            Config.ESPMenu.ItemThrowables = false;
-                                            Config.ESPMenu.ItemSkills = false;
-                                            Config.ESPMenu.ItemPerks = false;
-                                            Config.ESPMenu.ItemOther = false;
-                                        }
-                                        custom::EndCombo();
-                                    }
-                                    if (Config.ESPMenu.ItemWeapons) {
-                                        const char* classNames[] = {
-                                            "Assault rifles", "Sniper rifles", "SMGs", "LMGs",
-                                            "Shotguns", "Pistols", "Melee", "Throwing",
-                                            "Launchers", "Controllable", "Special", "Continuous cast", "Marksman rifles"
-                                        };
-                                        const unsigned int classMask = Config.ESPMenu.ItemWeaponClassMask;
-                                        const char* classSummary = classMask == 0 ? "All weapon classes" : "Custom classes";
-                                        if (custom::BeginCombo("Weapon classes", classSummary, 8, true)) {
-                                            if (custom::Selectable("All weapon classes", classMask == 0))
-                                                Config.ESPMenu.ItemWeaponClassMask = 0;
-                                            for (int idx = 0; idx < 13; ++idx) {
-                                                const unsigned int bit = 1u << (idx + 1);
-                                                const unsigned int currentMask = Config.ESPMenu.ItemWeaponClassMask;
-                                                const bool selected = currentMask == 0 || (currentMask & bit) != 0;
-                                                if (custom::Selectable(classNames[idx], selected, ImGuiSelectableFlags_DontClosePopups))
-                                                    Config.ESPMenu.ItemWeaponClassMask = currentMask == 0 ? bit : currentMask ^ bit;
-                                            }
-                                            custom::EndCombo();
-                                        }
-                                    }
-                                    if (Config.ESPMenu.ItemMods) {
-                                        const char* qualityNames[] = {
-                                            "White (common)", "Green (uncommon)", "Blue (rare)",
-                                            "Purple (epic)", "Gold (legendary)"
-                                        };
-                                        const unsigned int qualityMask = Config.ESPMenu.ItemModQualityMask;
-                                        const char* qualitySummary = qualityMask == 0 ? "All mod rarities" : "Custom rarities";
-                                        if (custom::BeginCombo("Mod rarity", qualitySummary, 6, true)) {
-                                            if (custom::Selectable("All mod rarities", qualityMask == 0))
-                                                Config.ESPMenu.ItemModQualityMask = 0;
-                                            for (int idx = 0; idx < 5; ++idx) {
-                                                const unsigned int bit = 1u << idx;
-                                                const unsigned int currentMask = Config.ESPMenu.ItemModQualityMask;
-                                                const bool selected = currentMask == 0 || (currentMask & bit) != 0;
-                                                if (custom::Selectable(qualityNames[idx], selected, ImGuiSelectableFlags_DontClosePopups))
-                                                    Config.ESPMenu.ItemModQualityMask = currentMask == 0 ? bit : currentMask ^ bit;
-                                            }
-                                            custom::EndCombo();
-                                        }
-                                    }
-                                    ImGui::InputText("Find item", Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch));
-                                    custom::SliderFloat("Loot range", &Config.ESPMenu.ItemDistance, 20.0f, 250.0f, "%.0fm");
-                                    custom::Checkbox("Group overlapping loot labels", &Config.ESPMenu.ItemClusterLabels);
-                                }
-                                ImGui::Separator();
-                                ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BR PICKUP");
-                                custom::Checkbox("Fast Pickup (BR)", &Config.ExtraMenu.FastPickup);
-                                custom::Checkbox("Extended Pickup Range (BR)", &Config.ExtraMenu.ExtendedPickupRange);
-                                if (Config.ExtraMenu.ExtendedPickupRange) {
-                                    custom::SliderFloat("Pickup Range", &Config.ExtraMenu.PickupRange,
-                                                        3.0f, 15.0f, "%.1fm");
-                                }
-                                ImGui::TextDisabled("Auto pickup checks: %llu | Range updates: %llu",
-                                    static_cast<unsigned long long>(pickup_tweaks::intervalCalls.load(std::memory_order_relaxed)),
-                                    static_cast<unsigned long long>(pickup_tweaks::rangeWrites.load(std::memory_order_relaxed)));
-
-                                if (Config.ESPMenu.PlacedNadesESP && ImGui::TreeNode("Placed device filters")) {
-                                    custom::Checkbox("Enemy devices only", &Config.ESPMenu.PlacedEnemyOnly);
-                                    custom::Checkbox("Trip mines", &Config.ESPMenu.PlacedTripMines);
-                                    custom::Checkbox("C4", &Config.ESPMenu.PlacedC4);
-                                    custom::Checkbox("Trip sensors / wires", &Config.ESPMenu.PlacedSensors);
-                                    custom::Checkbox("Trophy systems", &Config.ESPMenu.PlacedTrophies);
-                                    custom::Checkbox("Other deployables", &Config.ESPMenu.PlacedOther);
-                                    custom::SliderFloat("Device range", &Config.ESPMenu.PlacedDistance, 10.0f, 120.0f, "%.0fm");
-                                    ImGui::TreePop();
-                                }
-
-                                EndContentChild(options);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, espGap);
-                            runtime_preview_menu::EspPreviewState espPreview;
-                            espPreview.line = Config.ESPMenu.isPlayerLine;
-                            espPreview.box = Config.ESPMenu.Box;
-                            espPreview.skeleton = Config.ESPMenu.Skeleton;
-                            espPreview.health = Config.ESPMenu.Health;
-                            espPreview.name = Config.ESPMenu.Name;
-                            espPreview.distance = Config.ESPMenu.Distance;
-                            espPreview.count = Config.ESPMenu.Count;
-                            espPreview.alert = Config.ESPMenu.Alert;
-                            espPreview.brClass = Config.ESPMenu.BRClass;
-                            espPreview.armor = Config.ESPMenu.Armor;
-                            espPreview.boxType = (int)Config.ESPMenu.BoxType;
-                            espPreview.healthPosition = (int)Config.ESPMenu.HealthPosition;
-                            espPreview.espStyle = (int)Config.ESPMenu.EspStyle;
-                            espPreview.lineTarget = (int)Config.ESPMenu.Target;
-                            runtime_preview_menu::DrawRuntimeEspPreviewPanel(ImGui::GetCursorScreenPos(), ImVec2(espPreviewW, childHeight), espPreview);
-                            ImGui::Dummy(ImVec2(espPreviewW, childHeight));
                         }
 
                         if (runtimeState.activeTab == 3)
@@ -1048,45 +886,19 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
                         if (runtimeState.activeTab == 7)
                         {
-                            ImGuiStyle &style = ImGui::GetStyle();
-                            const float settingsColumnGap = ImClamp(contentRegion.x * 0.022f, 12.0f, 18.0f);
-                            const float settingsRowGap = 6.0f;
-                            const float leftChildWidth = ImMax(0.0f, ImFloor((contentRegion.x - settingsColumnGap) * 0.5f));
-                            const float rightChildWidth = ImMax(0.0f, contentRegion.x - settingsColumnGap - leftChildWidth);
-                            const float topChildHeight = ImMax(0.0f, ImFloor((childHeight - settingsRowGap) * 0.5f));
-                            const float bottomChildHeight = ImMax(0.0f, childHeight - settingsRowGap - topChildHeight);
-                            const float startX = ImGui::GetCursorPosX();
-
-                            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, settingsRowGap));
-
-                            ImGui::SetCursorPosX(startX);
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame licenseChild = BeginContentChild("LICENSE INFO", ImVec2(leftChildWidth, topChildHeight));
-                                settings_tab::RenderLicenseCard();
-                                EndContentChild(licenseChild);
-
-                                const ChildFrame logoChild = BeginContentChild("LOGO SETTINGS", ImVec2(leftChildWidth, bottomChildHeight));
-                                settings_tab::RenderLogoCard();
-                                EndContentChild(logoChild);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, settingsColumnGap);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame configChild = BeginContentChild("CONFIG MANAGEMENT", ImVec2(rightChildWidth, topChildHeight));
+                            const bool compact = contentRegion.x < 680.0f;
+                            const float gap = 12.0f;
+                            const float leftWidth = compact ? contentRegion.x : ImFloor((contentRegion.x - gap) * 0.5f);
+                            const ChildFrame licenseChild = BeginContentChild("LITE LICENSE", ImVec2(leftWidth, childHeight));
+                            settings_tab::RenderLicenseCard();
+                            EndContentChild(licenseChild);
+                            if (!compact) {
+                                ImGui::SameLine(0.0f, gap);
+                                const float rightWidth = ImMax(1.0f, contentRegion.x - leftWidth - gap);
+                                const ChildFrame configChild = BeginContentChild("LITE CONFIG", ImVec2(rightWidth, childHeight));
                                 settings_tab::RenderConfigCard();
                                 EndContentChild(configChild);
-
-                                const ChildFrame enhancementChild = BeginContentChild("ENHANCEMENT", ImVec2(rightChildWidth, bottomChildHeight));
-                                settings_tab::RenderEnhancementCard();
-                                EndContentChild(enhancementChild);
                             }
-                            custom::EndGroup();
-
-                            ImGui::PopStyleVar();
                         }
 
                         ImGui::PopStyleVar();
@@ -1277,18 +1089,7 @@ void Init_SwapHook()
 }
 
 static void RequestLicensedFeatures() {
-    static std::atomic<bool> started{false};
-    if(!license::Allows(license::Capability::Features)||started.exchange(true)) return;
-    std::thread([] {
-        DobbyHook((void*)getAbsoluteAddress("libunity.so",0xD5319D4),
-            reinterpret_cast<void*>(&license::Guard<WeaponFireComponent_Instant_CreateBulletLine,&oWeaponFireComponent_Instant_CreateBulletLine>::Invoke),
-            reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletLine));
-        DobbyHook((void*)getAbsoluteAddress("libunity.so",0xD53DA64),
-            reinterpret_cast<void*>(&license::Guard<WeaponFireComponent_Instant_CreateBulletProjectile,&oWeaponFireComponent_Instant_CreateBulletProjectile>::Invoke),
-            reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletProjectile));
-        InstallBRClassEspConfigHook();InitializeAllHooks();BlueprintEquipment::Install();
-        Init_Thread2();RequestTriggerInitialization();
-    }).detach();
+    if (!license::Allows(license::Capability::Features)) return;
 }
 
 void Init_Thread()
@@ -1343,7 +1144,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
     VM = vm;
     ZEL_SetVM(vm);
     std::thread(Init_Thread).detach();
-    std::thread(Init_Thread2).detach();
-    std::thread(Skins_Thread).detach();
+
     return JNI_VERSION_1_6;
 }
