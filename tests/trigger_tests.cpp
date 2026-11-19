@@ -836,6 +836,44 @@ void CancellationAndSettings() {
             VisibleTraceDistance(0, std::numeric_limits<float>::infinity()) == 0,
             "trace range follows valid camera clipping planes");
 }
+
+void LongRangeCoveredAcquisition() {
+    // The passthrough depth budget is measured past the first obstruction, so
+    // cover far downrange costs almost no traversal depth and a target behind
+    // it stays reachable.
+    Require(WithinPassthroughDepth(40.0f, 40.0f),
+            "a covered surface 40 m out costs no traversal depth");
+    Require(WithinPassthroughDepth(40.4f, 40.0f),
+            "a thin surface 40 m out keeps the target behind it reachable");
+    Require(WithinPassthroughDepth(45.5f, 40.0f),
+            "the depth budget covers a several metre deep cover stack");
+    Require(!WithinPassthroughDepth(47.0f, 40.0f),
+            "a cover stack deeper than the budget stops restarting");
+    Require(!WithinPassthroughDepth(40.0f, 41.0f),
+            "a surface before the first obstruction is never a restart base");
+    Require(!WithinPassthroughDepth(std::numeric_limits<float>::infinity(), 40.0f),
+            "a non finite surface distance never restarts");
+    Require(MaxPassthroughRestarts == 2,
+            "the restart budget stays two passes");
+
+    // End to end: the same distant covered target is acquired, and world
+    // occlusion still rejects it when cover is reported.
+    Queries queries;
+    queries.body = BodyHit{true, true, true, true, true, 11, {0, 0, 41}, 41};
+    queries.body.passthroughAdvance = 40.1f;
+    const ViewRay far{{0, 0, 0}, {0, 0, 1}, 500};
+    Require(EvaluateTarget(queries, Ready().identity, far) == TargetResult::Eligible,
+            "a covered target beyond 40 m is still acquired");
+    queries.world = Occlusion::Blocked;
+    Require(EvaluateTarget(queries, Ready().identity, far) == TargetResult::WorldBlocked,
+            "world cover still rejects the distant target");
+    queries.world = Occlusion::Clear;
+    queries.body.passthroughAdvance = 0.0f;
+    queries.body.distance = 40.0f;
+    queries.body.point = Point3{0, 0, 40};
+    Require(EvaluateTarget(queries, Ready().identity, far) == TargetResult::Eligible,
+            "an unobstructed target at 40 m is still acquired");
+}
 }
 
 int main() {
@@ -859,5 +897,6 @@ int main() {
     TargetValidation();
     InputQueryBudget();
     CancellationAndSettings();
+    LongRangeCoveredAcquisition();
     std::cout << "Passed " << checks << " trigger behavior checks\n";
 }

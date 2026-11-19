@@ -203,6 +203,16 @@ void ScopeGating() {
     matchGame=nullptr;stock();matchGame=Match;
     Put(f.regions,0x18,129);stock();Put(f.regions,0x18,1);
     assert(f.Shot());
+    // The lookup cache is re-validated on every use: when the cached slot no
+    // longer holds the target the hook rescans instead of reusing the answer.
+    Put(f.enemies,0x18,2);Put(f.enemyItems,0x18,std::uint64_t{2});
+    Put(f.enemyItems,0x20,f.other.data());Put(f.enemyItems,0x28,f.target.data());
+    assert(f.Shot() && f.weaponCalls==2 && Near(f.scales[1],1.21f));
+    Put(f.enemyItems,0x20,f.other.data());Put(f.enemyItems,0x28,f.other.data());
+    assert(!f.Shot() && f.weaponCalls==1);
+    Put(f.enemies,0x18,1);Put(f.enemyItems,0x18,std::uint64_t{1});
+    Put(f.enemyItems,0x20,f.target.data());
+    assert(f.Shot() && f.weaponCalls==2 && Near(f.scales[1],1.21f));
     f.throwMath=true;
     try {f.Shot();assert(false);} catch(int value) {assert(value==7);}
     assert(!currentTrace && primitiveScale==1.f);

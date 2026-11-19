@@ -133,9 +133,9 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     using BroadTrace = bool(*)(Object, Point3, Point3, float, int, Object, int, Method);
     Point3 traceOrigin = ray.origin;
     float advanced = 0.0f;
+    float firstSurface = -1.0f;
     Address collider = 0;
-    constexpr int maxPassthroughSurfaces = 8;
-    for (int i = 0; i <= maxPassthroughSurfaces; ++i) {
+    for (int restarts = 0; ; ++restarts) {
         const float remaining = ray.maxDistance - advanced;
         if (remaining <= 0.0f) return true;
         const bool broadHit = Bind<BroadTrace>(base_, 0x66F17EC)(
@@ -145,11 +145,14 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
         collider = Read<Address>(reinterpret_cast<Address>(impact.object), 0x18);
         if (!collider) return false;
         if (!BulletIgnorable(base_, impact)) break;
-        if (i == maxPassthroughSurfaces) return true;
+        if (restarts >= MaxPassthroughRestarts) return true;
         const float impactDistance = Read<float>(reinterpret_cast<Address>(impact.object), 0x5C);
         if (!std::isfinite(impactDistance) || impactDistance < 0.0f ||
             impactDistance >= remaining) return false;
-        const float step = impactDistance + 0.12f;
+        const float surfaceDistance = advanced + impactDistance;
+        if (firstSurface < 0.0f) firstSurface = surfaceDistance;
+        if (!WithinPassthroughDepth(surfaceDistance, firstSurface)) return true;
+        const float step = impactDistance + PassthroughStep;
         if (step >= remaining) return true;
         advanced += step;
         traceOrigin = AdvancePoint(ray, advanced);

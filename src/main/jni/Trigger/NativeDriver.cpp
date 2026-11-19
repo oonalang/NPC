@@ -72,6 +72,10 @@ struct LocalState {
     ContextIdentity verifiedIdentity{};
     std::uint64_t verifiedUpdate = 0;
     bool verifiedCached = false;
+    TargetResult occlusionResult = TargetResult::InvalidRay;
+    std::uint64_t occlusionGeneration = 0;
+    std::uint64_t occlusionMillis = 0;
+    bool occlusionCached = false;
     bool stopAfterUpdate = false;
     bool syntheticInput = false;
     bool releaseSequence = false;
@@ -160,6 +164,12 @@ void Merge(void* param, const Intent& intent) noexcept {
 }
 
 constexpr float TargetTraceDistance = 500.0f;
+
+// The world and smoke queries only matter together with the body the ray is
+// already resting on, so a body that was cleared moments ago keeps its verdict
+// for a few frames. Blocked verdicts are never cached, so stepping out of
+// cover is still picked up on the next frame.
+constexpr std::uint64_t OcclusionRevalidateMillis = 33;
 
 bool PrepareViewRay(bool needed, bool sampleViewport, ViewRay& ray) noexcept {
     float centerX = .5f, centerY = .5f;
@@ -330,7 +340,7 @@ void DecidePreparedInput(void* owner, void* param) {
         local.verifiedTarget == TargetResult::Eligible &&
         local.verifiedIdentity == frame.identity &&
         local.controller.HasOwnedInput() &&
-        frame.updateId == local.verifiedUpdate + 1;
+        frame.updateId > local.verifiedUpdate;
     const bool rayReady = reuseTarget ||
         PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
     frame.contextValid = frame.contextValid && (!needTarget || rayReady);
@@ -341,7 +351,27 @@ void DecidePreparedInput(void* owner, void* param) {
         if (reuseTarget) {
             target = local.verifiedTarget;
         } else {
-            target = EvaluateTarget(queries,frame.identity,ray);
+            BodyHit body{};
+            TargetResult bodyFailure = TargetResult::InvalidRay;
+            if (!EvaluateBody(queries,frame.identity,ray,body,bodyFailure)) {
+                target = bodyFailure;
+                local.occlusionCached = false;
+            } else {
+                const bool cleared = local.occlusionCached &&
+                    local.occlusionResult == TargetResult::Eligible &&
+                    local.occlusionGeneration == body.targetGeneration &&
+                    frame.nowMillis >= local.occlusionMillis &&
+                    frame.nowMillis - local.occlusionMillis < OcclusionRevalidateMillis;
+                if (cleared) {
+                    target = TargetResult::Eligible;
+                } else {
+                    target = EvaluateOcclusion(queries,frame.identity,ray,body);
+                    local.occlusionGeneration = body.targetGeneration;
+                    local.occlusionMillis = frame.nowMillis;
+                    local.occlusionResult = target;
+                    local.occlusionCached = true;
+                }
+            }
             local.verifiedTarget = target;
             local.verifiedIdentity = frame.identity;
             local.verifiedUpdate = frame.updateId;
@@ -350,6 +380,7 @@ void DecidePreparedInput(void* owner, void* param) {
         frame.targetValid = target == TargetResult::Eligible;
     } else {
         local.verifiedCached = false;
+        local.occlusionCached = false;
     }
     const auto intent = local.controller.Step(settings,frame);
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,
