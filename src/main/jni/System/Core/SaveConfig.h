@@ -11,6 +11,7 @@
 #include "../../BlueprintTierFilter.h"
 #include "../../Trigger/TriggerDotStyle.h"
 #include "../Hooks/Hitbox.h"
+#include "../Hooks/PickupTweaks.h"
 
 // Externals defined in Main.cpp
 extern float menu[4];
@@ -67,6 +68,8 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Switch"] = Config.ExtraMenu.Switch;
     config["ExtraMenu"]["KineticArmor"] = Config.ExtraMenu.Kinetic;
     config["ExtraMenu"]["Blueprints"] = Config.ExtraMenu.Blueprints;
+    config["ExtraMenu"]["FastPickup"] = Config.ExtraMenu.FastPickup;
+    config["ExtraMenu"]["PickupRange"] = Config.ExtraMenu.PickupRange;
     config["ExtraMenu"]["BlueprintTiers"] = BlueprintTierFilter::GetMask();
     auto& dotStyle = TriggerDotStyle::appearance;
     TriggerDotStyle::Normalize(dotStyle);
@@ -152,6 +155,9 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Scope = config["ExtraMenu"]["Scope"].get<bool>();
             Config.ExtraMenu.Switch = config["ExtraMenu"]["Switch"].get<bool>();
             Config.ExtraMenu.Kinetic = config["ExtraMenu"].value("Kinetic",config["ExtraMenu"].value("KineticArmor",false));
+            Config.ExtraMenu.FastPickup = config["ExtraMenu"].value("FastPickup", false);
+            Config.ExtraMenu.PickupRange = config["ExtraMenu"].value("PickupRange", 0.0f);
+            pickup_tweaks::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange>0.f,Config.ExtraMenu.PickupRange);
             if (config["ExtraMenu"].contains("Blueprints"))
                 Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();
             if (config["ExtraMenu"].contains("BlueprintTiers"))

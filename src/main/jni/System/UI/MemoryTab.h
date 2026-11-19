@@ -9,15 +9,16 @@
 #include "../../BlueprintTierFilter.h"
 #include "../Hooks/SlideFatigue.h"
 #include "../Hooks/Hitbox.h"
+#include "../Hooks/PickupTweaks.h"
 #include "../Audio/UiSounds.h"
 #include <algorithm>
 
 extern float SlideRange,SnowBsize,speedHackMultiplier,jumpHeightMultiplier,MpBsize;
 
 namespace memory_tab {
-enum class Category { Movement,Weapons,Protection,Blueprints };
+enum class Category { Movement,Weapons,Protection,Blueprints,Worlds };
 inline Category selected=Category::Movement;
-inline constexpr const char* labels[]{"Movement","Weapon","Protection & view","Blueprints"};
+inline constexpr const char* labels[]{"Movement","Weapon","Protection & view","Blueprints","Worlds"};
 inline bool CategoryButton(int index,ImVec2 size) {
     ImGui::PushID(index);
     const auto lo=ImGui::GetCursorScreenPos();
@@ -82,6 +83,11 @@ inline void Protection() {
     custom::Checkbox("No Smoke",&Config.ExtraMenu.NoSmoke);
     custom::Checkbox("Clear Terrain",&Config.ExtraMenu.ClearTerrain);
 }
+inline void World() {
+    custom::Checkbox("Fast Pickup",&Config.ExtraMenu.FastPickup);
+    custom::SliderFloat("Pickup Range",&Config.ExtraMenu.PickupRange,0.f,15.f,"%.1f");
+    pickup_tweaks::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange>0.f,Config.ExtraMenu.PickupRange);
+}
 inline void Camera() {
     custom::Checkbox("Camera POV",&Config.ExtraMenu.CameraPov);
     if(Config.ExtraMenu.CameraPov) custom::SliderFloat("Camera POV Size",&Config.ExtraMenu.CameraPovSize,0.f,150.f,"%.0f");
@@ -125,21 +131,23 @@ inline void Draw(ImVec2 available) {
     if(available.x<=0||available.y<=0) return;
     ImGui::PushID("MemorySections");
     const float scale=ImClamp(c::scale,.8f,1.15f),gap=8.f*scale;
+    constexpr int categoryCount=IM_ARRAYSIZE(labels);
     const int columns=available.x>=520.f*scale?4:2;
     const float buttonWidth=(available.x-(columns-1)*gap)/columns;
     const float buttonHeight=ImMax(34.f*scale,ImGui::GetTextLineHeight()+12.f*scale);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,{gap,gap});
-    for(int i=0;i<4;++i) {
+    for(int i=0;i<categoryCount;++i) {
         if(i%columns) ImGui::SameLine(0,gap);
         CategoryButton(i,{buttonWidth,buttonHeight});
     }
     ImGui::PopStyleVar();
-    const float navHeight=(4/columns)*buttonHeight+(4/columns)*gap;
+    const int categoryRows=(categoryCount+columns-1)/columns;
+    const float navHeight=categoryRows*buttonHeight+categoryRows*gap;
     const float bodyHeight=ImMax(32.f,available.y-navHeight);
     const float minimumPanel=ImGui::CalcTextSize("No Sprint Fire Delay").x+68.f*scale+ImGui::GetStyle().WindowPadding.x*2.f;
-    const bool wide=available.x>=minimumPanel*2.f+gap&&selected!=Category::Blueprints;
+    const bool wide=available.x>=minimumPanel*2.f+gap&&selected!=Category::Blueprints&&selected!=Category::Worlds;
     const float panelWidth=wide?(available.x-gap)*.5f:available.x;
-    const char* first=selected==Category::Movement?"MOVEMENT##memory_movement":selected==Category::Weapons?"WEAPON CONTROL##memory_weapons":selected==Category::Protection?"PROTECTION & VISIBILITY##memory_protection":"BLUEPRINTS##memory_blueprints";
+    const char* first=selected==Category::Movement?"MOVEMENT##memory_movement":selected==Category::Weapons?"WEAPON CONTROL##memory_weapons":selected==Category::Protection?"PROTECTION & VISIBILITY##memory_protection":selected==Category::Blueprints?"BLUEPRINTS##memory_blueprints":"WORLD##memory_world";
     ImGui::BeginGroup();
     custom::Child(first,{panelWidth,bodyHeight},true,ImGuiWindowFlags_NoScrollbar);
     switch(selected) {
@@ -147,6 +155,7 @@ inline void Draw(ImVec2 available) {
         case Category::Weapons: WeaponControl();if(!wide) {Section("WEAPON");WeaponHandling();}break;
         case Category::Protection: Protection();if(!wide) {Section("CAMERA");Camera();}break;
         case Category::Blueprints: Blueprints();break;
+        case Category::Worlds: World();break;
     }
     custom::EndChild();ImGui::EndGroup();
     if(wide) {

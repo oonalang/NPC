@@ -220,6 +220,8 @@ sColorsESPBOT sColorsESPBOT{0};
         bool Parachute;
 		bool WallHack;
 		bool Kinetic;
+        bool FastPickup;
+        float PickupRange = 0.f;
         bool CamoTest;
         int CamoTestMode;
     };
