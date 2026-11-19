@@ -75,6 +75,7 @@ struct Lookup {
     bool collidersReady = false;
 };
 thread_local Lookup lookup;
+thread_local bool fieldScaling = false;
 
 bool EnemyCached(void* instance, void* target) noexcept {
     if (!localPawn || !matchGame) return false;
@@ -121,6 +122,52 @@ bool CollidersCached(void* target, TraceContext& context) noexcept {
     return true;
 }
 
+// The hitbox a shot tests against carries its own size at +0x14. This inflates
+// that field on every hitbox of the traced pawn for the duration of one trace
+// and writes the exact previous values back immediately afterwards, so the
+// pawn is restored before the next shot or frame whatever the trace returns or
+// throws. Scaling the stored fields is what the reference mod does: the size
+// applies to the first trace and to every region, instead of a second attempt
+// that only runs after a miss.
+struct HitboxField {
+    void* hitbox = nullptr;
+    float size = 0.f;
+};
+class HitboxFields {
+    std::array<HitboxField, maximumColliders> fields_{};
+    std::size_t count_ = 0;
+public:
+    HitboxFields() = default;
+    HitboxFields(const HitboxFields&) = delete;
+    HitboxFields& operator=(const HitboxFields&) = delete;
+    ~HitboxFields() { Restore(); }
+    bool Apply(void* target, float scale) noexcept {
+        Restore();
+        if (!target) return false;
+        std::array<const void*, maximumColliders> list{};
+        std::size_t count = 0;
+        if (!CopyList(Field<void*>(target, 0xa8), list.data(), list.size(), count)) return false;
+        for (std::size_t i = 0; i < count; ++i) {
+            auto* hitbox = const_cast<void*>(list[i]);
+            if (!hitbox) continue;
+            const float size = Field<float>(hitbox, 0x14);
+            const float expanded = size * scale;
+            if (!std::isfinite(size) || size <= 0.f || !std::isfinite(expanded)) continue;
+            std::memcpy(static_cast<unsigned char*>(hitbox) + 0x14, &expanded, sizeof(expanded));
+            fields_[count_++] = {hitbox, size};
+        }
+        if (count_ > 0) fieldScaling = true;
+        return count_ > 0;
+    }
+    void Restore() noexcept {
+        for (std::size_t i = 0; i < count_; ++i)
+            std::memcpy(static_cast<unsigned char*>(fields_[i].hitbox) + 0x14,
+                        &fields_[i].size, sizeof(float));
+        count_ = 0;
+        fieldScaling = false;
+    }
+};
+
 bool Weapon(WeaponTrace original, void* instance, int type, void* target, void* collider,
             Point start, Point direction, void* impact, Metadata info) {
     if (!original) return false;
@@ -129,6 +176,11 @@ bool Weapon(WeaponTrace original, void* instance, int type, void* target, void* 
     if (!license::Allows(license::Capability::Features) || currentTrace || !available.load(std::memory_order_acquire) || !options.enabled ||
         options.scale <= 1.f || !instance || !target || !impact || type != 1)
         return invoke();
+    // A trace that is already running under inflated fields must not inflate
+    // them again; it simply runs.
+    if (fieldScaling) return invoke();
+    HitboxFields fields;
+    if (fields.Apply(target, options.scale)) return invoke();
     if (!EnemyCached(instance, target)) return invoke();
     TraceContext context;
     context.scale = options.scale;

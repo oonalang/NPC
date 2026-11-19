@@ -33,6 +33,7 @@ struct Fixture {
     bool parentAlive = true, nested = false, throwMath = false, sphere = false, obb = false;
     float fraction = 0.f;
     int weaponCalls = 0, avatarCalls = 0, mathCalls = 0;
+    float fieldDuringShot = 0.f, otherDuringShot = 0.f;
     int type = 1;
     void* queryTarget = target.data();
     void* selected = collider.data();
@@ -136,6 +137,8 @@ bool AvatarObbOriginal(void* receiver,void* collider,Point start,Point end,HitRe
 bool WeaponOriginal(void* receiver, int type, void* target, void* collider,
                     Point start, Point direction, void* impact, const void* info) {
     auto& f=*active;++f.weaponCalls;
+    f.fieldDuringShot=Field<float>(collider,0x14);
+    f.otherDuringShot=Field<float>(f.unselected.data(),0x14);
     assert(receiver==f.fire.data() && target==f.queryTarget && collider==f.selected && type==f.type);
     assert(impact==&f.hit && info==f.weaponInfo && Same(start,f.start) && Same(direction,f.direction));
     if(f.nested) {
@@ -296,6 +299,30 @@ void PrimitiveReentry() {
     }
     assert(primitiveScale==1.f);
 }
+void HitboxFieldSizing() {
+    Fixture f;Bind(f);
+    // The stored size of every hitbox is inflated for the single trace and put
+    // back afterwards, without the enemy-list scan.
+    Put(f.collider,0x14,0.5f);Put(f.unselected,0x14,0.25f);
+    Put(f.regions,0x18,2);Put(f.regionItems,0x18,std::uint64_t{2});
+    Put(f.regionItems,0x20,f.collider.data());Put(f.regionItems,0x28,f.unselected.data());
+    Publish(true,2.f);f.start.x=3.1f;
+    assert(f.Shot() && f.weaponCalls==1 && Near(f.fieldDuringShot,1.f) && Near(f.otherDuringShot,.5f));
+    assert(Near(Field<float>(f.collider.data(),0x14),.5f));
+    assert(Near(Field<float>(f.unselected.data(),0x14),.25f));
+    // A shot that hits nothing still restores every field it touched.
+    f.start.x=5.f;
+    assert(!f.Shot() && Near(Field<float>(f.collider.data(),0x14),.5f));
+    assert(Near(Field<float>(f.unselected.data(),0x14),.25f));
+    // A re-entrant shot runs under the same inflated fields, never squared.
+    f.start.x=3.1f;f.nested=true;
+    assert(f.Shot() && f.weaponCalls==2 && Near(f.fieldDuringShot,1.f));
+    assert(Near(Field<float>(f.collider.data(),0x14),.5f));
+    // Without a sized hitbox the primitive retry still applies the slider.
+    Put(f.collider,0x14,0.f);Put(f.unselected,0x14,0.f);f.start.x=3.22f;
+    assert(f.Shot() && f.weaponCalls==2 && f.mathCalls==2 && Near(f.scales.back(),2.f));
+    assert(Near(Field<float>(f.collider.data(),0x14),0.f));
+}
 }
 
 extern "C" int dl_iterate_phdr(int(*)(dl_phdr_info*,std::size_t,void*),void*) {return 0;}
@@ -306,6 +333,6 @@ void NativeDriverPending() noexcept {}
 }
 
 int main() {
-    NearMissAndPriority();InvalidParentsAndUnselectedRegions();ScopeGating();PrimitiveReentry();SphereSizingAndHeadGroups();ObbSizingAndHeadGroups();NestedSphereIsNotScaledTwice();
-    std::puts("Hitbox native callbacks: capsule/OBB/sphere slider scaling, head-group preservation, nested end-sphere scaling, 1.21x side shots, direct-hit priority, invalid parents, unchanged rays/results/metadata, ownership gating and nested scope restoration passed (stubbed game methods)");
+    NearMissAndPriority();InvalidParentsAndUnselectedRegions();ScopeGating();PrimitiveReentry();SphereSizingAndHeadGroups();ObbSizingAndHeadGroups();NestedSphereIsNotScaledTwice();HitboxFieldSizing();
+    std::puts("Hitbox native callbacks: capsule/OBB/sphere slider scaling, head-group preservation, nested end-sphere scaling, 1.21x side shots, direct-hit priority, invalid parents, unchanged rays/results/metadata, ownership gating, per-shot stored hitbox sizing with restore, and nested scope restoration passed (stubbed game methods)");
 }
