@@ -141,13 +141,20 @@ inline void DrawThrowableAlert(ImDrawList* draw, int width, int height,
             ++it;
         }
     }
+    const auto squaredDistance = [&](const ThrowInfo& info) {
+        const float dx = info.pos.x - localPos.x;
+        const float dy = info.pos.y - localPos.y;
+        const float dz = info.pos.z - localPos.z;
+        return dx * dx + dy * dy + dz * dz;
+    };
     std::sort(nearby.begin(), nearby.end(), [&](const ThrowInfo& a, const ThrowInfo& b) {
-        return Vector3::Distance(localPos, a.pos) < Vector3::Distance(localPos, b.pos);
+        return squaredDistance(a) < squaredDistance(b);
     });
     if (nearby.size() > ThrowAlertCfg::MaxDrawn)
         nearby.resize(ThrowAlertCfg::MaxDrawn);
 
     float closestDanger = ThrowAlertCfg::WarnDist + 1.0f;
+    float closestUrgent = ThrowAlertCfg::WarnDist + 1.0f;
     int urgentCount = 0;
     int warningCount = 0;
     for (const ThrowInfo& info : nearby) {
@@ -155,7 +162,10 @@ inline void DrawThrowableAlert(ImDrawList* draw, int width, int height,
         const bool urgent = distance <= std::max(12.0f, info.radius + 4.0f);
         if (distance <= ThrowAlertCfg::WarnDist) {
             ++warningCount;
-            if (urgent) ++urgentCount;
+            if (urgent) {
+                ++urgentCount;
+                closestUrgent = std::min(closestUrgent, distance);
+            }
             closestDanger = std::min(closestDanger, distance);
         }
         for (size_t i = 1; i < info.path.size(); ++i) {
@@ -179,7 +189,7 @@ inline void DrawThrowableAlert(ImDrawList* draw, int width, int height,
         char alert[100];
         std::snprintf(alert, sizeof(alert), "%s | %.0fm | %d nearby",
                       urgentCount ? "DANGER: THROWABLE" : "THROWABLE NEARBY",
-                      closestDanger, warningCount);
+                      urgentCount ? closestUrgent : closestDanger, warningCount);
         const ImU32 color = urgentCount ? IM_COL32(255, 94, 94, 255) : IM_COL32(255, 221, 97, 255);
         DrawTextWithBorder1(draw, alert, {width * 0.5f - 120.0f, 125.0f},
                             color, IM_COL32(0, 0, 0, 255), 19.0f);
