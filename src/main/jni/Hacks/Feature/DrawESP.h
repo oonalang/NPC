@@ -48,6 +48,7 @@ void DrawTextWithBorder1(ImDrawList *draw, const std::string &text, const Vector
 #include "System/Hooks/ThrowableAlert.h"
 #include "System/Hooks/WorldESP.h"
 #include "System/Hooks/ArmorEsp.h"
+#include "System/Hooks/VisibilityEsp.h"
 #include "BRClassEsp.h"
 #include "NoGravity.h"
 
@@ -715,6 +716,7 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         pLocalPawn_rootPos = get_LocalPawn->get_LastPawnPos();
     }
     
+    visibility_esp::BeginFrame();
     DrawThrowableAlert(draw, sWidth, sHeight, pLocalPawn_rootPos);
     world_esp::Draw(draw, sWidth, sHeight, pLocalPawn_rootPos, get_LocalPawn);
 
@@ -765,6 +767,12 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         }
 
         Vector3 pEnemyPawn_headPos = pawn->get_HeadPosition();
+        if (Config.ESPMenu.VisibilityCheck && visibility_esp::IsBlocked(pawn, pEnemyPawn_headPos)) {
+            const ImU32 hidden = ImGui::ColorConvertFloat4ToU32(ImVec4(
+                Config.ESPMenu.OccludedColor[0], Config.ESPMenu.OccludedColor[1],
+                Config.ESPMenu.OccludedColor[2], Config.ESPMenu.OccludedColor[3]));
+            lineColor = boxColor = skeletonColor = hidden;
+        }
         Vector3 pEnemyPawn_rootPos = pawn->get_LastPawnPos();
 
         Vector3 HeadSc = Camera::get_main()->WorldToScreenPoint(pEnemyPawn_headPos);
