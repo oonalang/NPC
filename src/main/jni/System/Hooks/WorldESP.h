@@ -10,6 +10,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+#include "LootLabelClusters.h"
 
 //-- ESP Items (BR) + ESP Placed Nades (MP)
 // RVAs and field offsets verified against the 1.6.59 dump.
@@ -69,6 +70,11 @@ inline std::unordered_map<uintptr_t, Loot> lootEntries;
 inline std::unordered_map<uintptr_t, Device> deviceEntries;
 inline std::atomic<bool> wantLoot{false};
 inline std::atomic<bool> wantDevices{false};
+inline std::atomic<uint64_t> lootCallbacks{0};
+inline std::atomic<uint64_t> lootAccepted{0};
+inline std::atomic<uint64_t> lootRejected{0};
+inline std::atomic<unsigned> lootLabelsDrawn{0};
+inline std::atomic<unsigned> lootLabelsGrouped{0};
 
 inline Tick origLootTick = nullptr;
 inline Tick origBRPickupTick = nullptr;
@@ -235,13 +241,21 @@ inline bool ItemEnabled(const Loot &item) {
 }
 
 inline void TrackLoot(void *instance) {
-    if (!wantLoot.load(std::memory_order_relaxed) || !Tools::IsPtrValid(instance)) return;
+    if (!wantLoot.load(std::memory_order_relaxed)) return;
+    lootCallbacks.fetch_add(1, std::memory_order_relaxed);
+    if (!Tools::IsPtrValid(instance)) {
+        lootRejected.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
     const uintptr_t address = reinterpret_cast<uintptr_t>(instance);
     const char *instanceName = ClassName(instance);
     const bool normalPickup = instanceName && std::strstr(instanceName, "DroppedPickUpNormal");
     void *data = *reinterpret_cast<void **>(address + LootField::ItemData);
     const bool hasData = Tools::IsPtrValid(data);
-    if (!hasData && !normalPickup) return;
+    if (!hasData && !normalPickup) {
+        lootRejected.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
 
     Loot entry;
     bool isInBox = false;
@@ -265,7 +279,10 @@ inline void TrackLoot(void *instance) {
     if (!ValidWorld(entry.pos) || entry.pos == Vector3::zero())
         std::memcpy(&entry.pos, reinterpret_cast<const void *>(address + LootField::ServerPosition), sizeof(Vector3));
     if (isInBox || entry.kind <= 0 || entry.kind > 21 || entry.item <= 0 ||
-        !ValidWorld(entry.pos) || entry.pos == Vector3::zero()) return;
+        !ValidWorld(entry.pos) || entry.pos == Vector3::zero()) {
+        lootRejected.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
 
     if (normalPickup) {
         void *config = *reinterpret_cast<void **>(address + LootField::Config);
@@ -295,8 +312,12 @@ inline void TrackLoot(void *instance) {
     }
     entry.seen = Clock::now();
     std::lock_guard<std::mutex> lock(mutex);
-    if (lootEntries.size() >= 400 && lootEntries.find(address) == lootEntries.end()) return;
+    if (lootEntries.size() >= 400 && lootEntries.find(address) == lootEntries.end()) {
+        lootRejected.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
     lootEntries[address] = entry;
+    lootAccepted.fetch_add(1, std::memory_order_relaxed);
 }
 
 inline void TrackPlaced(void *instance) {
@@ -386,7 +407,27 @@ inline unsigned int TrackedLootCount() {
     return static_cast<unsigned int>(lootEntries.size());
 }
 
+struct LootDiagnostics {
+    uint64_t callbacks;
+    uint64_t accepted;
+    uint64_t rejected;
+    unsigned drawn;
+    unsigned grouped;
+};
+
+inline LootDiagnostics GetLootDiagnostics() {
+    return {
+        lootCallbacks.load(std::memory_order_relaxed),
+        lootAccepted.load(std::memory_order_relaxed),
+        lootRejected.load(std::memory_order_relaxed),
+        lootLabelsDrawn.load(std::memory_order_relaxed),
+        lootLabelsGrouped.load(std::memory_order_relaxed)
+    };
+}
+
 inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPosition, Pawn *localPawn) {
+    lootLabelsDrawn.store(0, std::memory_order_relaxed);
+    lootLabelsGrouped.store(0, std::memory_order_relaxed);
     wantLoot.store(Config.ESPMenu.ItemESP, std::memory_order_relaxed);
     wantDevices.store(Config.ESPMenu.PlacedNadesESP, std::memory_order_relaxed);
     if ((!Config.ESPMenu.ItemESP && !Config.ESPMenu.PlacedNadesESP) ||
@@ -423,6 +464,16 @@ inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPo
     const float maxLoot = std::clamp(Config.ESPMenu.ItemDistance, 20.0f, 250.0f);
     const float maxDevices = std::clamp(Config.ESPMenu.PlacedDistance, 10.0f, 120.0f);
 
+    struct LootLabel {
+        ImVec2 screen;
+        ImU32 color;
+        char text[128]{};
+    };
+    std::vector<LootLabel> labels;
+    std::vector<loot_labels::Group> groups;
+    labels.reserve(nearbyLoot.size());
+    groups.reserve(nearbyLoot.size());
+
     for (const auto &item : nearbyLoot) {
         const float distance = Vector3::Distance(localPosition, item.pos);
         if (!std::isfinite(distance) || distance > maxLoot) continue;
@@ -432,15 +483,34 @@ inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPo
             item.kind == 2 || item.kind == 9 ? IM_COL32(100, 220, 255, 235) :
             item.kind == 4 ? IM_COL32(189, 144, 255, 235) :
             item.kind == 3 ? IM_COL32(150, 255, 170, 235) : IM_COL32(222, 233, 243, 235);
-        char label[128];
+        LootLabel label{};
+        label.screen = screen;
+        label.color = color;
         if (item.name[0])
-            std::snprintf(label, sizeof(label), "%s | %.0fm", item.name, distance);
+            std::snprintf(label.text, sizeof(label.text), "%s | %.0fm", item.name, distance);
         else
-            std::snprintf(label, sizeof(label), "%s #%d | %.0fm", ItemCategory(item.kind), item.item, distance);
-        if (!SearchMatches(label, Config.ESPMenu.ItemSearch)) continue;
-        draw->AddCircleFilled(screen, 3.5f, color);
-        DrawTextWithBorder1(draw, label, {screen.x + 7.0f, screen.y - 12.0f}, color, IM_COL32(0, 0, 0, 240), 14.0f);
+            std::snprintf(label.text, sizeof(label.text), "%s #%d | %.0fm", ItemCategory(item.kind), item.item, distance);
+        if (!SearchMatches(label.text, Config.ESPMenu.ItemSearch)) continue;
+        const int group = loot_labels::Assign(groups, screen.x, screen.y, distance,
+            labels.size(), Config.ESPMenu.ItemClusterLabels);
+        if (group < 0) continue;
+        labels.push_back(label);
     }
+
+    for (const auto& group : groups) {
+        if (group.representative >= labels.size()) continue;
+        const auto& label = labels[group.representative];
+        char display[155];
+        if (group.count > 1)
+            std::snprintf(display, sizeof(display), "%s (+%u)", label.text, group.count - 1);
+        else
+            std::snprintf(display, sizeof(display), "%s", label.text);
+        draw->AddCircleFilled(label.screen, 3.5f, label.color);
+        DrawTextWithBorder1(draw, display, {label.screen.x + 7.0f, label.screen.y - 12.0f},
+                            label.color, IM_COL32(0, 0, 0, 240), 14.0f);
+    }
+    lootLabelsDrawn.store(static_cast<unsigned>(groups.size()), std::memory_order_relaxed);
+    lootLabelsGrouped.store(static_cast<unsigned>(labels.size() - groups.size()), std::memory_order_relaxed);
 
     const uint32_t localTeam = PawnTeam(localPawn);
     for (const auto &entity : nearbyDevices) {
