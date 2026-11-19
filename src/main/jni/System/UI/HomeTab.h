@@ -189,17 +189,14 @@ inline void Draw(const HomeStats& stats,ImVec2 available) {
     const bool columns=width>=620.f*scale;
     if(columns) {
         const float leftWidth=ImClamp(width*.32f,200.f*scale,280.f*scale);
-        const float panelHeight=std::max(320.f*scale,height);
         ImGui::BeginGroup();
         Metrics(stats,leftWidth,scale);
-        Performance({leftWidth,std::max(160.f*scale,panelHeight-64.f*scale)},scale);
         ImGui::EndGroup();
         ImGui::SameLine(0,gap);
-        Music({width-leftWidth-gap,panelHeight},scale);
+        Performance({ImMax(1.f,width-leftWidth-gap),std::max(230.f*scale,height)},scale);
     } else {
         Metrics(stats,width,scale);
-        Music({width,std::max(320.f*scale,ImGui::GetContentRegionAvail().y)},scale);
-        Performance({width,190.f*scale},scale);
+        Performance({width,std::max(190.f*scale,height-120.f*scale)},scale);
     }
     ImGui::EndChild();
     ImGui::PopStyleVar(2);
