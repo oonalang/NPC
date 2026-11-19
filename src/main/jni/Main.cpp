@@ -272,6 +272,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
         memset(&Config, 0, sizeof(sConfig));
         Config.ESPMenu.HealthPosition = EspHealthPosition::HealthSide;
+        Config.ESPMenu.OccludedColor[0] = 1.0f;
+        Config.ESPMenu.OccludedColor[1] = 1.0f;
+        Config.ESPMenu.OccludedColor[2] = 1.0f;
+        Config.ESPMenu.OccludedColor[3] = 1.0f;
 
         Config.sColorsESPPLAYER.LinePLAYER = CREATE_COLOR(255, 0, 0, 255);
         Config.sColorsESPPLAYER.BoxPLAYER = CREATE_COLOR(255, 0, 0, 255);
@@ -785,6 +789,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Checkbox("ESP Skeleton", &Config.ESPMenu.Skeleton);
                                 custom::Checkbox("ESP Health", &Config.ESPMenu.Health);
                                 custom::Checkbox("ESP Armor (BR)", &Config.ESPMenu.Armor);
+                                custom::Checkbox("Visibility Check", &Config.ESPMenu.VisibilityCheck);
                                 custom::Checkbox("ESP Name", &Config.ESPMenu.Name);
                                 custom::Checkbox("ESP Distance", &Config.ESPMenu.Distance);
                                 custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
@@ -805,6 +810,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     Config.sColorsESPPLAYER.DistancePLAYER,
                                     Config.sColorsESPPLAYER.SkeletonPLAYER
                                 );
+                                if (Config.ESPMenu.VisibilityCheck) {
+                                    ImGui::ColorEdit4("Blocked ESP Color", Config.ESPMenu.OccludedColor,
+                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+                                }
                                 runtime_preview_menu::DrawRuntimeEspColorRow("Bot ESP Color", Config.sColorsESPBOT.LineBOT);
                                 runtime_preview_menu::CopyLinkedEspColors(
                                     Config.sColorsESPBOT.LineBOT,
