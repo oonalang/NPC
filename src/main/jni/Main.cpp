@@ -339,7 +339,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     ImGui::NewFrame();
     shai_lite::Apply();
     custom::UpdateTouchScroll();
-    music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     static auto lastHitboxProbe=frameTime;
