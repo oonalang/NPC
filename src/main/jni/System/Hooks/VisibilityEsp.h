@@ -10,6 +10,14 @@ namespace visibility_esp {
 
 using Clock = std::chrono::steady_clock;
 
+struct TracePoint {
+    float x;
+    float y;
+    float z;
+};
+
+static_assert(sizeof(TracePoint) == 12, "Native trace vector layout");
+
 struct Record {
     bool blocked = false;
     Clock::time_point checked{};
@@ -86,17 +94,18 @@ inline bool IsBlocked(Pawn* pawn, const Vector3& head) {
             existing->second.blocked;
     }
 
-    using WorldTrace = bool (*)(void*, Vector3, Vector3, float, float*, int, const void*);
+    using WorldTrace = bool (*)(void*, TracePoint, TracePoint, float, float*, int, const void*);
     static WorldTrace trace = reinterpret_cast<WorldTrace>(
         getAbsoluteAddress("libunity.so", 0x66F2708));
     if (!trace) return false;
 
     const float distance = std::sqrt(squared);
     const float inv = 1.0f / distance;
-    const Vector3 direction(dx * inv, dy * inv, dz * inv);
+    const TracePoint origin{viewOrigin.x, viewOrigin.y, viewOrigin.z};
+    const TracePoint direction{dx * inv, dy * inv, dz * inv};
     float blocker = -1.0f;
     --remainingChecks;
-    const bool hit = trace(nullptr, viewOrigin, direction, distance, &blocker, 0, nullptr);
+    const bool hit = trace(nullptr, origin, direction, distance, &blocker, 0, nullptr);
     if (hit && (!std::isfinite(blocker) || blocker < 0.0f)) {
         return existing != records.end() && existing->second.blocked;
     }
