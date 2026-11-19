@@ -812,12 +812,6 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         }
 
         Vector3 pEnemyPawn_headPos = pawn->get_HeadPosition();
-        if (Config.ESPMenu.VisibilityCheck && visibility_esp::IsBlocked(pawn, pEnemyPawn_headPos)) {
-            const ImU32 hidden = ImGui::ColorConvertFloat4ToU32(ImVec4(
-                Config.ESPMenu.OccludedColor[0], Config.ESPMenu.OccludedColor[1],
-                Config.ESPMenu.OccludedColor[2], Config.ESPMenu.OccludedColor[3]));
-            lineColor = boxColor = skeletonColor = hidden;
-        }
         Vector3 pEnemyPawn_rootPos = pawn->get_LastPawnPos();
 
         Vector3 HeadSc = Camera::get_main()->WorldToScreenPoint(pEnemyPawn_headPos);
@@ -827,6 +821,14 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         float actualHeight = Vector3::Distance(pEnemyPawn_headPos, pEnemyPawn_rootPos);
         
         if (HeadSc.z > 0 && pawn->m_IsAlive()) {
+            if (HeadSc.x >= 0.0f && HeadSc.x <= sWidth &&
+                HeadSc.y >= 0.0f && HeadSc.y <= sHeight &&
+                Config.ESPMenu.VisibilityCheck && visibility_esp::IsBlocked(pawn, pEnemyPawn_headPos)) {
+                const ImU32 hidden = ImGui::ColorConvertFloat4ToU32(ImVec4(
+                    Config.ESPMenu.OccludedColor[0], Config.ESPMenu.OccludedColor[1],
+                    Config.ESPMenu.OccludedColor[2], Config.ESPMenu.OccludedColor[3]));
+                lineColor = boxColor = skeletonColor = hidden;
+            }
             
             AttackableTargetInfo *m_AttackableInfoPtr = pawn->m_AttackableInfo();
             if (m_AttackableInfoPtr != nullptr && isAlive) {
