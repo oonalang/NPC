@@ -337,6 +337,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     previousFrameTime = frameTime;
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
+    shai_lite::Apply();
     custom::UpdateTouchScroll();
     music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
@@ -386,7 +387,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
-    shai_lite::Apply();
     if (menuReady)
         DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
     if(menuReady) {
