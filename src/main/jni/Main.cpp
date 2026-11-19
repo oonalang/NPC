@@ -385,10 +385,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
 
-    if (menuReady)
-        pickup_tweaks::Publish(Config.ExtraMenu.FastPickup, Config.ExtraMenu.ExtendedPickupRange,
+    pickup_tweaks::Publish(Config.ExtraMenu.FastPickup, Config.ExtraMenu.ExtendedPickupRange,
                            Config.ExtraMenu.PickupRange);
-    DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
+    if (menuReady)
+        DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
     if(menuReady) {
         PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
         floating_info::Render(draw, screenWidth, screenHeight);
