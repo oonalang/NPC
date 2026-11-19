@@ -7,6 +7,7 @@
 #include "SlideFatigue.h"
 #include "Hitbox.h"
 #include "WorldESP.h"
+#include "PickupTweaks.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -962,6 +963,10 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
+
+    LICENSE_HOOK_LIB("libunity.so", "0x90F6DE8", pickup_tweaks::HookAutoPickUpInterval, pickup_tweaks::origAutoPickUpInterval);
+    LICENSE_HOOK_LIB("libunity.so", "0x89FF498", pickup_tweaks::HookBRManagerTick, pickup_tweaks::origBRManagerTick);
+    LICENSE_HOOK_LIB("libunity.so", "0x8A00DA0", pickup_tweaks::HookInitMaxPickUpDistance, pickup_tweaks::origInitMaxPickUpDistance);
 
     //-- ESP Items (BR) / ESP Placed Nades (MP)
     LICENSE_HOOK_LIB("libunity.so", "0x64FA604", world_esp::HookLootTick, world_esp::origLootTick);

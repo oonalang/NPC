@@ -1,0 +1,57 @@
+name: BR pickup host checks
+
+on:
+  push:
+    branches:
+      - feature/br-fast-pickup-range
+  pull_request:
+    paths:
+      - "src/main/jni/**"
+      - "src/main/jni/Hacks/StructGame/Defines.h"
+      - "tests/pickup_tweaks_test.cpp"
+      - "tests/verify_1659_offsets.py"
+      - ".github/workflows/br-pickup-host-tests.yml"
+
+jobs:
+  cpp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native host pickup tests
+        run: sh tests/run-pickup-tests.sh
+      - name: Verify known 1.6.59 offset constants
+        run: python3 tests/verify_1659_offsets.py
+      - name: ESP loot label grouping tests
+        run: sh tests/run-esp-label-tests.sh
+
+  android-native-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install NDK r22
+        shell: bash
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | head -n 1)
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "ndk;22.0.7026061"
+      - name: Build ARM64 native library
+        shell: bash
+        run: |
+          "$ANDROID_HOME/ndk/22.0.7026061/ndk-build" \
+            NDK_PROJECT_PATH="$GITHUB_WORKSPACE" \
+            APP_BUILD_SCRIPT="$GITHUB_WORKSPACE/src/main/jni/Android.mk" \
+            NDK_APPLICATION_MK="$GITHUB_WORKSPACE/src/main/jni/Application.mk" \
+            NDK_OUT="$RUNNER_TEMP/npc-ndk-obj" \
+            NDK_LIBS_OUT="$RUNNER_TEMP/npc-ndk-libs" \
+            -j2
+          test -s "$RUNNER_TEMP/npc-ndk-libs/arm64-v8a/libnets.so"
+          file "$RUNNER_TEMP/npc-ndk-libs/arm64-v8a/libnets.so"
+      - name: Publish test ARM64 library
+        uses: actions/upload-artifact@v4
+        with:
+          name: npc-br-pickup-arm64
+          path: ${{ runner.temp }}/npc-ndk-libs/arm64-v8a/libnets.so
+          if-no-files-found: error
+          retention-days: 7
