@@ -11,6 +11,11 @@
 #include <openssl/err.h>
 #include <openssl/md5.h>
 #include <string>
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <mutex>
+#include <vector>
 #include "Tools.h"
 
 #if defined(__arm__)
@@ -90,12 +95,68 @@ bool Tools::PVM_WriteAddr(void *addr, void *buffer, size_t length) {
     return pvm(addr, buffer, length, true);
 }
 
-bool Tools::IsPtrValid(void *addr) {
-    static int fd = -1;
-    if (fd == -1) {
-        fd = open("/dev/random", O_WRONLY);
+namespace {
+struct ReadableRange {
+    uintptr_t begin;
+    uintptr_t end;
+};
+
+// Readable mappings come from /proc/self/maps. The list is parsed once and is
+// only re-read when an address is not found and the copy is stale, so a steady
+// frame full of pointer checks costs binary searches instead of one syscall
+// each. A write() to /dev/random used to serve this role: it faulted on
+// unreadable addresses, but it is a kernel call per check and the ESP path
+// makes several per pawn per frame.
+class ReadableRanges {
+public:
+    bool Contains(const void* address) {
+        const uintptr_t value = reinterpret_cast<uintptr_t>(address);
+        if (value == 0) return false;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (ranges_.empty()) Load();
+        if (Has(value)) return true;
+        const auto now = std::chrono::steady_clock::now();
+        if (now - loaded_ < RefreshInterval) return false;
+        Load();
+        return Has(value);
     }
-    return write(fd, addr, 4) >= 0;
+
+private:
+    static constexpr std::chrono::milliseconds RefreshInterval{250};
+
+    bool Has(uintptr_t value) const {
+        const auto after = std::upper_bound(ranges_.begin(), ranges_.end(), value,
+                                            [](uintptr_t probe, const ReadableRange& range) {
+                                                return probe < range.begin;
+                                            });
+        return after != ranges_.begin() && value < (after - 1)->end;
+    }
+
+    void Load() {
+        loaded_ = std::chrono::steady_clock::now();
+        ranges_.clear();
+        std::FILE* maps = std::fopen("/proc/self/maps", "r");
+        if (!maps) return;
+        char line[512];
+        while (std::fgets(line, sizeof(line), maps)) {
+            unsigned long long begin = 0, end = 0;
+            char permissions[8] = {};
+            if (std::sscanf(line, "%llx-%llx %7s", &begin, &end, permissions) != 3) continue;
+            if (permissions[0] != 'r' || end <= begin) continue;
+            ranges_.push_back({static_cast<uintptr_t>(begin), static_cast<uintptr_t>(end)});
+        }
+        std::fclose(maps);
+    }
+
+    std::mutex mutex_;
+    std::vector<ReadableRange> ranges_;
+    std::chrono::steady_clock::time_point loaded_{};
+};
+}
+
+bool Tools::IsPtrValid(void *addr) {
+    static ReadableRanges readable;
+    return readable.Contains(addr);
 }
 
 uintptr_t Tools::GetBaseAddress(const char *name) {
