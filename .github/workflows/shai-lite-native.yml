@@ -21,6 +21,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test Lite feature allowlist
         run: sh tests/run-lite-tests.sh
+      - name: Verify Lite edition integration
+        run: python3 tests/verify_lite_variant.py
 
   lite-native:
     runs-on: ubuntu-latest
