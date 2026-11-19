@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 #include <iomanip>
 #include "../Hooks/FrameRate.h"
 #include "../Hooks/SlideFatigue.h"
@@ -36,6 +38,9 @@ void SaveConfiguration(const std::string& filename) {
     config["ESPMenu"]["Name"] = Config.ESPMenu.Name;
     config["ESPMenu"]["Health"] = Config.ESPMenu.Health;
     config["ESPMenu"]["Armor"] = Config.ESPMenu.Armor;
+    config["ESPMenu"]["VisibilityCheck"] = Config.ESPMenu.VisibilityCheck;
+    config["ESPMenu"]["OccludedColor"] = {Config.ESPMenu.OccludedColor[0], Config.ESPMenu.OccludedColor[1], Config.ESPMenu.OccludedColor[2], Config.ESPMenu.OccludedColor[3]};
+    config["ESPMenu"]["ItemClusterLabels"] = Config.ESPMenu.ItemClusterLabels;
     config["ESPMenu"]["Distance"] = Config.ESPMenu.Distance;
     config["ESPMenu"]["Target"] = static_cast<int>(Config.ESPMenu.Target);
     config["ESPMenu"]["BoxType"] = static_cast<int>(Config.ESPMenu.BoxType);
@@ -139,6 +144,16 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ESPMenu.Name = config["ESPMenu"]["Name"].get<bool>();
             Config.ESPMenu.Health = config["ESPMenu"]["Health"].get<bool>();
             Config.ESPMenu.Armor = config["ESPMenu"].value("Armor", Config.ESPMenu.Armor);
+            Config.ESPMenu.VisibilityCheck = config["ESPMenu"].value("VisibilityCheck", Config.ESPMenu.VisibilityCheck);
+            Config.ESPMenu.ItemClusterLabels = config["ESPMenu"].value("ItemClusterLabels", Config.ESPMenu.ItemClusterLabels);
+            if (config["ESPMenu"].contains("OccludedColor") && config["ESPMenu"]["OccludedColor"].is_array() && config["ESPMenu"]["OccludedColor"].size() == 4) {
+                const auto& colors = config["ESPMenu"]["OccludedColor"];
+                for (int i = 0; i < 4; ++i) {
+                    if (!colors[i].is_number()) continue;
+                    const float v = colors[i].get<float>();
+                    if (std::isfinite(v)) Config.ESPMenu.OccludedColor[i] = std::clamp(v, 0.0f, 1.0f);
+                }
+            }
             Config.ESPMenu.Distance = config["ESPMenu"]["Distance"].get<bool>();
             if (config["ESPMenu"].contains("Target")) Config.ESPMenu.Target = static_cast<LineTarget>(config["ESPMenu"]["Target"].get<int>());
             if (config["ESPMenu"].contains("BoxType")) Config.ESPMenu.BoxType = static_cast<EspBoxType>(config["ESPMenu"]["BoxType"].get<int>());

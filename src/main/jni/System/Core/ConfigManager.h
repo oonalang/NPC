@@ -4,6 +4,8 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cmath>
 #include <jni.h>
 #include "FileUtils.h"
 #include "Hacks/Hacks.h"
@@ -40,6 +42,12 @@ void LoadConfig() {
         else if (key == "ESPMenu.Box") Config.ESPMenu.Box = (valueStr == "1");
         else if (key == "ESPMenu.Health") Config.ESPMenu.Health = (valueStr == "1");
         else if (key == "ESPMenu.Armor") Config.ESPMenu.Armor = (valueStr == "1");
+        else if (key == "ESPMenu.VisibilityCheck") Config.ESPMenu.VisibilityCheck = (valueStr == "1");
+        else if (key == "ESPMenu.ItemClusterLabels") Config.ESPMenu.ItemClusterLabels = (valueStr == "1");
+        else if (key == "ESPMenu.OccludedRed") Config.ESPMenu.OccludedColor[0] = std::stof(valueStr);
+        else if (key == "ESPMenu.OccludedGreen") Config.ESPMenu.OccludedColor[1] = std::stof(valueStr);
+        else if (key == "ESPMenu.OccludedBlue") Config.ESPMenu.OccludedColor[2] = std::stof(valueStr);
+        else if (key == "ESPMenu.OccludedAlpha") Config.ESPMenu.OccludedColor[3] = std::stof(valueStr);
         else if (key == "ESPMenu.Name") Config.ESPMenu.Name = (valueStr == "1");
         else if (key == "ESPMenu.Distance") Config.ESPMenu.Distance = (valueStr == "1");
         else if (key == "ESPMenu.Count") Config.ESPMenu.Count = (valueStr == "1");
@@ -105,6 +113,8 @@ void LoadConfig() {
         else if (key == "TriggerDot.Blue") TriggerDotStyle::appearance.color[2] = std::stof(valueStr);
     }
     file.close();
+    for (float& color : Config.ESPMenu.OccludedColor)
+        color = std::isfinite(color) ? std::clamp(color, 0.0f, 1.0f) : 1.0f;
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
 }
@@ -121,6 +131,12 @@ void SaveConfig() {
     file << "ESPMenu.Box " << Config.ESPMenu.Box << "\n";
     file << "ESPMenu.Health " << Config.ESPMenu.Health << "\n";
     file << "ESPMenu.Armor " << Config.ESPMenu.Armor << "\n";
+    file << "ESPMenu.VisibilityCheck " << Config.ESPMenu.VisibilityCheck << "\n";
+    file << "ESPMenu.ItemClusterLabels " << Config.ESPMenu.ItemClusterLabels << "\n";
+    file << "ESPMenu.OccludedRed " << Config.ESPMenu.OccludedColor[0] << "\n";
+    file << "ESPMenu.OccludedGreen " << Config.ESPMenu.OccludedColor[1] << "\n";
+    file << "ESPMenu.OccludedBlue " << Config.ESPMenu.OccludedColor[2] << "\n";
+    file << "ESPMenu.OccludedAlpha " << Config.ESPMenu.OccludedColor[3] << "\n";
     file << "ESPMenu.Name " << Config.ESPMenu.Name << "\n";
     file << "ESPMenu.Distance " << Config.ESPMenu.Distance << "\n";
     file << "ESPMenu.Count " << Config.ESPMenu.Count << "\n";

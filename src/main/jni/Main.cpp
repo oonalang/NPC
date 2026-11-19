@@ -272,6 +272,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
 
         memset(&Config, 0, sizeof(sConfig));
         Config.ESPMenu.HealthPosition = EspHealthPosition::HealthSide;
+        Config.ESPMenu.OccludedColor[0] = 1.0f;
+        Config.ESPMenu.OccludedColor[1] = 1.0f;
+        Config.ESPMenu.OccludedColor[2] = 1.0f;
+        Config.ESPMenu.OccludedColor[3] = 1.0f;
 
         Config.sColorsESPPLAYER.LinePLAYER = CREATE_COLOR(255, 0, 0, 255);
         Config.sColorsESPPLAYER.BoxPLAYER = CREATE_COLOR(255, 0, 0, 255);
@@ -785,6 +789,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                 custom::Checkbox("ESP Skeleton", &Config.ESPMenu.Skeleton);
                                 custom::Checkbox("ESP Health", &Config.ESPMenu.Health);
                                 custom::Checkbox("ESP Armor (BR)", &Config.ESPMenu.Armor);
+                                custom::Checkbox("Visibility Check", &Config.ESPMenu.VisibilityCheck);
                                 custom::Checkbox("ESP Name", &Config.ESPMenu.Name);
                                 custom::Checkbox("ESP Distance", &Config.ESPMenu.Distance);
                                 custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
@@ -805,6 +810,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     Config.sColorsESPPLAYER.DistancePLAYER,
                                     Config.sColorsESPPLAYER.SkeletonPLAYER
                                 );
+                                if (Config.ESPMenu.VisibilityCheck) {
+                                    ImGui::ColorEdit4("Blocked ESP Color", Config.ESPMenu.OccludedColor,
+                                        ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+                                }
                                 runtime_preview_menu::DrawRuntimeEspColorRow("Bot ESP Color", Config.sColorsESPBOT.LineBOT);
                                 runtime_preview_menu::CopyLinkedEspColors(
                                     Config.sColorsESPBOT.LineBOT,
@@ -837,6 +846,13 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     ImGui::Separator();
                                     ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "BR ITEM FILTERS");
                                     ImGui::TextDisabled("Tracked pickups: %u", world_esp::TrackedLootCount());
+                                    const auto lootStatus = world_esp::GetLootDiagnostics();
+                                    ImGui::TextDisabled("Loot callbacks: %llu | Accepted: %llu",
+                                        static_cast<unsigned long long>(lootStatus.callbacks),
+                                        static_cast<unsigned long long>(lootStatus.accepted));
+                                    ImGui::TextDisabled("Rejected: %llu | Labels: %u | Grouped: %u",
+                                        static_cast<unsigned long long>(lootStatus.rejected),
+                                        lootStatus.drawn, lootStatus.grouped);
                                     const int enabledCategories =
                                         static_cast<int>(Config.ESPMenu.ItemWeapons) +
                                         static_cast<int>(Config.ESPMenu.ItemAmmo) +
@@ -927,6 +943,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                                     }
                                     ImGui::InputText("Find item", Config.ESPMenu.ItemSearch, sizeof(Config.ESPMenu.ItemSearch));
                                     custom::SliderFloat("Loot range", &Config.ESPMenu.ItemDistance, 20.0f, 250.0f, "%.0fm");
+                                    custom::Checkbox("Group overlapping loot labels", &Config.ESPMenu.ItemClusterLabels);
                                 }
                                 if (Config.ESPMenu.PlacedNadesESP && ImGui::TreeNode("Placed device filters")) {
                                     custom::Checkbox("Enemy devices only", &Config.ESPMenu.PlacedEnemyOnly);

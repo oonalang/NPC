@@ -131,6 +131,9 @@ struct sWeaponAim {
         CrosshairTarget CrosshairType;
         EspStyleTarget EspStyle;
         bool Armor;
+        bool VisibilityCheck;
+        float OccludedColor[4];
+        bool ItemClusterLabels;
         bool GrenadeWarn;
         bool ItemESP;
         bool ItemWeapons;

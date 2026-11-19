@@ -189,17 +189,19 @@ public:
 };
 
 //-- ESP Items
+class HalfString;
+
 class WeaponConfConfig {
 public:
-    String *MarkOfName() {
-        return *(String **)((uintptr_t)this + Class_LethalAndTacticalConfConfig_MarkOfName);
+    HalfString *MarkOfName() {
+        return *(HalfString **)((uintptr_t)this + Class_WeaponConfConfig_LOCID_Name);
     }
 };
 
 class LethalAndTacticalConfConfig {
 public:
-    String *MarkOfName() {
-        return *(String **)((uintptr_t)this + Class_LethalAndTacticalConfConfig_MarkOfName);
+    HalfString *MarkOfName() {
+        return *(HalfString **)((uintptr_t)this + Class_LethalAndTacticalConfConfig_LOCID_Name);
     }
 };
 
