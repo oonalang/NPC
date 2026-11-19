@@ -716,7 +716,7 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         pLocalPawn_rootPos = get_LocalPawn->get_LastPawnPos();
     }
     
-    visibility_esp::BeginFrame();
+    visibility_esp::BeginFrame(get_MatchGame);
     DrawThrowableAlert(draw, sWidth, sHeight, pLocalPawn_rootPos);
     world_esp::Draw(draw, sWidth, sHeight, pLocalPawn_rootPos, get_LocalPawn);
 
