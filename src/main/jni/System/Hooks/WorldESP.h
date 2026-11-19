@@ -471,8 +471,12 @@ inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPo
     };
     std::vector<LootLabel> labels;
     std::vector<loot_labels::Group> groups;
-    labels.reserve(nearbyLoot.size());
-    groups.reserve(nearbyLoot.size());
+    const bool clusterLabels = Config.ESPMenu.ItemClusterLabels;
+    if (clusterLabels) {
+        labels.reserve(nearbyLoot.size());
+        groups.reserve(nearbyLoot.size());
+    }
+    unsigned plainDrawn = 0;
 
     for (const auto &item : nearbyLoot) {
         const float distance = Vector3::Distance(localPosition, item.pos);
@@ -491,8 +495,15 @@ inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPo
         else
             std::snprintf(label.text, sizeof(label.text), "%s #%d | %.0fm", ItemCategory(item.kind), item.item, distance);
         if (!SearchMatches(label.text, Config.ESPMenu.ItemSearch)) continue;
+        if (!clusterLabels) {
+            draw->AddCircleFilled(screen, 3.5f, color);
+            DrawTextWithBorder1(draw, label.text, {screen.x + 7.0f, screen.y - 12.0f},
+                                color, IM_COL32(0, 0, 0, 240), 14.0f);
+            ++plainDrawn;
+            continue;
+        }
         const int group = loot_labels::Assign(groups, screen.x, screen.y, distance,
-            labels.size(), Config.ESPMenu.ItemClusterLabels);
+            labels.size(), true);
         if (group < 0) continue;
         labels.push_back(label);
     }
@@ -509,7 +520,7 @@ inline void Draw(ImDrawList *draw, int width, int height, const Vector3 &localPo
         DrawTextWithBorder1(draw, display, {label.screen.x + 7.0f, label.screen.y - 12.0f},
                             label.color, IM_COL32(0, 0, 0, 240), 14.0f);
     }
-    lootLabelsDrawn.store(static_cast<unsigned>(groups.size()), std::memory_order_relaxed);
+    lootLabelsDrawn.store(plainDrawn + static_cast<unsigned>(groups.size()), std::memory_order_relaxed);
     lootLabelsGrouped.store(static_cast<unsigned>(labels.size() - groups.size()), std::memory_order_relaxed);
 
     const uint32_t localTeam = PawnTeam(localPawn);
