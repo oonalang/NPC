@@ -68,6 +68,10 @@ struct LocalState {
     Frame lastFrame{};
     bool hasFrame = false;
     NativeCancellation cancellation;
+    TargetResult verifiedTarget = TargetResult::InvalidRay;
+    ContextIdentity verifiedIdentity{};
+    std::uint64_t verifiedUpdate = 0;
+    bool verifiedCached = false;
     bool stopAfterUpdate = false;
     bool syntheticInput = false;
     bool releaseSequence = false;
@@ -135,6 +139,7 @@ ContextIdentity Identity(std::uintptr_t match, std::uintptr_t pawn,
     if (local.epoch != epoch) {
         local.controller.Reset();
         local.cancellation.Reset();
+        local.verifiedCached = false;
         local.epoch = epoch;
         for (auto& generation : local.generations) ++generation;
     }
@@ -154,9 +159,12 @@ void Merge(void* param, const Intent& intent) noexcept {
         });
 }
 
+constexpr float TargetTraceDistance = 500.0f;
+
 bool PrepareViewRay(bool needed, bool sampleViewport, ViewRay& ray) noexcept {
     float centerX = .5f, centerY = .5f;
     const bool ready = needed && BuildNativeRay(library,ray,centerX,centerY,sampleViewport);
+    if (ready && ray.maxDistance > TargetTraceDistance) ray.maxDistance = TargetTraceDistance;
     if (ready && sampleViewport) {
         std::uint32_t x = 0, y = 0;
         std::memcpy(&x,&centerX,sizeof(x)); std::memcpy(&y,&centerY,sizeof(y));
@@ -318,14 +326,30 @@ void DecidePreparedInput(void* owner, void* param) {
     status.store(RuntimeStatus::Ready,std::memory_order_release);
     ViewRay ray;
     const bool needTarget = NeedsTargetQuery(settings,frame,local.controller);
-    const bool rayReady = PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
+    const bool reuseTarget = needTarget && !settings.showDot && local.verifiedCached &&
+        local.verifiedTarget == TargetResult::Eligible &&
+        local.verifiedIdentity == frame.identity &&
+        local.controller.HasOwnedInput() &&
+        frame.updateId == local.verifiedUpdate + 1;
+    const bool rayReady = reuseTarget ||
+        PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
     frame.contextValid = frame.contextValid && (!needTarget || rayReady);
     NativeTargetQueries queries(library,match,pawn);
     TargetResult target = TargetResult::InvalidRay;
     frame.targetValid = false;
     if (needTarget && rayReady) {
-        target = EvaluateTarget(queries,frame.identity,ray);
+        if (reuseTarget) {
+            target = local.verifiedTarget;
+        } else {
+            target = EvaluateTarget(queries,frame.identity,ray);
+            local.verifiedTarget = target;
+            local.verifiedIdentity = frame.identity;
+            local.verifiedUpdate = frame.updateId;
+            local.verifiedCached = true;
+        }
         frame.targetValid = target == TargetResult::Eligible;
+    } else {
+        local.verifiedCached = false;
     }
     const auto intent = local.controller.Step(settings,frame);
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,
