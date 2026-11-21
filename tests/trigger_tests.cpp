@@ -977,6 +977,88 @@ void GlassPaths() {
             "a malformed contact cannot hide a blocker");
 }
 
+void CharacterWorldOcclusion() {
+    constexpr std::uintptr_t self=11,target=22,other=33,body=100,targetAlias=101,selfAlias=102;
+    constexpr std::uintptr_t wall=200,shield=201,glass=202,ownedShield=203,unknown=999;
+    const auto classify=[&](std::uintptr_t collider) {
+        const auto actor=(collider==targetAlias || collider==ownedShield)?target:collider==selfAlias?self:collider==shield?other:0;
+        if(IsCharacterWorldContact(collider,body,actor,self,target))
+            return VerifiedCharacterContact(true,collider==ownedShield?6:1,false);
+        if(collider==glass) return ContactKind::Glass;
+        return collider==unknown?ContactKind::Unavailable:ContactKind::Solid;
+    };
+    Require(!IsCharacterWorldContact(0,0,0,0,0) &&
+        !IsCharacterWorldContact(shield,body,other,self,target),"unknown identities and another actor are not character exemptions");
+    RayContacts contacts{{{body,18.f}}};
+    Require(CheckWorldContacts(contacts,1,{0,18.f},20.f,classify)==Occlusion::Clear,
+        "the target broad collider in front of its detailed body point is not world cover");
+    contacts={{{targetAlias,18.f},{selfAlias,1.f},{body,17.f}}};
+    Require(CheckWorldContacts(contacts,3,{0,1.f},20.f,classify)==Occlusion::Clear,
+        "verified self and current-target aliases clear without requiring a glass pane");
+    contacts={{{targetAlias,18.f},{wall,17.5f},{body,17.f}}};
+    Require(CheckWorldContacts(contacts,3,{0,17.f},20.f,classify)==Occlusion::Blocked,
+        "a real wall between a broad proxy and its detailed body still blocks");
+    contacts={{{body,18.f},{wall,10.f},{glass,9.f},{selfAlias,1.f}}};
+    Require(CheckWorldContacts(contacts,4,{0,1.f},20.f,classify)==Occlusion::Blocked,
+        "self, target and glass exemptions cannot hide an intervening wall");
+    contacts={{{shield,10.f},{body,18.f}}};
+    Require(CheckWorldContacts(contacts,2,{0,10.f},20.f,classify)==Occlusion::Blocked,
+        "an independently mapped shield remains a solid blocker");
+    contacts={{{ownedShield,10.f},{body,18.f}}};
+    Require(CheckWorldContacts(contacts,2,{0,10.f},20.f,classify)==Occlusion::Blocked,
+        "a shield mapped to the current target still needs a valid body group and remains solid");
+    Require(VerifiedCharacterContact(false,1,true)==ContactKind::Unavailable &&
+        VerifiedCharacterContact(true,32,true)==ContactKind::Solid &&
+        VerifiedCharacterContact(true,6,true)==ContactKind::Solid &&
+        VerifiedCharacterContact(true,0,false)==ContactKind::Solid &&
+        VerifiedCharacterContact(true,0,true)==ContactKind::Character,
+        "character aliases require a detailed body hit and never exempt shield groups");
+    contacts={{{selfAlias,1.f},{glass,10.f},{targetAlias,18.f}}};
+    Require(CheckWorldContacts(contacts,3,{0,1.f},20.f,classify)==Occlusion::Clear,
+        "passable glass and verified character contacts can coexist on a clear path");
+    contacts={{{unknown,1.f},{body,18.f}}};
+    Require(CheckWorldContacts(contacts,2,{0,1.f},20.f,classify)==Occlusion::Unavailable,
+        "an unverified collider is unavailable rather than confirmed cover");
+    Require(CheckWorldContacts(contacts,2,{0,2.f},20.f,classify)==Occlusion::Unavailable,
+        "disagreement with the native nearest hit cannot clear a path");
+    contacts={{{glass,1.f},{glass,2.f},{glass,3.f},{body,18.f}}};
+    Require(CheckWorldContacts(contacts,4,{0,1.f},20.f,classify)==Occlusion::Unavailable,
+        "the world path retains its bounded glass allowance");
+    contacts={{{body,18.f},{wall,std::numeric_limits<float>::quiet_NaN()}}};
+    Require(CheckWorldContacts(contacts,2,{0,18.f},20.f,classify)==Occlusion::Unavailable,
+        "a malformed contact is rejected before character filtering");
+    int traces=0;
+    bool available=true;
+    contacts={{{body,18.f}}};
+    const auto trace=[&](RayContacts& out,std::size_t& count) { ++traces;out=contacts;count=1;return available; };
+    Require(ResolveWorldOcclusion(20.f,false,0.f,trace,classify)==Occlusion::Clear && traces==0,
+        "clear native world rays perform no contact fallback");
+    Require(ResolveWorldOcclusion(20.f,true,20.f,trace,classify)==Occlusion::Clear && traces==0,
+        "an endpoint hit performs no contact fallback");
+    Require(ResolveWorldOcclusion(20.f,true,18.f,trace,classify)==Occlusion::Clear && traces==1,
+        "a nearer character contact is verified using one bounded fallback");
+    available=false;
+    Require(ResolveWorldOcclusion(20.f,true,18.f,trace,classify)==Occlusion::Unavailable,
+        "unavailable native contact bindings are not reported as cover");
+    Require(ResolveWorldOcclusion(20.f,true,-1.f,trace,classify)==Occlusion::Unavailable && traces==2,
+        "invalid native distances do not invoke contact queries");
+    for(const auto mode:{Mode::Both,Mode::ADSOnly}) for(const auto fire:{FireMode::Automatic,FireMode::SingleRelease}) {
+        Controller controller;
+        auto frame=Ready(fire);frame.aiming=frame.fullyAimed=true;
+        Queries queries;queries.world=CheckWorldContacts(contacts,1,{0,18.f},20.f,classify);
+        const Settings settings{true,mode,false};
+        Require(EvaluateInput(settings,frame,{{0,0,0},{0,0,1},500},queries,controller).down,
+            "a clear character-only world path acquires in both modes and fire paths");
+        ++frame.updateId;queries.world=Occlusion::Blocked;
+        const auto intent=EvaluateInput(settings,frame,{{0,0,0},{0,0,1},500},queries,controller);
+        Require(!intent.down && !intent.held && !intent.commitRelease,
+            "new solid cover cancels character-path firing before a shot commits");
+    }
+    Queries queries;available=false;queries.world=ResolveWorldOcclusion(20.f,true,18.f,trace,classify);
+    Require(EvaluateTarget(queries,Ready().identity,{{0,0,0},{0,0,1},500})==TargetResult::QueryUnavailable,
+        "unavailable obstruction verification propagates to query feedback instead of cover");
+}
+
 void TargetValidation() {
     const auto identity = Ready().identity;
     Queries queries;
@@ -1179,6 +1261,7 @@ int main() {
     AdsAndModeChanges();
     IdleSniperAcquisition();
     GlassPaths();
+    CharacterWorldOcclusion();
     TargetValidation();
     InputQueryBudget();
     AutomaticCooldownQueryBudget();

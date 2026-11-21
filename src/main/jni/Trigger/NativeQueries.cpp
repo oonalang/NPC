@@ -96,9 +96,22 @@ struct OwnedImpact {
     }
 };
 
-bool BodyGroup(int group, bool avatar) noexcept {
-    return group != 6 && group != 32 &&
-           ((group >= 1 && group <= 31) || (group == 0 && avatar));
+using DetailTrace = bool(*)(Object,Object,Object,Point3,Point3,float,int,Object*,Method);
+
+ContactKind VerifyWorldCharacter(Address base,Object actor,Object collider,const ViewRay& ray,float distance) noexcept {
+    OwnedImpact impact{base,Bind<Object(*)(Object,Method)>(base,0x62588E4)(nullptr,nullptr)};
+    if(!impact.object) return ContactKind::Unavailable;
+    const bool detailed=Bind<DetailTrace>(base,0x66FE6B4)(nullptr,actor,collider,ray.origin,
+        ray.direction,distance,0,&impact.object,nullptr);
+    if(!impact.object) return ContactKind::Unavailable;
+    const auto address=reinterpret_cast<Address>(impact.object);
+    const auto kind=VerifiedCharacterContact(detailed,Read<int>(address,0x70),Read<unsigned char>(address,0x8D)!=0);
+    if(kind!=ContactKind::Character) return kind;
+    const float hitDistance=Read<float>(address,0x5C);
+    if(!Read<Address>(address,0x18) || !Finite(Read<Point3>(address,0x28)) ||
+        !std::isfinite(hitDistance) || hitDistance<=0.f || hitDistance>distance+ContactTolerance(distance))
+        return ContactKind::Unavailable;
+    return kind;
 }
 
 bool IsGlassMaterial(Address base, Object material) noexcept {
@@ -107,28 +120,36 @@ bool IsGlassMaterial(Address base, Object material) noexcept {
     return IsPassableGlass(Bind<MaterialType>(base, 0x66F1E00)(nullptr, material, nullptr));
 }
 
-GlassPath TraceGlassPath(Address base, const ViewRay& ray, float distance, RayContact nearest,
-                         int traceFlag) noexcept {
-    if (!NativeGlassQueriesReady(base)) return {};
+bool TraceContacts(Address base,const ViewRay& ray,float distance,int traceFlag,
+                    RayContacts& contacts,int& count) noexcept {
+    count=0;
+    if (!NativeGlassQueriesReady(base)) return false;
     const auto scratch = Bind<Object(*)(Object, Method)>(base, 0x66F0820)(nullptr, nullptr);
     const auto array = reinterpret_cast<Address>(scratch);
     const auto capacity = Read<std::uint64_t>(array, 0x18);
-    if (capacity < 2 || capacity > MaximumRaycastBuffer) return {};
+    if (capacity < 2 || capacity > MaximumRaycastBuffer) return false;
     using GetLayerMask = std::int64_t(*)(Object, int, Method);
     using RemoveWaterLayer = std::int64_t(*)(Object, std::int64_t, Method);
     auto mask = Bind<GetLayerMask>(base, 0x66ECB64)(nullptr, traceFlag, nullptr);
     if (traceFlag == WorldTraceFlag)
         mask = Bind<RemoveWaterLayer>(base, 0x66F2694)(nullptr, mask, nullptr);
     using RaycastNonAlloc = int(*)(Object, Point3, Point3, Object, float, std::int64_t, Method);
-    const int count = Bind<RaycastNonAlloc>(base, 0x531EA00)(
+    count = Bind<RaycastNonAlloc>(base, 0x531EA00)(
         nullptr, ray.origin, ray.direction, scratch, distance, mask, nullptr);
-    if (!CompleteContactCount(count, capacity)) return {};
+    if (!CompleteContactCount(count, capacity)) return false;
 
-    RayContacts contacts{};
     for (int i = 0; i < count; ++i) {
         const auto at = 0x20 + static_cast<std::size_t>(i) * 0x30;
         contacts[i] = {Read<Address>(array, at + 0x28), Read<float>(array, at + 0x1C)};
     }
+    return true;
+}
+
+GlassPath TraceGlassPath(Address base, const ViewRay& ray, float distance, RayContact nearest,
+                         int traceFlag) noexcept {
+    RayContacts contacts{};
+    int count=0;
+    if(!TraceContacts(base,ray,distance,traceFlag,contacts,count)) return {};
     using IsLiveObject = bool(*)(Object, Object, Object, Method);
     using SharedMaterial = Object(*)(Object, Method);
     return CheckGlassPath(contacts, static_cast<std::size_t>(count), nearest, distance,
@@ -151,6 +172,7 @@ bool BuildNativeRay(Address base, ViewRay& ray,
 bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
                                    const ViewRay& ray, BodyHit& result) noexcept {
     result = {};
+    tracedTarget_=tracedCollider_=0;
     if (!base_ || !match_ || !pawn_ || context.match == 0 ||
         !Finite(ray.origin) || !Finite(ray.direction) ||
         !std::isfinite(ray.maxDistance) || ray.maxDistance <= 0) return false;
@@ -201,8 +223,6 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
 
 
 
-    using DetailTrace = bool(*)(Object, Object, Object, Point3, Point3,
-                               float, int, Object*, Method);
     const bool detailed = Bind<DetailTrace>(base_, 0x66FE6B4)(
         nullptr, target, reinterpret_cast<Object>(collider), detailRay.origin,
         detailRay.direction, detailRay.maxDistance, 0, &impact.object, nullptr);
@@ -210,7 +230,7 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     const Address address = reinterpret_cast<Address>(impact.object);
     const int group = Read<int>(address, 0x70);
     const bool avatar = Read<unsigned char>(address, 0x8D) != 0;
-    result.detailed = BodyGroup(group, avatar);
+    result.detailed = EligibleBodyGroup(group, avatar);
     if (!result.detailed) return true;
     result.point = Read<Point3>(address, 0x28);
     const float detailDistance = Read<float>(address, 0x5C);
@@ -223,6 +243,8 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
 
     result.targetGeneration = (context.match * 0x100000001b3ULL) ^ actor;
     if (!result.targetGeneration) result.targetGeneration = actor;
+    tracedTarget_=targetAddress;
+    tracedCollider_=collider;
     return true;
 }
 
@@ -233,15 +255,29 @@ Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
     using WorldTrace = bool(*)(Object, Point3, Point3, float, float*, int, Method);
     const bool blocked = Bind<WorldTrace>(base_, 0x66F2708)(
         nullptr, ray.origin, ray.direction, hit.distance, &blockerDistance, 0, nullptr);
-    if (!blocked) return Occlusion::Clear;
-    if (!std::isfinite(blockerDistance) || blockerDistance < 0) return Occlusion::Unavailable;
-    const float tolerance = ContactTolerance(hit.distance);
-    if (blockerDistance + tolerance >= hit.distance) return Occlusion::Clear;
-
-    const auto path = TraceGlassPath(base_, ray, hit.distance, {0, blockerDistance}, WorldTraceFlag);
-    if (!path.verified || path.lastPaneDistance < 0.f) return Occlusion::Blocked;
-    if (path.firstSolid.collider && path.firstSolid.distance + tolerance < hit.distance) return Occlusion::Blocked;
-    return Occlusion::Clear;
+    using IsLiveObject=bool(*)(Object,Object,Object,Method);
+    using SharedMaterial=Object(*)(Object,Method);
+    const auto lookup=Bind<Object(*)(Object,Object,Method)>(base_,0x78AF19C);
+    Object map=nullptr;
+    return ResolveWorldOcclusion(hit.distance,blocked,blockerDistance,
+        [&](RayContacts& contacts,std::size_t& size) noexcept {
+            if(!tracedTarget_ || !tracedCollider_) return false;
+            int count=0;
+            if(!TraceContacts(base_,ray,hit.distance,WorldTraceFlag,contacts,count)) return false;
+            map=Bind<Object(*)(Object,Method)>(base_,0x8011E2C)(nullptr,nullptr);
+            size=static_cast<std::size_t>(count);
+            return map!=nullptr;
+        },
+        [&](Address address) noexcept {
+            const auto collider=reinterpret_cast<Object>(address);
+            if(!Bind<IsLiveObject>(base_,0x52B7CE4)(nullptr,collider,nullptr,nullptr)) return ContactKind::Unavailable;
+            if(IsCharacterWorldContact(address,tracedCollider_,0,pawn_,tracedTarget_)) return ContactKind::Character;
+            const auto actor=reinterpret_cast<Address>(lookup(map,collider,nullptr));
+            if(IsCharacterWorldContact(address,tracedCollider_,actor,pawn_,tracedTarget_))
+                return VerifyWorldCharacter(base_,reinterpret_cast<Object>(actor),collider,ray,hit.distance);
+            return IsGlassMaterial(base_,Bind<SharedMaterial>(base_,0x52D98B8)(collider,nullptr)) ?
+                ContactKind::Glass : ContactKind::Solid;
+        });
 }
 
 Occlusion NativeTargetQueries::CheckSmoke(const ContextIdentity&,

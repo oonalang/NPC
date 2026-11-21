@@ -26,5 +26,7 @@ private:
     std::uintptr_t base_;
     std::uintptr_t match_;
     std::uintptr_t pawn_;
+    std::uintptr_t tracedTarget_ = 0;
+    std::uintptr_t tracedCollider_ = 0;
 };
 }

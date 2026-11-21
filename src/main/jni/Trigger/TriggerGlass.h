@@ -23,7 +23,16 @@ struct GlassPath {
 };
 
 using RayContacts = std::array<RayContact, MaxGlassContacts>;
-enum class ContactKind { Unavailable, Solid, Glass };
+enum class ContactKind { Unavailable, Solid, Glass, Character };
+
+inline bool EligibleBodyGroup(int group,bool avatar) noexcept {
+    return group!=6 && group!=32 && ((group>=1 && group<=31) || (group==0 && avatar));
+}
+
+inline ContactKind VerifiedCharacterContact(bool detailed,int group,bool avatar) noexcept {
+    if(!detailed) return ContactKind::Unavailable;
+    return EligibleBodyGroup(group,avatar)?ContactKind::Character:ContactKind::Solid;
+}
 
 inline bool IsPassableGlass(int materialType) noexcept {
     return materialType == 1 || materialType == 12 || materialType == 33;
@@ -43,25 +52,68 @@ inline float GlassRetraceTolerance(const ViewRay& ray, float distance) noexcept 
                                      std::fabs(ray.origin.y), std::fabs(ray.origin.z)}));
 }
 
-template<class Classify>
-GlassPath CheckGlassPath(RayContacts& contacts, std::size_t count, RayContact nearest,
-                         float distance, Classify classify) noexcept {
+inline bool PrepareRayContacts(RayContacts& contacts,std::size_t count,RayContact nearest,float distance) noexcept {
     if (!count || count > contacts.size() || !std::isfinite(distance) || distance <= 0.f ||
         !std::isfinite(nearest.distance) || nearest.distance < 0.f || nearest.distance > distance)
-        return {};
+        return false;
     auto end = contacts.begin() + count;
     for (auto at = contacts.begin(); at != end; ++at) {
         if (!at->collider || !std::isfinite(at->distance) || at->distance < 0.f ||
             at->distance > distance + ContactTolerance(distance))
-            return {};
+            return false;
     }
     std::sort(contacts.begin(), end, [](RayContact a, RayContact b) { return a.distance < b.distance; });
     const float tolerance = ContactTolerance(nearest.distance);
-    if (std::fabs(contacts[0].distance - nearest.distance) > tolerance) return {};
+    if (std::fabs(contacts[0].distance - nearest.distance) > tolerance) return false;
     if (nearest.collider && std::none_of(contacts.begin(), end, [&](RayContact contact) {
             return contact.collider == nearest.collider &&
                 std::fabs(contact.distance - nearest.distance) <= tolerance;
-        })) return {};
+        })) return false;
+    return true;
+}
+
+inline bool IsCharacterWorldContact(std::uintptr_t collider,std::uintptr_t bodyCollider,
+                                    std::uintptr_t actor,std::uintptr_t self,std::uintptr_t target) noexcept {
+    return (collider && bodyCollider && collider==bodyCollider) ||
+        (actor && ((self && actor==self) || (target && actor==target)));
+}
+
+template<class Classify>
+Occlusion CheckWorldContacts(RayContacts& contacts,std::size_t count,RayContact nearest,
+                              float distance,Classify classify) noexcept {
+    if(!PrepareRayContacts(contacts,count,nearest,distance)) return Occlusion::Unavailable;
+    std::size_t panes=0;
+    const float tolerance=ContactTolerance(distance);
+    for(std::size_t index=0;index<count;++index) {
+        const auto contact=contacts[index];
+        if(contact.distance+tolerance>=distance) return Occlusion::Clear;
+        const auto kind=classify(contact.collider);
+        if(kind==ContactKind::Unavailable) return Occlusion::Unavailable;
+        if(kind==ContactKind::Solid) return Occlusion::Blocked;
+        if(kind==ContactKind::Character) continue;
+        if(kind!=ContactKind::Glass || ++panes>MaxGlassPanes) return Occlusion::Unavailable;
+    }
+    return Occlusion::Clear;
+}
+
+template<class Trace,class Classify>
+Occlusion ResolveWorldOcclusion(float distance,bool blocked,float blockerDistance,Trace trace,Classify classify) noexcept {
+    if(!std::isfinite(distance) || distance<=0.f) return Occlusion::Unavailable;
+    if(!blocked) return Occlusion::Clear;
+    if(!std::isfinite(blockerDistance) || blockerDistance<0.f ||
+        blockerDistance>distance+ContactTolerance(distance)) return Occlusion::Unavailable;
+    if(blockerDistance+ContactTolerance(distance)>=distance) return Occlusion::Clear;
+    RayContacts contacts{};
+    std::size_t count=0;
+    if(!trace(contacts,count)) return Occlusion::Unavailable;
+    return CheckWorldContacts(contacts,count,{0,blockerDistance},distance,classify);
+}
+
+template<class Classify>
+GlassPath CheckGlassPath(RayContacts& contacts, std::size_t count, RayContact nearest,
+                         float distance, Classify classify) noexcept {
+    if(!PrepareRayContacts(contacts,count,nearest,distance)) return {};
+    const auto end=contacts.begin()+count;
 
     GlassPath path{true, {}, -1.f};
     std::size_t panes = 0;
@@ -72,7 +124,7 @@ GlassPath CheckGlassPath(RayContacts& contacts, std::size_t count, RayContact ne
             path.firstSolid = *at;
             return path;
         }
-        if (++panes > MaxGlassPanes) return {};
+        if (kind!=ContactKind::Glass || ++panes > MaxGlassPanes) return {};
         path.lastPaneDistance = at->distance;
     }
     return path;

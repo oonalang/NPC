@@ -220,6 +220,45 @@ Changing mode while idle no longer discards a ready update. Release-fire
 snipers still need completed ADS and distinct press and freshly checked release
 updates. Host tests cover these transitions and the glass and cover ordering.
 
+## False world obstruction follow-up
+
+The user reports the "Target is behind cover" status with a visible, unobstructed
+enemy. The recording alone does not identify the colliding object. The previous
+world fallback had a concrete false-rejection path: a world contact with the
+target's broad collider could lie before the detailed body point, and any path
+without a glass pane was treated as blocked. Failed contact verification was
+also reported as confirmed cover.
+
+`NativeTargetQueries` now retains the validated target and broad collider only
+for its current query. When the native distance check reports a nearer hit, a
+bounded contact query uses the same world mask, original ray, water filter and
+range. The validated broad body collider can be excluded as a character contact.
+Other contacts mapped to the local pawn or current target require a successful
+native detailed body verification. Shield groups 6 and 32 remain solid, including
+when mapped to the current target. Other actors and solid world objects still
+block. All contacts are checked in distance order, so excluding a body proxy
+does not hide a wall before the detailed body point. Glass keeps its existing
+material and pane limits.
+
+Unavailable optional bindings, full/incomplete contact buffers, invalid data or
+disagreement with the original nearest hit produce an unavailable query. They
+cannot authorize a shot or claim that cover was confirmed. Clear native world
+checks and endpoint-only hits do not invoke this fallback. The contact list uses
+fixed storage with at most 32 entries; character aliases may require additional
+native detail calls. No reaction timer, firing cadence, aim requirement, native
+compatibility gate or license capability was changed.
+
+The sanitizer suite passes 4,428 behavior checks, including broad-body false
+cover, character aliases, intervening walls, separately mapped and target-owned
+shields, unavailable queries, malformed contacts, clear-path query budgets, and
+acquisition/cancellation for Both and ADS Only with automatic and release-fire
+weapons. Prepared-input, native-profile and permanent-rejection suites pass;
+all 57 fingerprints and seven compatibility probes still match the supplied
+ELF. The ARM64 Lite build and hardening inspection pass. These tests establish
+the policy and static binding checks; they do not establish which collider was
+hit in the user's recording or prove the behavior on a phone. Device collision
+and FPS verification remain outstanding.
+
 ## Validation
 
 Host checks need a C++17 compiler with AddressSanitizer and UBSan:

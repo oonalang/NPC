@@ -34,7 +34,7 @@ Login uses a compact centered matte card, a centered ETHNIR title and spaced LIT
 - Enemy projection/drawing is skipped when all supported visual options are off. Speed/gravity maintenance and existing license revocation restoration still run. Aim/trigger/native feature callbacks are unchanged.
 - The periodic automatic screenshot/upload loop is removed from Lite's render loop. Existing explicit feedback service code is retained.
 
-Measured ARM64 release library size with the same NDK: **3,930,552 bytes** versus main's **7,488,904 bytes**, about **47.5% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
+Measured ARM64 release library size with the same NDK: **3,932,264 bytes** versus main's **7,488,904 bytes**, about **47.5% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
 
 ## Files
 
@@ -101,6 +101,8 @@ Commands: `sh tests/run-lite-ui-tests.sh`; `LITE_GPU_TEST=1 sh tests/run-lite-ui
 The shared trigger/pickup/hitbox/license/Java results above belong to the initial Lite port. The sidebar/touch follow-up reruns the native build, hardening, UI sanitizer, GLES, Settings controls and Memory tab suites. Additional checks exercise scaled immediate presses and jitter-tolerant releases at 15/30/60/90/120 FPS, cancellation, missing Ended samples, finger/resolution changes, diagonal slider drags and final release values, whole-row slider targets, scrolling/selection in a 40-item dropdown, and nested scroll handoff. GLES checks verify the source kernel's brightness, the source shadow/tint color within 3/255, padded crop UVs and blur sampling beyond the pane edges. Validation logs use the `ethnir-lite-v3-*` prefix.
 
 The handle/drag/routing follow-up uses `ethnir-lite-v4-*` logs and reruns the ARM64 build, native hardening, UI sanitizer and GLES suites. New checks cover six viewport sizes, valid upward restore, rejected taps/wrong-direction/outside/canceled/resized gestures, release capture, no accidental toggle after opening, title-only dragging, persistent/clamped placement, and outside passthrough in all three UI states. Routing tests cover latched ownership across panel crossings, repeated releases, recovery for the next finger, concurrent snapshot publication, and actual Config bindings. These are host/integration checks, not installed-phone results.
+
+The subsequent false-obstruction fix is documented in [Triggerbot integration](triggerbot.md#false-world-obstruction-follow-up). It adds character-aware verification to the world-contact fallback and distinguishes unavailable queries from confirmed cover. It reruns Triggerbot sanitizer/profile, supplied-ELF, ARM64/hardening and Hitbox checks under the `ethnir-trigger-cover-*` prefix. It does not establish the exact collider in the supplied recording or a device FPS result.
 
 Capture the actual login/loading/check/reveal sequence using `LITE_GPU_TEST=1 LITE_CAPTURE_STARTUP=1 sh tests/run-lite-ui-tests.sh /tmp/lite-startup`. This emits 180 native frames at 30 FPS. Authentication/setup times and session data are fixtures; the presentation controller and all UI drawing are production code. The striped menu backdrop is a GPU blur test pattern; runtime blur uses the game image.
 
