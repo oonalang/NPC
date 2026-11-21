@@ -16,9 +16,10 @@ void Require(bool condition, const char* message) {
 struct InputStage {
     std::array<unsigned char, 0x30> param{};
     std::array<unsigned char, 0x20> result{};
-    void Prepare() {
+    void Prepare(bool checkFire = true) {
         param.fill(0);
         result.fill(0);
+        param[0x13] = checkFire;
         param[0x14] = 1;
     }
     void Merge(const Intent& intent) {
@@ -34,7 +35,7 @@ struct InputStage {
                 }
             });
     }
-    bool NativeReleaseShot() const { return param[0x14] && param[0x1A]; }
+    bool NativeReleaseShot() const { return param[0x13] && param[0x14] && param[0x1A]; }
 };
 
 Frame Ready() {
@@ -144,5 +145,28 @@ int main() {
     ++frame.updateId;
     Require(controller.Step(enabled,frame).down,
             "native rejection left the sniper permanently awaiting an ack");
+
+    for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
+        const Settings settings{true, mode, false};
+        controller.Reset();
+        frame = Ready();
+        native.Prepare(false);
+        frame.hardBlocked = !PreparedFireCheckEnabled(native.param.data());
+        native.Merge(controller.Step(settings, frame));
+        Require(frame.hardBlocked && !controller.HasOwnedInput() && !native.param[0x18],
+                "an update with native fire checking disabled does not consume the sniper press");
+
+        native.Prepare();
+        ++frame.updateId;
+        frame.hardBlocked = !PreparedFireCheckEnabled(native.param.data());
+        native.Merge(controller.Step(settings, frame));
+        Require(native.param[0x18] && !native.NativeReleaseShot(),
+                "the first accepted update receives the press in either trigger mode");
+
+        native.Prepare();
+        ++frame.updateId;
+        native.Merge(controller.Step(settings, frame));
+        Require(native.NativeReleaseShot(), "the next freshly eligible update consumes the release");
+    }
     std::cout << "Passed " << checks << " prepared input checks\n";
 }

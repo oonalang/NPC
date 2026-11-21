@@ -1,6 +1,7 @@
 #include "../src/main/jni/Trigger/NativeCancellation.h"
 #include "../src/main/jni/Trigger/NativeReadiness.h"
 #include "../src/main/jni/Trigger/NativeRay.h"
+#include "../src/main/jni/Trigger/TriggerGlass.h"
 #include "../src/main/jni/Trigger/TriggerRange.h"
 #include "../src/main/jni/Trigger/TriggerRuntime.h"
 
@@ -729,6 +730,66 @@ void AdsAndModeChanges() {
     Require(controller.Step(Settings{}, frame).up, "disabling releases owned fire");
 }
 
+void IdleSniperAcquisition() {
+    const Settings ads{true, Mode::ADSOnly, false};
+    Controller controller;
+    Queries queries;
+    auto frame = ReleaseReady();
+    frame.fireMode = FireMode::Unsupported;
+    Require(EvaluateInput(enabled, frame, centerRay, queries, controller).passthrough,
+            "unsupported input leaves no press to clean up");
+    ++frame.updateId;
+    frame.fireMode = FireMode::SingleRelease;
+    Require(EvaluateInput(ads, frame, centerRay, queries, controller).down && queries.bodyCalls == 1,
+            "a ready sniper can press on the first eligible update after an idle mode change");
+    ++frame.updateId;
+    Require(EvaluateInput(ads, frame, centerRay, queries, controller).commitRelease && queries.bodyCalls == 2,
+            "the next release still needs a new body and obstruction check");
+}
+
+void GlassPaths() {
+    constexpr std::uintptr_t glass = 1, breakable = 12, penetrable = 33;
+    constexpr std::uintptr_t wall = 6, solidGlass = 31, enemy = 100;
+    const auto isGlass = [](std::uintptr_t collider) { return IsPassableGlass(static_cast<int>(collider)); };
+    Require(IsPassableGlass(glass) && IsPassableGlass(breakable) && IsPassableGlass(penetrable) &&
+            !IsPassableGlass(0) && !IsPassableGlass(solidGlass) && !IsPassableGlass(wall),
+            "only the native passable glass material types can be skipped");
+
+    RayContacts contacts{{{enemy, 68.f}, {breakable, 63.f}, {glass, 60.f}}};
+    auto path = CheckGlassPath(contacts, 3, {glass, 60.f}, centerRay.maxDistance, isGlass);
+    ViewRay shortened;
+    float advance = 0.f;
+    Require(path.verified && path.firstSolid.collider == enemy && path.lastPaneDistance == 63.f &&
+            AdvancePastGlass(centerRay, path, shortened, advance) && advance > 63.f && advance < 68.f &&
+            shortened.origin.z == advance && std::fabs(shortened.maxDistance + advance - centerRay.maxDistance) < .0001f,
+            "unsorted hits select the nearest candidate after two panes and retain the original range cap");
+
+    contacts = {{{enemy, 20.f}, {wall, 10.001f}, {glass, 10.f}}};
+    path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, isGlass);
+    Require(path.verified && path.firstSolid.collider == wall && path.firstSolid.distance < 20.f,
+            "a wall right behind glass still blocks the original world ray");
+    contacts[1] = {solidGlass, 10.f};
+    path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, isGlass);
+    Require(path.verified && path.firstSolid.collider == solidGlass && path.firstSolid.distance == 10.f,
+            "impenetrable glass blocks even when another pane touches it");
+
+    contacts = {{{breakable, 12.f}, {glass, 10.f}}};
+    path = CheckGlassPath(contacts, 2, {0, 10.f}, 20.f, isGlass);
+    Require(path.verified && path.lastPaneDistance == 12.f && !path.firstSolid.collider,
+            "world obstruction can clear when every intervening contact is passable glass");
+    Require(!CheckGlassPath(contacts, 2, {wall, 10.f}, 20.f, isGlass).verified &&
+            !CheckGlassPath(contacts, 2, {0, 9.f}, 20.f, isGlass).verified,
+            "a differing collider or nearest distance cannot clear the first native hit");
+
+    contacts = {{{glass, 10.f}, {breakable, 12.f}, {penetrable, 14.f}, {enemy, 20.f}}};
+    Require(!CheckGlassPath(contacts, 4, {glass, 10.f}, 20.f, isGlass).verified &&
+            !CompleteContactCount(32, 32) && !CompleteContactCount(33, 64) &&
+            CompleteContactCount(32, 64), "pane and hit counts are bounded and a full native buffer is rejected");
+    contacts[1].distance = std::numeric_limits<float>::quiet_NaN();
+    Require(!CheckGlassPath(contacts, 4, {glass, 10.f}, 20.f, isGlass).verified,
+            "a malformed contact cannot hide a blocker");
+}
+
 void TargetValidation() {
     const auto identity = Ready().identity;
     Queries queries;
@@ -926,6 +987,8 @@ int main() {
     ReleaseShotCancellation();
     OwnershipAndLifecycle();
     AdsAndModeChanges();
+    IdleSniperAcquisition();
+    GlassPaths();
     TargetValidation();
     InputQueryBudget();
     AutomaticCooldownQueryBudget();

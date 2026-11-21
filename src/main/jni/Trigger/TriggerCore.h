@@ -141,7 +141,7 @@ public:
             return {false, false, true, false};
         }
 
-        if (modeChanged || !Eligible(settings, frame)) {
+        if ((modeChanged && IsOwned()) || !Eligible(settings, frame)) {
             return ReleaseOwned();
         }
 

@@ -69,8 +69,8 @@ def verify(library, source):
 
     probes = re.findall(r'\{"([^"]+)",\s*(0x[0-9A-Fa-f]+),\s*\{([^}]*)\},\s*(?:true|false)\}',
                         (source / "TriggerCompatibility.cpp").read_text())
-    if len(checks) != 48 or len(probes) != 7:
-        raise ValueError("expected all 48 profile fingerprints and all 7 compatibility probes")
+    if len(checks) != 57 or len(probes) != 7:
+        raise ValueError("expected all 57 profile fingerprints and all 7 compatibility probes")
     if len({int(rva, 16) for _, rva, _ in checks}) != len(checks):
         raise ValueError("duplicate profile fingerprint addresses")
     failures = []

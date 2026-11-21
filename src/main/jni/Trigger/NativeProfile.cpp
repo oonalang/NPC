@@ -36,10 +36,12 @@ const char* PendingDecodeReason(std::uintptr_t rva) noexcept {
     switch (rva) {
         case 0x530005C: return "Waiting for decoded Screen.get_width (0x530005C)";
         case 0x53000C0: return "Waiting for decoded Screen.get_height (0x53000C0)";
+        case 0x531EA00: return "Waiting for decoded Physics.RaycastNonAlloc (0x531EA00)";
         case 0x54AFFE4: return "Waiting for decoded Weapon.CanFire (0x54AFFE4)";
         case 0x5E5FA20: return "Waiting for decoded BaseGame.IsInSmoke (0x5E5FA20)";
         case 0x5E5FBE8: return "Waiting for decoded BaseGame.IsSmokeInMiddle (0x5E5FBE8)";
         case 0x5E5FDB4: return "Waiting for decoded smoke cluster query (0x5E5FDB4)";
+        case 0x66F0820: return "Waiting for decoded raycast scratch getter (0x66F0820)";
         case 0x66FE6B4: return "Waiting for decoded detailed target trace (0x66FE6B4)";
         case 0x78AF19C: return "Waiting for decoded collider target lookup (0x78AF19C)";
         default:
@@ -141,6 +143,18 @@ bool ReadVerifiedExecutable(std::uintptr_t address, void* output, std::size_t si
         }
     }
     return false;
+}
+
+bool NativeGlassQueriesReady(std::uintptr_t base) noexcept {
+    if (!base) return false;
+    for (const auto& check : glassChecks) {
+        std::array<unsigned char, 16> actual{};
+        if (check.rva > std::numeric_limits<std::uintptr_t>::max() - base ||
+            !ReadVerifiedExecutable(base + check.rva, actual.data(), actual.size())) return false;
+        const bool exact = NativeProfileDetail::RequiresExactRuntimePrefix(check.rva);
+        if ((actual == check.expected) != exact) return false;
+    }
+    return true;
 }
 
 NativeProfileDetail::ValidationResult NativeProfileDetail::ValidateModule(

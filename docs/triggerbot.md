@@ -13,8 +13,8 @@ so this change repairs NPC's existing path.
 - NPC base: `bd3fb7187311d2e2abfa7306aca425954f176771`
 - Purple reference: `fd895e5f1023712a331fcdf530371e1332e557cc`
 
-All 48 pinned code fingerprints and seven diagnostic probes match the supplied
-ELF when virtual addresses are mapped through its program headers. The checked
+All 50 core fingerprints, seven optional glass fingerprints and seven diagnostic
+probes match the supplied ELF when mapped through its program headers. The checked
 trigger RVAs map to file offsets at `RVA - 0x4000` in this image.
 
 The C# declaration of a static method does not fully specify this binary's ABI.
@@ -25,7 +25,7 @@ also use the ARM64 indirect aggregate return convention. Preserve these bindings
 Eight method bodies in the disk image are encoded. Their disk fingerprints are
 checked by the offline verifier rather than compared with the loaded bodies.
 Runtime validation requires the pinned build ID, readable executable ranges for
-all 48 code locations, and exact prefixes for the 40 stable locations, including all five
+all 50 core code locations, and exact prefixes for the 42 stable locations, including all five
 input hook entry points. The encoded methods must be readable and no longer
 match their known encoded disk prefixes before hooks can be installed. Unknown
 builds and changed stable entry points leave automatic input disabled. Live
@@ -186,6 +186,24 @@ tracing. It checks and presses on its first ready update. Held input still
 checks current geometry through cooldown so losing a target cancels it
 immediately. Host tests cover the range bounds, weapon changes and the skipped
 cooldown queries. A BR device capture is needed to measure the frame time gain.
+
+## Glass and interrupted sniper input
+
+Ordinary, breakable and physically penetrable glass use the native material
+classifier. When a pane is the first hit, a bounded raycast with the same mask
+finds the next solid contact. The usual body trace still has to agree with that
+contact. The world check starts at the original camera and uses its own native
+mask, so a wall behind or touching a pane still blocks the shot. Unknown and
+impenetrable materials remain solid. Each fallback considers at most two panes
+and 32 contacts. A full buffer or unavailable native binding leaves the blocker
+in place. The native weapon still determines whether a shot breaks or penetrates
+the pane.
+
+The trigger checks the prepared `CheckFireParam.CheckFire` flag before tracing.
+An update the game will ignore cannot consume a synthetic press or release.
+Changing mode while idle no longer discards a ready update. Release-fire
+snipers still need completed ADS and distinct press and freshly checked release
+updates. Host tests cover these transitions and the glass and cover ordering.
 
 ## Validation
 

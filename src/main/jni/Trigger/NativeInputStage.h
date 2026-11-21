@@ -6,6 +6,10 @@
 
 namespace PhantomTrigger {
 
+inline bool PreparedFireCheckEnabled(const void* param) noexcept {
+    return param && static_cast<const unsigned char*>(param)[0x13] == 1;
+}
+
 inline bool IsSupportedPreparation(std::uintptr_t base, std::uintptr_t entry) noexcept {
     if (!base || entry < base) return false;
     const auto rva = entry - base;

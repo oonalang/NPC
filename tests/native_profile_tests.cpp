@@ -56,6 +56,8 @@ struct Module {
         std::memcpy(bytes + 0x100, note, sizeof(note));
         for (const auto& check : checks)
             std::memcpy(bytes + check.rva, check.expected.data(), check.expected.size());
+        for (const auto& check : glassChecks)
+            std::memcpy(bytes + check.rva, check.expected.data(), check.expected.size());
         loaded.dlpi_addr = base();
         loaded.dlpi_name = "/data/app/game/lib/arm64/libunity.so";
         loaded.dlpi_phdr = segments.data();
@@ -180,6 +182,18 @@ void RetryAndPublish(Module& module) {
     Require(InitializeNativeTrigger(module.base()) && installs == 1 && failures == 0,
             "retry installs once after the loader becomes available");
     Require(IsVerifiedExecutableAddress(address), "validated decoded method is executable");
+    Require(!NativeGlassQueriesReady(module.base()), "ordinary trigger installs while optional glass bindings are encoded");
+    for (const auto& check : glassChecks) {
+        if (!NativeProfileDetail::RequiresExactRuntimePrefix(check.rva)) {
+            constexpr unsigned char decoded[]{0xfd,0x7b,0xbf,0xa9,0xfd,0x03,0x00,0x91,
+                                               0x1f,0x20,0x03,0xd5,0xc0,0x03,0x5f,0xd6};
+            std::memcpy(module.bytes + check.rva, decoded, sizeof(decoded));
+        }
+    }
+    Require(NativeGlassQueriesReady(module.base()), "optional glass bindings become available when their methods decode");
+    module.bytes[0x66F2798] ^= 1;
+    Require(!NativeGlassQueriesReady(module.base()), "a changed world mask rejects the optional glass scan");
+    module.bytes[0x66F2798] ^= 1;
     std::array<unsigned char,8> code{};
     const auto walks = loaderWalks;
     for (unsigned i = 0; i < 1000; ++i)

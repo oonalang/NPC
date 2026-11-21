@@ -1,5 +1,7 @@
 #include "NativeQueries.h"
+#include "NativeProfile.h"
 #include "NativeRay.h"
+#include "TriggerGlass.h"
 
 #include <algorithm>
 #include <cmath>
@@ -54,7 +56,10 @@ struct NativeCamera {
 };
 
 constexpr int LocalBulletTrace = 0x800A;
+constexpr int WorldTraceFlag = 0x12009;
 constexpr std::size_t MaximumPawnCount = 512;
+constexpr std::uint64_t MaximumRaycastBuffer = 256;
+using BroadTrace = bool(*)(Object, Point3, Point3, float, int, Object, int, Method);
 
 bool Finite(const Point3& value) noexcept {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
@@ -95,6 +100,44 @@ bool BodyGroup(int group, bool avatar) noexcept {
     return group != 6 && group != 32 &&
            ((group >= 1 && group <= 31) || (group == 0 && avatar));
 }
+
+bool IsGlassMaterial(Address base, Object material) noexcept {
+    if (!material) return false;
+    using MaterialType = int(*)(Object, Object, Method);
+    return IsPassableGlass(Bind<MaterialType>(base, 0x66F1E00)(nullptr, material, nullptr));
+}
+
+GlassPath TraceGlassPath(Address base, const ViewRay& ray, float distance, RayContact nearest,
+                         int traceFlag) noexcept {
+    if (!NativeGlassQueriesReady(base)) return {};
+    const auto scratch = Bind<Object(*)(Object, Method)>(base, 0x66F0820)(nullptr, nullptr);
+    const auto array = reinterpret_cast<Address>(scratch);
+    const auto capacity = Read<std::uint64_t>(array, 0x18);
+    if (capacity < 2 || capacity > MaximumRaycastBuffer) return {};
+    using GetLayerMask = std::int64_t(*)(Object, int, Method);
+    using RemoveWaterLayer = std::int64_t(*)(Object, std::int64_t, Method);
+    auto mask = Bind<GetLayerMask>(base, 0x66ECB64)(nullptr, traceFlag, nullptr);
+    if (traceFlag == WorldTraceFlag)
+        mask = Bind<RemoveWaterLayer>(base, 0x66F2694)(nullptr, mask, nullptr);
+    using RaycastNonAlloc = int(*)(Object, Point3, Point3, Object, float, std::int64_t, Method);
+    const int count = Bind<RaycastNonAlloc>(base, 0x531EA00)(
+        nullptr, ray.origin, ray.direction, scratch, distance, mask, nullptr);
+    if (!CompleteContactCount(count, capacity)) return {};
+
+    RayContacts contacts{};
+    for (int i = 0; i < count; ++i) {
+        const auto at = 0x20 + static_cast<std::size_t>(i) * 0x30;
+        contacts[i] = {Read<Address>(array, at + 0x28), Read<float>(array, at + 0x1C)};
+    }
+    using IsLiveObject = bool(*)(Object, Object, Object, Method);
+    using SharedMaterial = Object(*)(Object, Method);
+    return CheckGlassPath(contacts, static_cast<std::size_t>(count), nearest, distance,
+        [base](Address address) noexcept {
+            auto collider = reinterpret_cast<Object>(address);
+            if (!Bind<IsLiveObject>(base, 0x52B7CE4)(nullptr, collider, nullptr, nullptr)) return false;
+            return IsGlassMaterial(base, Bind<SharedMaterial>(base, 0x52D98B8)(collider, nullptr));
+        });
+}
 }
 
 bool BuildNativeRay(Address base, ViewRay& ray,
@@ -111,22 +154,41 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
         !std::isfinite(ray.maxDistance) || ray.maxDistance <= 0) return false;
     OwnedImpact impact{base_, Bind<Object(*)(Object, Method)>(base_, 0x62588E4)(nullptr, nullptr)};
     if (!impact.object) return false;
-    using BroadTrace = bool(*)(Object, Point3, Point3, float, int, Object, int, Method);
-    const bool broadHit = Bind<BroadTrace>(base_, 0x66F17EC)(
-        nullptr, ray.origin, ray.direction, ray.maxDistance, LocalBulletTrace,
-        impact.object, 0, nullptr);
-    if (!broadHit) return true;
+    const auto trace = Bind<BroadTrace>(base_, 0x66F17EC);
+    if (!trace(nullptr, ray.origin, ray.direction, ray.maxDistance, LocalBulletTrace,
+               impact.object, 0, nullptr)) return true;
     result.hit = true;
     result.nearest = true;
-    const Address collider = Read<Address>(reinterpret_cast<Address>(impact.object), 0x18);
+    const auto impactAddress = reinterpret_cast<Address>(impact.object);
+    auto collider = Read<Address>(impactAddress, 0x18);
     if (!collider) return false;
     const Object map = Bind<Object(*)(Object, Method)>(base_, 0x8011E2C)(nullptr, nullptr);
     if (!map) return false;
-    const Object target = Bind<Object(*)(Object, Object, Method)>(base_, 0x78AF19C)(
-        map, reinterpret_cast<Object>(collider), nullptr);
-    const Address targetAddress = reinterpret_cast<Address>(target);
+    const auto lookup = Bind<Object(*)(Object, Object, Method)>(base_, 0x78AF19C);
+    auto target = lookup(map, reinterpret_cast<Object>(collider), nullptr);
+    auto targetAddress = reinterpret_cast<Address>(target);
+    if (targetAddress == pawn_) return true;
+    ViewRay detailRay = ray;
+    float advance = 0.f;
+    if (!EnemyMember(match_, targetAddress)) {
+        if (!IsGlassMaterial(base_, Read<Object>(impactAddress, 0x78))) return true;
+        const RayContact surface{collider, Read<float>(impactAddress, 0x5C)};
+        const auto path = TraceGlassPath(base_, ray, ray.maxDistance, surface, LocalBulletTrace);
+        if (!AdvancePastGlass(ray, path, detailRay, advance)) return true;
 
-    if (!target || targetAddress == pawn_ || !EnemyMember(match_, targetAddress)) return true;
+        collider = path.firstSolid.collider;
+        target = lookup(map, reinterpret_cast<Object>(collider), nullptr);
+        targetAddress = reinterpret_cast<Address>(target);
+        if (targetAddress == pawn_ || !EnemyMember(match_, targetAddress)) return true;
+        const float tolerance = GlassRetraceTolerance(ray, path.firstSolid.distance);
+        const float retraceDistance = std::min(detailRay.maxDistance, path.firstSolid.distance - advance + tolerance);
+        if (!trace(nullptr, detailRay.origin, detailRay.direction, retraceDistance,
+                   LocalBulletTrace, impact.object, 0, nullptr)) return true;
+        const float retraced = Read<float>(impactAddress, 0x5C);
+        if (Read<Address>(impactAddress, 0x18) != collider || !std::isfinite(retraced) ||
+            retraced < 0.f || std::fabs(advance + retraced - path.firstSolid.distance) > tolerance)
+            return false;
+    }
     result.enemy = true;
     const Address info = Read<Address>(targetAddress, 0x78);
     const float health = Read<float>(info, 0x34);
@@ -140,8 +202,8 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     using DetailTrace = bool(*)(Object, Object, Object, Point3, Point3,
                                float, int, Object*, Method);
     const bool detailed = Bind<DetailTrace>(base_, 0x66FE6B4)(
-        nullptr, target, reinterpret_cast<Object>(collider), ray.origin,
-        ray.direction, ray.maxDistance, 0, &impact.object, nullptr);
+        nullptr, target, reinterpret_cast<Object>(collider), detailRay.origin,
+        detailRay.direction, detailRay.maxDistance, 0, &impact.object, nullptr);
     if (!detailed || !impact.object) return true;
     const Address address = reinterpret_cast<Address>(impact.object);
     const int group = Read<int>(address, 0x70);
@@ -149,7 +211,10 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     result.detailed = BodyGroup(group, avatar);
     if (!result.detailed) return true;
     result.point = Read<Point3>(address, 0x28);
-    result.distance = Read<float>(address, 0x5C);
+    const float detailDistance = Read<float>(address, 0x5C);
+    if (!std::isfinite(detailDistance) || detailDistance <= 0.f || detailDistance > detailRay.maxDistance)
+        return false;
+    result.distance = advance + detailDistance;
     const auto actor = Read<std::uint32_t>(info, 0x30);
     if (actor == 0) return false;
 
@@ -168,9 +233,13 @@ Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
         nullptr, ray.origin, ray.direction, hit.distance, &blockerDistance, 0, nullptr);
     if (!blocked) return Occlusion::Clear;
     if (!std::isfinite(blockerDistance) || blockerDistance < 0) return Occlusion::Unavailable;
-    const float tolerance = std::max(0.0001f,
-        8.0f * std::numeric_limits<float>::epsilon() * hit.distance);
-    return blockerDistance + tolerance < hit.distance ? Occlusion::Blocked : Occlusion::Clear;
+    const float tolerance = ContactTolerance(hit.distance);
+    if (blockerDistance + tolerance >= hit.distance) return Occlusion::Clear;
+
+    const auto path = TraceGlassPath(base_, ray, hit.distance, {0, blockerDistance}, WorldTraceFlag);
+    if (!path.verified || path.lastPaneDistance < 0.f) return Occlusion::Blocked;
+    if (path.firstSolid.collider && path.firstSolid.distance + tolerance < hit.distance) return Occlusion::Blocked;
+    return Occlusion::Clear;
 }
 
 Occlusion NativeTargetQueries::CheckSmoke(const ContextIdentity&,

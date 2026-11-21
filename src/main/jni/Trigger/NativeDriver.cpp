@@ -290,7 +290,7 @@ void DecidePreparedInput(void* owner, void* param) {
     frame.contextValid = component != 0;
     frame.bindingsReady = true;
     frame.manualActive = local.manualActive;
-    frame.hardBlocked = !Field<bool>(pawn,0x550) || HardStateBlocked(weapon) ||
+    frame.hardBlocked = !PreparedFireCheckEnabled(param) || !Field<bool>(pawn,0x550) || HardStateBlocked(weapon) ||
         !At<BoolGetter>(0xC914698)(controller,nullptr);
     frame.ammoAvailable = At<BoolGetter>(0x5473F58)(weapon,nullptr);
     const auto klass = Field<std::uintptr_t>(weapon,0);
