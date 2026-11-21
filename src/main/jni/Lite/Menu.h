@@ -1,5 +1,6 @@
 #pragma once
 #include "Widgets.h"
+#include "SidebarStyle.h"
 #include "StartupView.h"
 #include "../System/UI/MemoryTab.h"
 #include "../System/UI/Keyboard.h"
@@ -21,6 +22,7 @@ struct State {
 struct View {
     bool authorized = false, pending = false, ready = false, interactive = true;
     ImTextureID sidebarTexture = nullptr;
+    ImVec2 sidebarUv0{0,1},sidebarUv1{1,0};
     lite_startup::Frame startup;
     float preparation = 0.f, fps = 0.f;
     std::uint64_t uptime = 0;
@@ -123,20 +125,22 @@ inline void Panel(const char* label, float height, Draw draw) {
 
 inline bool SideTab(const char* label, Tab tab, State& state) {
     const auto lo = ImGui::GetCursorScreenPos();
-    const ImVec2 size(ImGui::GetContentRegionAvail().x - 2.f * lite_widgets::scale, 26.f * lite_widgets::scale);
+    const auto scale=lite_widgets::scale;
+    const ImVec2 size(ImGui::GetContentRegionAvail().x,26.f*scale);
     const bool pressed = lite_widgets::Tap(ImGui::InvisibleButton(label, size));
     const bool active = state.tab == tab;
     auto* draw = ImGui::GetWindowDrawList();
-    if (active || ImGui::IsItemHovered()) draw->AddRectFilled(lo, lo + size,
-        active ? IM_COL32(36,36,36,255) : IM_COL32(28,28,28,255), 5.f * lite_widgets::scale);
+    if (active || ImGui::IsItemHovered()) draw->AddRectFilled(lo+ImVec2(10.f*scale,0),lo+size-ImVec2(12.f*scale,0),
+        active ? IM_COL32(36,36,36,200) : IM_COL32(28,28,28,190),5.f*scale);
     static constexpr const char* icons[]{"\xef\x80\x95","\xef\x94\x80","\xef\x81\x9b","\xef\x83\xa7",
         "\xef\x80\x93","\xef\x87\xbc","\xef\x81\xbb"};
     const auto* icon = icons[static_cast<int>(tab)];
-    const auto iconPos = lo + ImVec2(10,5)*lite_widgets::scale;
-    draw->AddText(iconPos,active ? lite_colors::Accent : IM_COL32(60,60,60,255),icon);
+    const auto iconPos = lo + ImVec2(20,5)*scale;
+    draw->AddText(iconPos,active ? lite_colors::Accent : IM_COL32(58,58,58,255),icon);
     draw->AddText(iconPos + ImVec2(ImGui::CalcTextSize(icon).x + 6.f*lite_widgets::scale,0),
         active ? lite_colors::TextBright : lite_colors::TextDim, label);
     if (pressed) { state.tab = tab; keyboard = false; }
+    ImGui::SetCursorScreenPos(lo+ImVec2(0,31.f*scale));
     return pressed;
 }
 
@@ -145,39 +149,39 @@ inline void Sidebar(State& state, const View& view) {
     auto* draw = ImGui::GetWindowDrawList();
     auto* titleFont = view.titleFont ? view.titleFont : ImGui::GetFont();
     const auto lo = ImGui::GetCursorScreenPos();
-    const float titleSize = 30.f * scale;
-    const auto measured = titleFont->CalcTextSizeA(titleSize, FLT_MAX, 0, "ETHNIR");
-    draw->AddText(titleFont, titleSize, {lo.x + (ImGui::GetContentRegionAvail().x - measured.x) * .5f, lo.y + 29.f * scale},
-        lite_colors::TextBright, "ETHNIR");
-    const auto liteSize = ImGui::CalcTextSize("LITE");
-    draw->AddText({lo.x + (ImGui::GetContentRegionAvail().x - liteSize.x) * .5f, lo.y + 62.f * scale},
-        lite_colors::TextDim, "LITE");
-    ImGui::Dummy({0, 92.f * scale});
-    ImGui::TextDisabled("session");
+    const float width=ImGui::GetContentRegionAvail().x;
+    const auto original=titleFont->CalcTextSizeA(30.f*scale,FLT_MAX,0,"ethnir lite");
+    const float titleSize=30.f*scale*ImMin(1.f,ImMax(1.f,width-28.f*scale)/original.x);
+    const auto measured=titleFont->CalcTextSizeA(titleSize,FLT_MAX,0,"ethnir lite");
+    draw->AddText(titleFont,titleSize,{lo.x+(width-measured.x)*.5f,lo.y+44.f*scale-measured.y*.5f},
+        lite_colors::Accent,"ethnir lite");
+    ImGui::SetCursorScreenPos(lo+ImVec2(0,92.f*scale));
     SideTab("home", Tab::Home, state);
-    ImGui::Spacing();
-    ImGui::TextDisabled("visuals");
+    const auto group=[&](const char* label) {
+        const auto pos=ImGui::GetCursorScreenPos()+ImVec2(0,4.f*scale);
+        draw->AddText(pos+ImVec2(14.f*scale,0),lite_colors::TextDim,label);
+        ImGui::SetCursorScreenPos(pos+ImVec2(0,ImGui::GetTextLineHeight()+6.f*scale));
+    };
+    group("visuals");
     SideTab("players", Tab::Esp, state);
-    ImGui::Spacing();
-    ImGui::TextDisabled("combat");
+    group("combat");
     SideTab("aimbot", Tab::Aim, state);
     SideTab("trigger", Tab::Trigger, state);
-    ImGui::Spacing();
-    ImGui::TextDisabled("misc");
+    group("misc");
     SideTab("memory", Tab::Memory, state);
     SideTab("skins", Tab::Skins, state);
-    ImGui::Spacing();
-    ImGui::TextDisabled("system");
+    group("system");
     SideTab("configs", Tab::Settings, state);
-    ImGui::Dummy({0, 10.f * scale});
-    if (lite_widgets::Button("Hide menu", {0, 26.f * scale})) { state.minimized = true; keyboard = false; }
+    ImGui::Dummy({0,6.f*scale});
+    const auto hide=ImGui::GetCursorScreenPos();
+    if(lite_widgets::Tap(ImGui::InvisibleButton("##hide_lite",{width,26.f*scale}))) { state.minimized=true;keyboard=false; }
+    draw->AddText(hide+ImVec2(20,5)*scale,lite_colors::TextDim,"hide menu");
 }
 
 inline void Combo(const char* label, int& value, const char* const* items, int count) {
-    ImGui::TextUnformatted(label);
     ImGui::PushID(label);
     value = ImClamp(value, 0, count - 1);
-    custom::Combo("##choice", &value, items, count);
+    custom::Combo(label, &value, items, count);
     ImGui::PopID();
 }
 
@@ -264,20 +268,17 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::PopStyleVar(2);
     } else {
         ImGui::PushItemFlag(ImGuiItemFlags_Disabled,!view.interactive);
+        lite_sidebar::Shadow((ImGui::GetIO().DisplaySize-layout.size)*.5f,layout.size,view.startup.reveal);
         ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize*.5f, ImGuiCond_Always, {.5f,.5f});
         ImGui::SetNextWindowSize(layout.size, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
         ImGui::Begin("ETHNIR LITE##menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus);
         lite_widgets::SetFontScale();
         const auto pos = ImGui::GetWindowPos();
-        auto* draw = ImGui::GetWindowDrawList();
-        if (view.sidebarTexture) draw->AddImageRounded(view.sidebarTexture,pos,{pos.x+layout.sidebar,pos.y+layout.size.y},
-            {0,1},{1,0},IM_COL32_WHITE,20.f,ImDrawFlags_RoundCornersLeft);
-        draw->AddRectFilled(pos,{pos.x+layout.sidebar,pos.y+layout.size.y},
-            view.sidebarTexture?IM_COL32(8,8,10,175):IM_COL32(14,14,16,255),20.f,ImDrawFlags_RoundCornersLeft);
-        draw->AddLine({pos.x+layout.sidebar,pos.y}, {pos.x+layout.sidebar,pos.y+layout.size.y}, lite_colors::SideStrip);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10,0)*layout.scale);
+        lite_sidebar::Surface(pos,layout.size,layout.sidebar,view.sidebarTexture,view.sidebarUv0,view.sidebarUv1);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
         ImGui::BeginChild("##sidebar", {layout.sidebar,layout.size.y}, false,
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding);
         lite_widgets::SetFontScale();

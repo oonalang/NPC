@@ -6,6 +6,7 @@ struct Vector3 { float x, y, z; };
 #include "../src/main/jni/Lite/Menu.h"
 #include "../src/main/jni/Lite/Fonts.h"
 #include "../src/main/jni/Lite/FrostedSidebar.h"
+#include "../src/main/jni/Lite/TouchInput.h"
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
@@ -190,6 +191,8 @@ ImRect checkRect, sliderRect, buttonRect, inputRect, comboRect, choiceRect;
 int choice = 0;
 bool comboOpen = false;
 bool checked = false, buttonPressed = false;
+bool longChoices=false;
+ImRect lastChoiceRect;
 float slider = .25f;
 ImGuiWindow* scrollWindow = nullptr;
 char text[32] = "";
@@ -204,12 +207,14 @@ void ControlsFrame() {
     buttonPressed = lite_widgets::Button("Button",{0,28}); buttonRect = GImGui->LastItemData.Rect;
     lite_ui::Input("Input",text,sizeof(text)); inputRect = GImGui->LastItemData.Rect;
     const char* choices[]{"Choice zero","Choice one","Choice two"};
-    comboOpen = custom::BeginCombo("Combo",choices[choice],3);
+    comboOpen = custom::BeginCombo("Combo",longChoices?"Choose item":choices[choice],3);
     comboRect = GImGui->LastItemData.Rect;
     if (comboOpen) {
-        for (int index=0;index<3;++index) {
-            if (custom::Selectable(choices[index],choice==index)) choice=index;
+        for (int index=0;index<(longChoices?40:3);++index) {
+            char item[32]; std::snprintf(item,sizeof(item),"Choice %02d",index);
+            if (custom::Selectable(longChoices?item:choices[index],choice==index)) choice=index;
             if (index==1) choiceRect=GImGui->LastItemData.Rect;
+            if (index==39) lastChoiceRect=GImGui->LastItemData.Rect;
         }
         custom::EndCombo();
     }
@@ -272,6 +277,7 @@ void ValidateTouch() {
     io.AddMouseSourceEvent(ImGuiMouseSource_Mouse); io.AddMousePosEvent(-FLT_MAX,-FLT_MAX); Frame();
     std::puts("Touch taps work; vertical drags pan without changing controls or opening dropdowns; dropdown selection and slider endpoints work; keyboard types, spaces and deletes");
 }
+#include "lite_touch_checks.h"
 void ValidateBindings() {
     Config = {}; assert(Config.ExtraMenu.PickupRange == 1 && Config.ExtraMenu.HitboxScale == 1);
     assert(!lite_ui::EspEnabled()); Config.ESPMenu.EspStyle = EspStyle3DSphere; assert(lite_ui::EspEnabled());
@@ -396,10 +402,10 @@ int main(int argc, char** argv) {
     } else
 #endif
     {
-    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidateBindings(); ValidateBudget();
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateBindings(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
-    ValidateBlur();
+    ValidateBlur();ValidateSidebarReference();
     io.DisplaySize = {1280,720}; state = {}; view.ready = true;
     const char* names[]{"home","esp","aim","trigger","memory","skins","settings"};
     for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); PrepareSidebar(); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm"),true); }

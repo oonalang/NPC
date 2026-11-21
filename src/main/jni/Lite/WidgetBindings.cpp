@@ -31,14 +31,16 @@ void EndChild() { lite_widgets::EndPanel(); }
 bool BeginCombo(const char* label, const char* preview, int maxItems, bool, ImGuiComboFlags flags) {
     auto* window = ImGui::GetCurrentWindow();
     if (window->SkipItems) return false;
+    const auto rowStart=ImGui::GetCursorScreenPos();
     const char* labelEnd = ImGui::FindRenderedTextEnd(label);
     if (labelEnd > label) ImGui::TextUnformatted(label,labelEnd);
     const auto start = ImGui::GetCursorScreenPos();
     const float width = ImMin(140.f*lite_widgets::scale,ImGui::GetContentRegionAvail().x);
     const ImVec2 pos(start.x+(ImGui::GetContentRegionAvail().x-width)*.5f,start.y);
-    ImGui::SetCursorScreenPos(pos);
-    const bool pressed = lite_widgets::Tap(ImGui::InvisibleButton(label,{width,24.f*lite_widgets::scale}));
-    const auto box = GImGui->LastItemData.Rect;
+    ImGui::SetCursorScreenPos(rowStart);
+    const bool pressed = lite_widgets::Tap(ImGui::InvisibleButton(label,
+        {ImGui::GetContentRegionAvail().x,start.y-rowStart.y+27.f*lite_widgets::scale}));
+    const ImRect box(pos,pos+ImVec2(width,24.f*lite_widgets::scale));
     const bool visible = ImGui::IsItemVisible();
     const auto popup = ImHashStr("##ComboPopup",0,window->GetID(label));
     if (pressed) {
@@ -63,7 +65,10 @@ bool BeginCombo(const char* label, const char* preview, int maxItems, bool, ImGu
     ImGui::SetCursorScreenPos({start.x,start.y+27.f*lite_widgets::scale});
     if (!visible && open) ImGui::ClosePopupToLevel(GImGui->BeginPopupStack.Size,true);
     if (!visible || !open) return false;
-    const float height = ImGui::GetTextLineHeightWithSpacing()*ImClamp(maxItems,1,8)+12.f*lite_widgets::scale;
+    const float rowHeight=ImGui::GetIO().MouseSource==ImGuiMouseSource_TouchScreen ?
+        ImMax(ImGui::GetTextLineHeight(),ImMax(28.f,28.f*lite_widgets::scale))+ImGui::GetStyle().ItemSpacing.y :
+        ImGui::GetTextLineHeightWithSpacing();
+    const float height = rowHeight*ImClamp(maxItems,1,8)+12.f*lite_widgets::scale;
     ImGui::SetNextWindowSizeConstraints({width,0},{width,ImMin(height,ImGui::GetIO().DisplaySize.y-16.f)});
     const auto extent = ImGui::GetPopupAllowedExtentRect(window);
     ImRect avoid = box;
@@ -109,7 +114,18 @@ bool Combo(const char* label, int* value, const char* items, int maxHeight) {
     },const_cast<char*>(items),count,maxHeight);
 }
 bool Selectable(const char* label, bool selected, ImGuiSelectableFlags flags, const ImVec2& size, const MenuItemDecoration&) {
-    return lite_widgets::Tap(ImGui::Selectable(label, selected, flags, size));
+    const bool touch=ImGui::GetIO().MouseSource==ImGuiMouseSource_TouchScreen;
+    auto adjusted=size;
+    if(touch) {
+        flags&=~(ImGuiSelectableFlags_SelectOnClick | ImGuiSelectableFlags_SelectOnRelease | ImGuiSelectableFlags_AllowDoubleClick);
+        if(adjusted.y==0) adjusted.y=ImMax(ImGui::GetTextLineHeight(),ImMax(28.f,28.f*lite_widgets::scale));
+    }
+    const bool close=!(flags&ImGuiSelectableFlags_DontClosePopups);
+    ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign,{0,.5f});
+    const bool pressed=lite_widgets::Tap(ImGui::Selectable(label,selected,flags|ImGuiSelectableFlags_DontClosePopups,adjusted));
+    ImGui::PopStyleVar();
+    if(pressed && close && (ImGui::GetCurrentWindow()->Flags&ImGuiWindowFlags_Popup)) ImGui::CloseCurrentPopup();
+    return pressed;
 }
 bool Selectable(const char* label, bool* value, ImGuiSelectableFlags flags, const ImVec2& size, const MenuItemDecoration& decoration) {
     if (!Selectable(label, *value, flags, size, decoration)) return false;

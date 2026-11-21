@@ -9,7 +9,7 @@ struct Gesture {
     ImGuiWindow* origin=nullptr;
     ImGuiWindow* scroll=nullptr;
     ImVec2 start{},last{};
-    float initialScroll=0.f;
+    ImGuiID slider=0;
     int frame=-1,intentFrame=-1;
     Intent intent=Intent::Pending;
     bool active=false,released=false;
@@ -26,6 +26,21 @@ inline void Cancel() {
     gesture.intent=Intent::Canceled;
     if(GImGui && GImGui->ActiveIdWindow && Related(GImGui->ActiveIdWindow)) ImGui::ClearActiveID();
 }
+inline void OwnSlider(ImGuiID id) {
+    if(gesture.active && gesture.intent==Intent::Pending && GImGui->IO.MouseClicked[0] &&
+        GImGui->ActiveId==id && Related(ImGui::GetCurrentWindow())) gesture.slider=id;
+}
+inline void Pan(float amount) {
+    for(auto* window=gesture.scroll;window && std::fabs(amount)>.001f;window=window->ParentWindow) {
+        if(!(window->Flags&ImGuiWindowFlags_NoScrollWithMouse) && window->ScrollMax.y>0.f) {
+            const float before=window->Scroll.y;
+            window->Scroll.y=ImClamp(before+amount,0.f,window->ScrollMax.y);
+            window->ScrollTarget.y=FLT_MAX;
+            amount-=window->Scroll.y-before;
+        }
+        if(window->Flags&ImGuiWindowFlags_Popup) break;
+    }
+}
 inline void Update() {
     auto& g=*GImGui;
     auto& io=g.IO;
@@ -41,18 +56,21 @@ inline void Update() {
         gesture.start=gesture.last=io.MousePos;
         gesture.intent=Intent::Pending;
         gesture.scroll=nullptr;
+        gesture.slider=0;
         if(gesture.active) for(auto* window=origin;window;window=window->ParentWindow) {
             if(!(window->Flags&ImGuiWindowFlags_NoScrollWithMouse) && window->ScrollMax.y>0.f) {
-                gesture.scroll=window;gesture.initialScroll=window->Scroll.y;break;
+                gesture.scroll=window;break;
             }
         }
     }
     if(!gesture.active) return;
-    if(io.MousePos.x>-10000.f && io.MousePos.y>-10000.f) gesture.last=io.MousePos;
+    const ImVec2 previous=gesture.last;
+    if(ImGui::IsMousePosValid(&io.MousePos)) gesture.last=io.MousePos;
     const ImVec2 delta=gesture.last-gesture.start;
-    const float threshold=ImMax(7.f,g.IO.MouseDragThreshold);
-    if(gesture.intent==Intent::Pending && ImLengthSqr(delta)>=threshold*threshold) {
-        gesture.intent=std::fabs(delta.y)>=std::fabs(delta.x)?Intent::Vertical:Intent::Horizontal;
+    const float threshold=ImMax(10.f,io.MouseDragThreshold*1.5f);
+    if(gesture.intent==Intent::Pending && ImMax(std::fabs(delta.x),std::fabs(delta.y))>=threshold) {
+        const float horizontalBias=gesture.slider ? .6f : 1.f;
+        gesture.intent=std::fabs(delta.x)>=std::fabs(delta.y)*horizontalBias ? Intent::Horizontal : Intent::Vertical;
         gesture.intentFrame=g.FrameCount;
     }
     if(g.MovingWindow && (g.MovingWindow==gesture.origin || g.MovingWindow==gesture.origin->RootWindow)) {
@@ -63,8 +81,7 @@ inline void Update() {
         if(g.ActiveIdWindow && Related(g.ActiveIdWindow)) ImGui::ClearActiveID();
         if(g.MovingWindow && (g.MovingWindow==gesture.origin || g.MovingWindow==gesture.origin->RootWindow)) g.MovingWindow=nullptr;
         if(gesture.intent==Intent::Vertical && gesture.scroll) {
-            gesture.scroll->Scroll.y=ImClamp(gesture.initialScroll-delta.y,0.f,gesture.scroll->ScrollMax.y);
-            gesture.scroll->ScrollTarget.y=FLT_MAX;
+            Pan(gesture.intentFrame==g.FrameCount ? -delta.y : previous.y-gesture.last.y);
         }
         if(io.MouseDown[0]) {
             const auto id=ImHashStr("##content_pan",0,gesture.origin->ID);
@@ -74,7 +91,7 @@ inline void Update() {
     if(io.MouseReleased[0] || !io.MouseDown[0]) gesture.released=true;
 }
 inline bool Applies() {
-    return GImGui && GImGui->IO.MouseSource==ImGuiMouseSource_TouchScreen && Related(ImGui::GetCurrentWindow());
+    return GImGui && GImGui->CurrentWindow && GImGui->IO.MouseSource==ImGuiMouseSource_TouchScreen && Related(GImGui->CurrentWindow);
 }
 inline bool Tap() { return Applies() && gesture.released && gesture.intent==Intent::Pending; }
 inline bool Horizontal() { return Applies() && gesture.intent==Intent::Horizontal; }

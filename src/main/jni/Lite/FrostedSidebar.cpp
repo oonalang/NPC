@@ -74,11 +74,10 @@ uniform sampler2D source;
 uniform vec2 direction;
 out vec4 color;
 void main() {
-    vec3 value=texture(source,uv).rgb*0.2270270270;
-    value+=texture(source,uv+direction*1.3846153846).rgb*0.3162162162;
-    value+=texture(source,uv-direction*1.3846153846).rgb*0.3162162162;
-    value+=texture(source,uv+direction*3.2307692308).rgb*0.0702702703;
-    value+=texture(source,uv-direction*3.2307692308).rgb*0.0702702703;
+    const float weights[13]=float[13](0.0561,0.0690,0.0782,0.0847,0.0876,0.0890,0.0894,
+        0.0890,0.0876,0.0847,0.0782,0.0690,0.0561);
+    vec3 value=vec3(0);
+    for(int i=0;i<13;++i) value+=texture(source,uv+direction*float(i-6)).rgb*weights[i];
     color=vec4(value,1);
 })";
     const auto vs=Shader(GL_VERTEX_SHADER,vertex), fs=Shader(GL_FRAGMENT_SHADER,fragment);
@@ -124,10 +123,15 @@ Texture Capture(Region region, int framebufferWidth, int framebufferHeight, doub
         region.width<=0 || region.height<=0) return {};
     if (context!=resources.context) { resources={}; resources.context=context; }
     if (resources.failed) return {};
-    const int x=int(std::floor(std::clamp(double(region.x),0.,double(framebufferWidth))));
-    const int y=int(std::floor(std::clamp(double(framebufferHeight)-region.y-region.height,0.,double(framebufferHeight))));
-    const int right=int(std::ceil(std::clamp(double(region.x)+region.width,double(x),double(framebufferWidth))));
-    const int top=int(std::ceil(std::clamp(double(framebufferHeight)-region.y,double(y),double(framebufferHeight))));
+    const double leftEdge=std::clamp(double(region.x),0.,double(framebufferWidth));
+    const double bottomEdge=std::clamp(double(framebufferHeight)-region.y-region.height,0.,double(framebufferHeight));
+    const double rightEdge=std::clamp(double(region.x)+region.width,leftEdge,double(framebufferWidth));
+    const double topEdge=std::clamp(double(framebufferHeight)-region.y,bottomEdge,double(framebufferHeight));
+    if(leftEdge>=rightEdge || bottomEdge>=topEdge) return {};
+    const int x=std::max(0,int(std::floor(leftEdge))-capturePadding);
+    const int y=std::max(0,int(std::floor(bottomEdge))-capturePadding);
+    const int right=std::min(framebufferWidth,int(std::ceil(rightEdge))+capturePadding);
+    const int top=std::min(framebufferHeight,int(std::ceil(topEdge))+capturePadding);
     const int sourceWidth=right-x, sourceHeight=top-y;
     if (!sourceWidth || !sourceHeight) return {};
     const float scale=std::min(float(maximumWidth)/sourceWidth,float(maximumHeight)/sourceHeight);
@@ -139,8 +143,11 @@ Texture Capture(Region region, int framebufferWidth, int framebufferHeight, doub
     if (samples>1) return {};
     const bool moved=x!=resources.sourceX || y!=resources.sourceY || sourceWidth!=resources.sourceWidth ||
         sourceHeight!=resources.sourceHeight || source!=resources.sourceFramebuffer;
+    const auto result=[&] { return Texture{resources.textures[0],resources.width,resources.height,
+        float((leftEdge-x)/sourceWidth),float((bottomEdge-y)/sourceHeight),
+        float((rightEdge-x)/sourceWidth),float((topEdge-y)/sourceHeight)}; };
     if (!moved && resources.valid && now<resources.next && now>=resources.next-refreshSeconds)
-        return {resources.textures[0],resources.width,resources.height};
+        return result();
     SavedState saved;
     glBindFramebuffer(GL_READ_FRAMEBUFFER,source);
     GLint readBuffer=0; glGetIntegerv(GL_READ_BUFFER,&readBuffer);
@@ -156,14 +163,14 @@ Texture Capture(Region region, int framebufferWidth, int framebufferHeight, doub
     glUseProgram(resources.program); glBindVertexArray(resources.vao); glBindSampler(0,0);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER,resources.framebuffers[1]);
     glBindTexture(GL_TEXTURE_2D,resources.textures[0]);
-    glUniform2f(resources.direction,1.f/width,0); glDrawArrays(GL_TRIANGLES,0,3);
+    glUniform2f(resources.direction,sampleSpacing/sourceWidth,0); glDrawArrays(GL_TRIANGLES,0,3);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER,resources.framebuffers[0]);
     glBindTexture(GL_TEXTURE_2D,resources.textures[1]);
-    glUniform2f(resources.direction,0,1.f/height); glDrawArrays(GL_TRIANGLES,0,3);
+    glUniform2f(resources.direction,0,sampleSpacing/sourceHeight); glDrawArrays(GL_TRIANGLES,0,3);
     resources.next=now+refreshSeconds; resources.valid=true;
     resources.sourceX=x; resources.sourceY=y; resources.sourceWidth=sourceWidth; resources.sourceHeight=sourceHeight;
     resources.sourceFramebuffer=source; ++resources.statistics.captures;
-    return {resources.textures[0],width,height};
+    return result();
 }
 Statistics GetStatistics() { return resources.statistics; }
 void Release() {

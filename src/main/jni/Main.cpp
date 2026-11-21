@@ -42,6 +42,7 @@
 #include "Lite/Menu.h"
 #include "Lite/NativeBackend.h"
 #include "Lite/FrostedSidebar.h"
+#include "Lite/TouchInput.h"
 #include "System/UI/ReducedMotion.h"
 
 static void RequestTriggerInitialization();
@@ -77,7 +78,6 @@ class _DWORD;
 class _QWORD;
 
 #define CREATE_COLOR(r, g, b, a) new float[4] {(float)(r) / 255.0f, (float)(g) / 255.0f, (float)(b) / 255.0f, (float)(a) / 255.0f}
-bool g_clearMousePos = false;
 bool ClearDisplay = false;
 bool ShowFPS;
 bool SnowB = false;
@@ -163,21 +163,19 @@ std::string md5(std::string s);
 uintptr_t g_il2cpp;
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
 static void PollLiteTouch(ImGuiIO& io) {
+    static lite_touch::Input input;
+    if(!m_unity || !api1 || !api2 || !api4 || !api5) { input.Update(io,nullptr,{}); return; }
     const auto count = g_AuthOriginalTouchCount ? g_AuthOriginalTouchCount : reinterpret_cast<int(*)()>(Class_Input_get_touchCount);
     if (count && count() > 0) {
         const auto getTouch = reinterpret_cast<Touch(*)(uintptr_t,int)>(Class_Input_GetTouch);
-        const auto mousePosition = reinterpret_cast<Vector3(*)(uintptr_t)>(Class_Input_get_mousePosition);
+        if(!getTouch) { input.Update(io,nullptr,{}); return; }
         const auto touch = getTouch(Config.ImGuiMenu.thiz,0);
-        const auto position = mousePosition(Config.ImGuiMenu.thiz);
-        io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-        io.AddMousePosEvent(position.x, static_cast<float>(get_height())-position.y);
-        const bool held = touch.m_Phase==TouchPhase::Began || touch.m_Phase==TouchPhase::Moved || touch.m_Phase==TouchPhase::Stationary;
-        io.AddMouseButtonEvent(0,held);
-        g_clearMousePos = !held;
-        if(touch.m_Phase==TouchPhase::Canceled) custom::CancelTouchScroll();
+        const auto phase=touch.m_Phase>=TouchPhase::Began && touch.m_Phase<=TouchPhase::Canceled ?
+            static_cast<lite_touch::Phase>(touch.m_Phase) : lite_touch::Phase::Canceled;
+        const lite_touch::Sample sample{touch.m_FingerId,{touch.m_Position.x,touch.m_Position.y},phase};
+        input.Update(io,&sample,{static_cast<float>(get_width()),static_cast<float>(get_height())});
     } else {
-        io.AddMouseButtonEvent(0,false);
-        if(g_clearMousePos) {io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);g_clearMousePos=false;}
+        input.Update(io,nullptr,{});
     }
 }
 
@@ -191,6 +189,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         io.IniFilename=io.LogFilename=nullptr;
         io.ConfigFlags|=ImGuiConfigFlags_NoMouseCursorChange;
         io.MouseDragThreshold=7.f;
+        lite_touch::Input::Configure(io);
         ImGui_ImplOpenGL3_Init("#version 300 es");
         const auto fonts=lite_fonts::Load(*io.Fonts,lite_body_start,lite_body_end-lite_body_start,
             lite_title_start,lite_title_end-lite_title_start,lite_icons_start,lite_icons_end-lite_icons_start);
@@ -310,6 +309,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         const auto texture=lite_blur::Capture({position.x,position.y,layout.sidebar,layout.size.y},
             g_GlWidth,g_GlHeight,std::chrono::duration<double>(now-appStartTime).count());
         view.sidebarTexture=reinterpret_cast<ImTextureID>(static_cast<std::uintptr_t>(texture.id));
+        view.sidebarUv0={texture.u0,texture.v1};view.sidebarUv1={texture.u1,texture.v0};
     }
     view.preparation=stage/3.f;view.fps=fps;
     view.uptime=static_cast<std::uint64_t>(std::chrono::duration<double>(now-appStartTime).count());

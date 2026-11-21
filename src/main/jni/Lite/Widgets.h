@@ -60,12 +60,14 @@ inline bool SliderFloat(const char* label, float* value, float minimum, float ma
     const float trackWidth = ImMax(1.f, width - knobWidth - 2.f * scale);
     if (!std::isfinite(*value)) *value = minimum;
     ImGui::PushID(label);
-    ImGui::SetCursorScreenPos({trackLeft, trackY - knobHeight * .575f});
-    ImGui::InvisibleButton("##slider", {trackWidth, knobHeight * 1.15f + trackHeight});
+    ImGui::InvisibleButton("##slider", {width, lineHeight + 15.f * scale});
+    const auto id=GImGui->LastItemData.ID;
+    custom::touch::OwnSlider(id);
     const bool visible = ImGui::IsItemVisible();
     const bool held = ImGui::IsItemActive() && !custom::touch::Suppressed();
     bool changed = false;
-    if (held || (custom::touch::Tap() && ImGui::IsItemHovered())) {
+    const bool finish=custom::touch::Horizontal() && custom::touch::gesture.released && GImGui->ActiveIdPreviousFrame==id;
+    if (held || finish || (custom::touch::Tap() && ImGui::IsItemHovered())) {
         const float amount = ImClamp((ImGui::GetIO().MousePos.x - trackLeft) / trackWidth, 0.f, 1.f);
         const float next = minimum + amount * (maximum - minimum);
         changed = std::fabs(next - *value) > .00001f;
@@ -134,7 +136,7 @@ inline void EndPanel() {
     const auto titleSize = ImGui::CalcTextSize(nameStart, nameEnd);
     draw->PushClipRect(window->OuterRectClipped.Min, window->OuterRectClipped.Max, false);
     draw->AddRectFilled(lo + ImVec2(1,1), {hi.x - 1, lo.y + 36.f * scale}, Fade(lite_colors::MenuBg), 9.f * scale);
-    draw->AddRect(lo, hi, Fade(lite_colors::BoxBorder), 9.f * scale);
+    draw->AddRect(lo+ImVec2(.5f,.5f),hi-ImVec2(.5f,.5f),Fade(lite_colors::BoxBorder),9.f*scale);
     draw->AddText({lo.x + (window->Size.x - titleSize.x) * .5f, lo.y + 10.f * scale},
         Fade(lite_colors::Section), nameStart, nameEnd);
     draw->PopClipRect();

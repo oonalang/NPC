@@ -6,6 +6,12 @@ ETHNIR LITE is the native Android edition on `feature/ethnir-lite`, based on mai
 
 The implementation uses the supplied Celerity ImGui drawing code rather than a website or desktop executable. See [source provenance and font notices](../src/main/jni/Assets/LITE_UI_SOURCES.md).
 
+The sidebar follow-up restores the source's single-line title placement, 26-unit navigation rows, 5-unit row gaps, group-label spacing, translucent selection colors and dark shadow/tint layering. Home remains first; NPC's existing page order and feature bindings are retained. The frosted image uses the supplied 13-tap weights and 3.9-pixel sample spacing, with a 28-pixel capture margin so the blur samples outside both sidebar edges. The outer shadow uses narrow strokes and one composited interior layer to avoid twelve full-menu translucent fills. Its soft edge and the reduced-resolution blur are bounded approximations of the desktop rendering, not a pixel-identical D3D11 port.
+
+`Lite/TouchInput.h` is the only Unity-to-ImGui pointer adapter. It maps `Touch.m_Position` from Unity screen dimensions to the current framebuffer, holds Began/Moved/Stationary, preserves the final Ended position through release, and cancels invalid samples, finger changes and resolution changes. It reads the original touch-count trampoline so the existing game-input capture guard cannot starve UI input. ImGui event trickling is disabled for this frame-polled backend to process each sample immediately; do not add a second direct `MouseDown` polling loop alongside it.
+
+Touch scrolling keeps a small movement tolerance for taps. A slider owns horizontal motion after direction is established, including diagonal drags, and accepts input across its whole row without changing its visual track. Vertical swipes still pan without modifying values or triggering buttons. Dropdown labels/fields share a tap target; touch options have taller rows, and only an accepted tap closes a dropdown. Long lists scroll without a visible scrollbar. A full nested panel hands remaining vertical motion to its parent, while popups keep their scrolling isolated. This follows the separate pointer/panning structure in [ZUCHIZZ-SRC-MOD](https://github.com/oonalang/ZUCHIZZ-SRC-MOD/tree/a8adfb1f399d8b591f19327893c3119054a62f54), with NPC's release/cancellation protections retained.
+
 The dark sidebar, centered section titles, outlined boxes, checkbox geometry, compact dropdowns, slider tracks/knobs, font glyphs and sidebar icons derive from the archive. The 705×500 layout scales to landscape displays and changes to one content column on narrow displays or with enlarged text. Panels and the sidebar support touch scrolling with hidden scrollbars. Touch gestures commit checkboxes, buttons and dropdowns on release; vertical swipes cancel activation and slider edits. Window placement remains centered through rotation/resizing. Nested ImGui font scales are normalized so text scales once.
 
 The existing Home, ESP, aim, trigger, Memory, cosmetic and configuration controls use their existing NPC Config fields/runtime APIs. Memory keeps its existing Movement/Weapon/world functions; skins reuse the original category/application code. The aim trigger dropdown contains exactly the three enum values NPC supports. Backend compatibility and license checks remain in place. No desktop game logic, offsets or Windows dependencies were imported.
@@ -24,13 +30,15 @@ Login uses a compact centered matte card, a centered ETHNIR title and spaced LIT
 - Enemy projection/drawing is skipped when all supported visual options are off. Speed/gravity maintenance and existing license revocation restoration still run. Aim/trigger/native feature callbacks are unchanged.
 - The periodic automatic screenshot/upload loop is removed from Lite's render loop. Existing explicit feedback service code is retained.
 
-Measured ARM64 release library size with the same NDK: **3,924,168 bytes** versus main's **7,488,904 bytes**, about **47.6% smaller**. The host Home fixture makes no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
+Measured ARM64 release library size with the same NDK: **3,926,264 bytes** versus main's **7,488,904 bytes**, about **47.6% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
 
 ## Files
 
 - `Lite/Menu.h`, `Widgets.h`, `WidgetBindings.cpp`: UI, geometry and touch-safe adapters for existing NPC controls.
 - `Lite/StartupMotion.h`, `StartupView.h`: presentation clock, reduced-motion behavior, centered minimal login and vector loading/check animation.
 - `Lite/FrostedSidebar.h/.cpp`: bounded cropped blur and GL state preservation.
+- `Lite/SidebarStyle.h`: source shadow/tint composition and bounded outer shadow drawing.
+- `Lite/TouchInput.h`, `ImGui/TouchScroll.h`: scaled native polling, cancellation, gesture direction and nested panning.
 - `Lite/NativeBackend.h`: original skin category bridge and optional Local/Cloud music UI.
 - `Lite/Fonts.h`, `Assets/LiteFonts.S`, three `lite-*` font subsets: small single-atlas font setup.
 - `Main.cpp`, `MainFeatureIncludes.h`, `Android.mk`: Lite startup/render path and excluded heavyweight modules/assets. Native feature modules are unchanged.
@@ -85,7 +93,7 @@ Executed on 2026-11-21:
 
 Commands: `sh tests/run-lite-ui-tests.sh`; `LITE_GPU_TEST=1 sh tests/run-lite-ui-tests.sh /tmp/lite-frames`; `sh tests/run-lite-release-tests.sh`; `sh tests/run-trigger-tests.sh`; `sh tests/run-pickup-tests.sh /path/to/libunity.so`; `sh tests/run-hitbox-tests.sh`; `sh tests/run-license-security-tests.sh`; `python3 tools/verify-native-hardening.py /path/to/libnets.so`. GLES tests need EGL/GLES3 headers and a surfaceless Mesa context. Java tests need OpenSSL and a JDK; server integration needs PHP/OpenSSL.
 
-The shared trigger/pickup/hitbox/license/Java results above belong to the initial Lite port; the sidebar/startup follow-up reruns the native build, hardening, UI sanitizer and GLES suites.
+The shared trigger/pickup/hitbox/license/Java results above belong to the initial Lite port. The sidebar/touch follow-up reruns the native build, hardening, UI sanitizer, GLES, Settings controls and Memory tab suites. Additional checks exercise scaled immediate presses and jitter-tolerant releases at 15/30/60/90/120 FPS, cancellation, missing Ended samples, finger/resolution changes, diagonal slider drags and final release values, whole-row slider targets, scrolling/selection in a 40-item dropdown, and nested scroll handoff. GLES checks verify the source kernel's brightness, the source shadow/tint color within 3/255, padded crop UVs and blur sampling beyond the pane edges. Validation logs use the `ethnir-lite-v3-*` prefix.
 
 Capture the actual login/loading/check/reveal sequence using `LITE_GPU_TEST=1 LITE_CAPTURE_STARTUP=1 sh tests/run-lite-ui-tests.sh /tmp/lite-startup`. This emits 180 native frames at 30 FPS. Authentication/setup times and session data are fixtures; the presentation controller and all UI drawing are production code. The striped menu backdrop is a GPU blur test pattern; runtime blur uses the game image.
 
