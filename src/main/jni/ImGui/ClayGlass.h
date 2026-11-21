@@ -4,7 +4,7 @@
 #include <array>
 #include <chrono>
 #include "GlassTiming.h"
-#ifndef CLAY_CPU_PREVIEW
+#if !defined(CLAY_CPU_PREVIEW) && !defined(ETHNIR_LITE)
 #include <GLES3/gl3.h>
 #include <EGL/egl.h>
 #endif
@@ -31,7 +31,7 @@ inline void Surface(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius, bool r
     draw->AddRect(lo + ImVec2(1,1), hi - ImVec2(1,1), IM_COL32(225,220,255,22), radius, 0, 1);
 }
 
-#ifndef CLAY_CPU_PREVIEW
+#if !defined(CLAY_CPU_PREVIEW) && !defined(ETHNIR_LITE)
 inline GLuint scene = 0, framebuffer = 0, softScene = 0, softFramebuffer = 0;
 inline GLuint blurProgram = 0, liquidProgram = 0, glassVao = 0;
 inline int sceneWidth = 0, sceneHeight = 0, sourceWidth = 0, sourceHeight = 0;
@@ -308,7 +308,7 @@ inline void DrawMaterial(const ImDrawList*, const ImDrawCmd* cmd) {
 inline bool Liquid(ImDrawList* draw, ImVec2 lo, ImVec2 hi, float radius, ImVec4 tint,
                    float strength=1.f, float opacity=1.f) {
     if(!draw || hi.x<=lo.x || hi.y<=lo.y) return false;
-#ifndef CLAY_CPU_PREVIEW
+#if !defined(CLAY_CPU_PREVIEW) && !defined(ETHNIR_LITE)
     if(materialValid && liquidProgram && materialCount<materialDraws.size()) {
         auto& p=materialDraws[materialCount++];
         p={lo,hi,tint,radius,strength,ImGui::GetStyle().Alpha*opacity};

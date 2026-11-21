@@ -526,6 +526,9 @@ inline void RenderSkinCategoryContent(int categoryIndex, bool drawSubTabs = fals
     #define ID_GLACIAL_RIPPLE 0x1D37F77F
     
     ImGui::BeginChild("SkinContent", ImVec2(0, 0),false,ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
+#ifdef ETHNIR_LITE
+    lite_widgets::SetFontScale();
+#endif
     ImGui::Dummy(ImVec2(0, 8 * c::scale));
     
     if (drawSubTabs) {

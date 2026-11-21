@@ -1,10 +1,8 @@
-#include "System/UI/StartupSounds.h"
 #include "Includes/Logger.h"
 #include "Includes/Macros.h"
 #include "Includes/obfuscate.h"
 #include "Includes/Utils.h"
 #include "ImGui/Call_ImGui.h"
-#include "ImGui/ClayGlass.h"
 #include "IL2CppSDKGenerator/BasicStructs/Call_BasicStructs.h"
 #include "IL2CppSDKGenerator/IL2Cpp/Call_IL2Cpp.h"
 #include "Hacks/Hacks.h"
@@ -39,11 +37,10 @@
 #include "Trigger/TriggerRuntime.h"
 #include "Trigger/TriggerOverlay.h"
 #include "CaptureOverlay/HideRecord.h"
-#include "System/UI/TriggerTab.h"
-#include "System/UI/AuthenticateFlow.h"
-#include "System/UI/ReducedMotion.h"
-#include "System/UI/HomeTab.h"
 #include "System/UI/AuthenticateInput.h"
+#include "Lite/Fonts.h"
+#include "Lite/Menu.h"
+#include "Lite/NativeBackend.h"
 
 static void RequestTriggerInitialization();
 static void RequestLicensedFeatures();
@@ -70,9 +67,6 @@ void Init_Thread2();
 #include <functional>
 #include "FeedbackService.h"
 
-static auto lastScreenshotTime = std::chrono::steady_clock::now();
-constexpr std::chrono::seconds screenshotInterval(180);
-
 class _BYTE;
 class _BOOL4;
 class _BOOL8;
@@ -95,11 +89,6 @@ bool isJumpAdjustmentEnabled = false;
 float jumpHeightMultiplier = 1.0f;
 char logintext[4096];
 float menu[4] = {188.0f / 255.0f, 110.0f / 255.0f, 1.0f, 1.0f};
-
-float g_LastLogoOpacity = 1.0f;
-float g_LastLogoSize = 1.0f;
-int g_LogoHideDelayFrames = 0;
-int g_LogoHideDelay = 40;
 
 #define _BYTE uint8_t
 #define _WORD  uint8_t
@@ -143,14 +132,6 @@ bool active = false;
 float AimSmooth = 1.0f;
 
 bool showKeyboard = false;
-static bool g_RuntimeClearDisplayInit = false;
-
-struct ClearDisplayDefaultInit {
-    ClearDisplayDefaultInit()
-    {
-        Config.ExtraMenu.ClearDisplay = true;       
-    }
-} g_ClearDisplayDefaultInit;
 
 struct sRegion
 {
@@ -159,119 +140,65 @@ struct sRegion
 
 std::chrono::steady_clock::time_point appStartTime = std::chrono::steady_clock::now();
 
-static float veh_min = 0.1f;
-static float veh_max = 5.0f;
-static bool windowCollapsed = false;
-static double collapseBarLastActiveTime = 0.0;
-static float collapseBarOpacityAnim = 1.0f;
-static float collapseBarPressAnim = 0.0f;
-static float collapseBarEnterAnim = 1.0f;
-static float collapseBarRestoreAnim = 1.0f;
-static bool collapseBarRestoreActive = false;
-static bool collapseBarWasCollapsed = false;
-static float uncollapseOpenAnim = 1.0f;
-static bool dark = true;
-static float tabAlpha = 0.0f;
-static float tabAdd = 0.0f;
-static int page = 1;
-static int activeTab = 1;
-bool g_LogoPreviewMode = false;
-static bool g_PresentationComplete = false;
+static std::atomic<unsigned> g_LiteSetupProgress{0};
+static std::atomic<bool> g_LiteCaptureInput{true};
+static lite_ui::State g_LiteState;
+static bool g_LiteTriedKey = false;
 static std::string err;
-static std::string storedKey = "";
 static char s[256];
-static bool g_LoginTextLoaded = false;
 
 static std::atomic<bool> g_LoginFinished{false};
 static bool g_LoginPending = false;
 static std::string g_LoginResult;
 static std::string g_SubmittedKey;
-static ImVec2 g_AuthCenter(.5f,.5f);
 static int (*g_AuthOriginalTouchCount)()=nullptr;
-static int AuthTouchCount() { return auth_input::TouchCount(g_AuthOriginalTouchCount); }
+static int AuthTouchCount() { return g_LiteCaptureInput.load(std::memory_order_acquire) ? 0 : auth_input::TouchCount(g_AuthOriginalTouchCount); }
 
 std::vector<sRegion> trapRegions;
 uintptr_t address = 0;
 std::string md5(std::string s);
 uintptr_t g_il2cpp;
-static bool isMenuVisible = true;
-static bool hideRecordEnabled = false;
-static bool hideRecordUnavailable = false;
-
-int TABG = 1;
-
 EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
-EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
-{
-    eglQuerySurface(dpy, surface, EGL_WIDTH, &g_GlWidth);
-    eglQuerySurface(dpy, surface, EGL_HEIGHT, &g_GlHeight);
+static void PollLiteTouch(ImGuiIO& io) {
+    const auto count = g_AuthOriginalTouchCount ? g_AuthOriginalTouchCount : reinterpret_cast<int(*)()>(Class_Input_get_touchCount);
+    if (count && count() > 0) {
+        const auto getTouch = reinterpret_cast<Touch(*)(uintptr_t,int)>(Class_Input_GetTouch);
+        const auto mousePosition = reinterpret_cast<Vector3(*)(uintptr_t)>(Class_Input_get_mousePosition);
+        const auto touch = getTouch(Config.ImGuiMenu.thiz,0);
+        const auto position = mousePosition(Config.ImGuiMenu.thiz);
+        io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+        io.AddMousePosEvent(position.x, static_cast<float>(get_height())-position.y);
+        const bool held = touch.m_Phase==TouchPhase::Began || touch.m_Phase==TouchPhase::Moved || touch.m_Phase==TouchPhase::Stationary;
+        io.AddMouseButtonEvent(0,held);
+        g_clearMousePos = !held;
+        if(touch.m_Phase==TouchPhase::Canceled) custom::CancelTouchScroll();
+    } else {
+        io.AddMouseButtonEvent(0,false);
+        if(g_clearMousePos) {io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);g_clearMousePos=false;}
+    }
+}
 
-    if (!g_App)
-    {
+EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
+    eglQuerySurface(dpy,surface,EGL_WIDTH,&g_GlWidth);
+    eglQuerySurface(dpy,surface,EGL_HEIGHT,&g_GlHeight);
+    if(g_GlWidth<=0 || g_GlHeight<=0) return old_eglSwapBuffers(dpy,surface);
+    if(!g_App) {
         ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        io.IniFilename = NULL;
-        io.LogFilename = NULL;
-        io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
-        io.MouseDoubleClickTime = 0.3f;
-        io.MouseDragThreshold = 2.f;
+        auto& io=ImGui::GetIO();
+        io.IniFilename=io.LogFilename=nullptr;
+        io.ConfigFlags|=ImGuiConfigFlags_NoMouseCursorChange;
+        io.MouseDragThreshold=7.f;
         ImGui_ImplOpenGL3_Init("#version 300 es");
-
-        ImFontConfig title_config;
-        title_config.FontDataOwnedByAtlas = false;
-        title_config.PixelSnapH = true;
-        font::inter_title = io.Fonts->AddFontFromMemoryTTF(
-            (void*)inter_semibold, sizeof(inter_semibold), 28.f, &title_config);
-
-        ImFontConfig inter_config;
-        inter_config.MergeMode = false;
-        inter_config.PixelSnapH = true;
-        inter_config.FontDataOwnedByAtlas = false;
-        font::inter_semibold = io.Fonts->AddFontFromMemoryTTF(
-            (void*)inter_semibold,
-            sizeof(inter_semibold),
-            20.f,
-            &inter_config
-        );
-
-        ImFontConfig page_config;
-        page_config.MergeMode = false;
-        page_config.PixelSnapH = true;
-        page_config.FontDataOwnedByAtlas = false;
-        font::icomoon_page = io.Fonts->AddFontFromMemoryTTF(
-            (void*)icomoon_page,
-            sizeof(icomoon_page),
-            18.f,
-            &page_config
-        );
-
-        static const ImWchar icons_ranges[] = { 0xe000, 0xf8ff, 0 };
-        ImFontConfig iconsConfig;
-        iconsConfig.MergeMode = true;
-        iconsConfig.PixelSnapH = true;
-        iconsConfig.OversampleH = 2.5f;
-        iconsConfig.OversampleV = 2.5f;
-        iconsConfig.FontDataOwnedByAtlas = false;
-        F107 = io.Fonts->AddFontFromMemoryCompressedTTF(
-            (void*)font_awesome_data1,
-            (int)font_awesome_size1,
-            25.0f,
-            &iconsConfig,
-            icons_ranges
-        );
-        F50 = io.Fonts->AddFontFromMemoryTTF((void *)F50_data, F50_size, 30.0f, NULL, io.Fonts->GetGlyphRangesDefault());
-        if (!F107) {
-            F107 = font::inter_semibold;
-        }
-        if (font::inter_semibold) {
-            io.FontDefault = font::inter_semibold;
-        }
+        const auto fonts=lite_fonts::Load(*io.Fonts,lite_body_start,lite_body_end-lite_body_start,
+            lite_title_start,lite_title_end-lite_title_start,lite_icons_start,lite_icons_end-lite_icons_start);
+        font::inter_semibold=fonts.body?fonts.body:io.Fonts->AddFontDefault();
+        font::inter_title=fonts.title?fonts.title:font::inter_semibold;
+        font::icomoon_page=font::inter_semibold;
+        F50=F107=font::inter_semibold;
+        io.FontDefault=font::inter_semibold;
         io.Fonts->Build();
-        
-        ImGui_ImplOpenGL3_CreateFontsTexture();
-
-        memset(&Config, 0, sizeof(sConfig));
-
+        Config={};
+        Config.ExtraMenu.ClearDisplay = true;
         Config.sColorsESPPLAYER.LinePLAYER = CREATE_COLOR(255, 0, 0, 255);
         Config.sColorsESPPLAYER.BoxPLAYER = CREATE_COLOR(255, 0, 0, 255);
         Config.sColorsESPPLAYER.NamePLAYER = CREATE_COLOR(255, 0, 0, 255);
@@ -296,781 +223,131 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
         Config.Bline = 2.0f;
         Config.Pline = 2.0f;
 
-        g_App = true;
-    }
 
-    ImGuiIO *io = &ImGui::GetIO();
-    screenWidth = (float)g_GlWidth;
-    screenHeight = (float)g_GlHeight;
-    io->DisplaySize = ImVec2((float)g_GlWidth, (float)g_GlHeight);
-    const auto frameTime = std::chrono::steady_clock::now();
-    static auto previousFrameTime = frameTime;
-    const float measuredFrameSeconds=std::chrono::duration<float>(frameTime-previousFrameTime).count();
-    io->DeltaTime = ImClamp(measuredFrameSeconds, .0001f, .05f);
-    previousFrameTime = frameTime;
+        g_App=true;
+    }
+    auto& io=ImGui::GetIO();
+    screenWidth=static_cast<float>(g_GlWidth);
+    screenHeight=static_cast<float>(g_GlHeight);
+    io.DisplaySize={screenWidth,screenHeight};
+    const auto now=std::chrono::steady_clock::now();
+    static auto previous=now;
+    io.DeltaTime=ImClamp(std::chrono::duration<float>(now-previous).count(),.0001f,.1f);
+    previous=now;
+    PollLiteTouch(io);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
     custom::UpdateTouchScroll();
-    music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
     pickup::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-    static auto lastHitboxProbe=frameTime;
-    if(Config.ExtraMenu.Hit&&hitbox::NeedsProbe()&&
-       frameTime-lastHitboxProbe>=std::chrono::seconds(1)) {
-        lastHitboxProbe=frameTime;
-        Init_Thread2();
+    frame_rate::Publish(frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,
+        Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
+    static auto lastProbe=now;
+    if(Config.ExtraMenu.Hit&&hitbox::NeedsProbe()&&now-lastProbe>=std::chrono::seconds(1)) {
+        lastProbe=now;Init_Thread2();
     }
-    frame_rate::Publish(frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
+    if(!g_LiteTriedKey&&VM) {
+        g_LiteTriedKey=true;
+        if(LoadTextFromFile()&&logintext[0]) {
+            std::snprintf(s,sizeof(s),"%s",logintext);
+        }
+    }
+    if(g_LoginPending&&g_LoginFinished.load(std::memory_order_acquire)) {
+        g_LoginPending=false;
+        g_LoginFinished.store(false,std::memory_order_relaxed);
+        err=g_LoginResult;
+        if(err=="OK"&&license::Allows(license::Capability::Menu)) {
+            usedKey=g_SubmittedKey;
+            std::snprintf(logintext,sizeof(logintext),"%s",g_SubmittedKey.c_str());
+            SaveLoginTextToFile(logintext);
+            err.clear();
+            RequestLicensedFeatures();
+        } else if(err=="OK"||err.empty()) err="Authentication failed.";
+    }
     const bool authorized=license::Allows(license::Capability::Menu);
-    static bool previousAuthorization=false;
-    if(previousAuthorization&&!authorized) {
-        err=license::LastError();
-        if(err.empty()) err="Session expired. Authenticate again.";
-        startup_ui::loginTransition.Reset();
-        Patches.A1.Restore();Patches.NoCrouch.Restore();
-        ApplySpeedhack();ApplyNoGravityRuntime();ApplyWorldVisualsRuntime();
-    }
-    previousAuthorization=authorized;
-    bool menuReady=authorized&&g_PresentationComplete;
-    if(authorized) userType=license::Allows(license::Capability::Premium)?"PREMIUM PAID":"FREE";
-    const auto licenseExpiry=license::LicenseUntil();
-    if(licenseExpiry>0&&licenseExpiry!=static_cast<std::uint64_t>(expiryTimestamp)) {
-        expiryTimestamp=static_cast<time_t>(licenseExpiry);
-        std::tm date{};char label[40]{};
-        if(gmtime_r(&expiryTimestamp,&date)&&std::strftime(label,sizeof(label),"%Y-%m-%d %H:%M UTC",&date)) EXP=label;
-    }
-    auto authFrame=startup_ui::loginTransition.At(startup_ui::Now());
-    static startup_ui::SoundObserver authSounds;
-    static startup_ui::LoadingSoundObserver loadingSounds;
-    const bool soundsVisible=isMenuVisible&&!windowCollapsed;
-    startup_ui::PlaySounds(authSounds.Update(authFrame,soundsVisible));
-    startup_ui::PlaySounds(loadingSounds.Update(ui_loading::IsActive(),ui_loading::GetProgress(),soundsVisible));
-    const bool startupScene=!menuReady && isMenuVisible && !windowCollapsed;
-    static bool previousStartupScene=false;
-    if(startupScene!=previousStartupScene) {
-        clay::captureSchedule.Reset();
-        clay::sceneValid=clay::materialValid=false;
-        previousStartupScene=startupScene;
-    }
-    clay::Capture(g_GlWidth, g_GlHeight, isMenuVisible && !windowCollapsed, GImGui->MovingWindow != nullptr);
-    if(startupScene) ZEL_Shutdown();
-    const bool authenticateScene=startupScene && auth_scene::Begin(g_GlWidth,g_GlHeight,true);
-    if(!startupScene) auth_scene::Release();
-
-    ImDrawList *draw = ImGui::GetBackgroundDrawList();
-
-    if (menuReady)
-        DrawESP(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight, get_dpi());
-    if(menuReady) {
-        PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(), screenWidth, screenHeight);
-        floating_info::Render(draw, screenWidth, screenHeight);
-    }
-      
-
-
-    if (windowCollapsed)
-    {
-        if (!collapseBarWasCollapsed) {
-            collapseBarEnterAnim = 0.0f;
-            collapseBarRestoreAnim = 1.0f;
-            collapseBarRestoreActive = false;
-            collapseBarOpacityAnim = 1.0f;
-            collapseBarLastActiveTime = ImGui::GetTime();
-        }
-        collapseBarWasCollapsed = true;
-        const float dt = ImGui::GetIO().DeltaTime;
-        collapseBarEnterAnim = ImClamp(collapseBarEnterAnim + dt * 6.0f, 0.0f, 1.0f);
-        if (collapseBarRestoreActive)
-            collapseBarRestoreAnim = ImClamp(collapseBarRestoreAnim + dt * 8.0f, 0.0f, 1.0f);
-        const float enterEase = collapseBarEnterAnim * collapseBarEnterAnim * (3.0f - 2.0f * collapseBarEnterAnim);
-        const float restoreEase = collapseBarRestoreAnim * collapseBarRestoreAnim * (3.0f - 2.0f * collapseBarRestoreAnim);
-        const float collapsedAlphaSetting = ImClamp(GetLogoOpacity(), 0.0f, 1.0f);
-        const float collapsedScaleSetting = ImClamp(GetLogoSizeMultiplier(), 0.1f, 2.0f);
-        const ImVec2 display = ImGui::GetIO().DisplaySize;
-        const float baseLineW = 120.0f * c::scale * collapsedScaleSetting;
-        const float line_w = collapseBarRestoreActive ? ImLerp(baseLineW * 1.28f, baseLineW, restoreEase) : ImLerp(baseLineW * 1.28f, baseLineW, enterEase);
-        const float line_h = collapseBarRestoreActive ? ImLerp(10.0f, 6.0f, restoreEase) : ImLerp(6.0f, 10.0f, enterEase);
-        const float lineH = line_h * c::scale * collapsedScaleSetting;
-        const float click_w = line_w + 72.0f * c::scale;
-        const float click_h = ImMax(28.0f * c::scale, lineH + 20.0f * c::scale);
-        const float startY = display.y - 10.0f * c::scale - lineH;
-        const float endY = display.y - 10.0f * c::scale - lineH;
-        const float handleY = collapseBarRestoreActive ? ImLerp(startY, endY, restoreEase) : ImLerp(endY, startY, enterEase);
-        const ImVec2 handlePos((display.x - line_w) * 0.5f, handleY);
-        const ImVec2 clickPos(handlePos.x - (click_w - line_w) * 0.5f, handlePos.y - (click_h - lineH) * 0.5f);
-
-        ImGui::SetNextWindowPos(clickPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(click_w, click_h), ImGuiCond_Always);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0, 0, 0, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-
-        if (ImGui::Begin("##indicator", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings))
-        {
-            ImVec2 windowPos = ImGui::GetWindowPos();
-            ImGui::SetCursorPos(ImVec2(0, 0));
-            ImGui::InvisibleButton("##restoreclick", ImVec2(click_w, click_h));
-
-            bool barHeld = ImGui::IsItemActive();
-            bool barHovered = ImGui::IsItemHovered();
-            if (barHovered || barHeld)
-                collapseBarLastActiveTime = ImGui::GetTime();
-            const bool idle = (ImGui::GetTime() - collapseBarLastActiveTime) > 5.0;
-            const float targetOpacity = idle ? 0.20f : 1.0f;
-            collapseBarOpacityAnim = ImLerp(collapseBarOpacityAnim, targetOpacity, ImGui::GetIO().DeltaTime * 9.0f);
-            collapseBarPressAnim = ImLerp(collapseBarPressAnim, barHeld ? 1.0f : 0.0f, ImGui::GetIO().DeltaTime * 22.0f);
-
-            if (ImGui::IsItemClicked())
-            {
-                collapseBarRestoreActive = true;
-                collapseBarRestoreAnim = 0.0f;
-                collapseBarLastActiveTime = ImGui::GetTime();
-            }
-
-            float drawAlpha = ImClamp(collapseBarOpacityAnim * collapsedAlphaSetting, 0.0f, 1.0f);
-            ImDrawList* indicatorDraw = ImGui::GetWindowDrawList();
-            const ImVec2 lineMin(windowPos.x + (click_w - line_w) * 0.5f, windowPos.y + (click_h - lineH) * 0.5f);
-            const ImVec2 lineMax(lineMin.x + line_w, lineMin.y + lineH);
-            const float press = collapseBarPressAnim;
-            indicatorDraw->AddRectFilled(
-                lineMin,
-                lineMax,
-                IM_COL32(255, 255, 255, (int)((225.0f + 30.0f * press) * drawAlpha)),
-                lineH * 0.5f
-            );
-
-            if (collapseBarRestoreActive && collapseBarRestoreAnim >= 1.0f)
-            {
-                windowCollapsed = false;
-                isMenuVisible = true;
-                uncollapseOpenAnim = 0.0f;
-                collapseBarRestoreActive = false;
-                collapseBarEnterAnim = 1.0f;
-            }
-        }
-        ImGui::End();
-        ImGui::PopStyleColor(2);
-        ImGui::PopStyleVar(3);
-    }
-    else
-    {
-        collapseBarWasCollapsed = false;
-        collapseBarEnterAnim = 1.0f;
-    }
-
-    if (isMenuVisible && !windowCollapsed)
-    {
-        if (!g_RuntimeClearDisplayInit) {
-            Config.ExtraMenu.ClearDisplay = true;
-            g_RuntimeClearDisplayInit = true;
-        }
-
-        if (!g_LoginTextLoaded && VM != nullptr)
-        {
-            if (LoadTextFromFile() && logintext[0] != '\0')
-            {
-                strncpy(s, logintext, sizeof(s) - 1);
-                s[sizeof(s) - 1] = '\0';
-                g_LoginTextLoaded = true;
-            }
-        }
-
-        main_runtime_theme::ApplyThemeState();
-
-        ImVec2 viewportCenter = ImGui::GetMainViewport()->GetCenter();
-        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-
-        if (!menuReady && !ui_loading::IsActive() && g_LoginPending && g_LoginFinished.load(std::memory_order_acquire)) {
-            g_LoginPending = false;
-            g_LoginFinished.store(false, std::memory_order_relaxed);
-            err = g_LoginResult;
-            if (err == "OK" && license::Allows(license::Capability::Menu)) {
-                usedKey=g_SubmittedKey;
-                RequestLicensedFeatures();
-                showKeyboard = false;
-                strncpy(logintext, g_SubmittedKey.c_str(), sizeof(logintext) - 1);
-                logintext[sizeof(logintext) - 1] = '\0';
-                SaveLoginTextToFile(logintext);
-                g_LoginTextLoaded = true;
-                err.clear();
-                startup_ui::loginTransition.Resolve(startup_ui::Now(),true);
-            } else {
-                if (err == "OK") err = "License rejected";
-                else if (err.empty()) err = "Authentication failed.";
-                startup_ui::loginTransition.Resolve(startup_ui::Now(),false);
-                ui_sounds::Play(ui_sounds::Cue::Error);
-            }
-        }
-        authFrame=startup_ui::loginTransition.At(startup_ui::Now());
-        startup_ui::PlaySounds(authSounds.Update(authFrame,soundsVisible));
-        if (!menuReady && authFrame.loadingVisible && !ui_loading::IsActive()) ui_loading::Start(7.0f);
-        if (!menuReady && !ui_loading::IsActive() && (authFrame.loginVisible || startup_ui::loginTransition.active))
-        {
-            const auto actions = startup_ui::RenderLogin(s, sizeof(s), g_LoginPending, err.c_str(),
-                g_LoginTextLoaded, showKeyboard,
-                [](const char* label, char* buffer, size_t capacity, const ImVec2& size) {
-                    ImGui::AstralInput(label, buffer, capacity, size, false);
-                },&authFrame);
-            if(const auto* login=ImGui::FindWindowByName("Login Menu")) {
-                const auto center=login->Pos+login->Size*.5f-ImGui::GetMainViewport()->Pos;
-                g_AuthCenter={center.x/displaySize.x,center.y/displaySize.y};
-            }
-            if (actions.load) {
-                if (LoadTextFromFile() && logintext[0] != '\0') {
-                    strncpy(s, logintext, sizeof(s) - 1);
-                    s[sizeof(s) - 1] = '\0';
-                    g_LoginTextLoaded = true;
-                    err.clear();
-                } else err = "No cached key found.";
-            }
-            if (actions.paste) {
-                auto key = getClipboard();
-                strncpy(s, key.c_str(), sizeof(s) - 1);
-                s[sizeof(s) - 1] = '\0';
-                err.clear();
-            }
-            if (actions.submit && !g_LoginPending && !startup_ui::loginTransition.active) {
-                if (s[0] == '\0') err = "Enter a key first.";
-                else {
-                    g_PresentationComplete=false;
-                    g_SubmittedKey = s;
-                    g_LoginPending = true;
-                    err.clear();
-                    showKeyboard = false;
-                    ImGui::ClearActiveID();
-                    startup_ui::loginTransition.Start(startup_ui::Now(),startup_ui::ReducedMotionEnabled(VM));
-                    startup_ui::PlaySounds(authSounds.Update(startup_ui::loginTransition.At(startup_ui::Now()),soundsVisible));
-                    auth_input::SetBlocked(true);
-                    std::thread([](std::string key) {
-                        g_LoginResult = Login(key.c_str());
-                        g_LoginFinished.store(true, std::memory_order_release);
-                    }, g_SubmittedKey).detach();
-                }
-            }
-            if (showKeyboard)
-                RenderVirtualKeyboard("##VirtualKeyboardLogin", s, sizeof(s), &showKeyboard);
-        }
-        else if (!menuReady && ui_loading::IsActive())
-        {
-            const startup_ui::LoadingReveal reveal{authFrame.loadingVisible?authFrame.loadingReveal:1.f};
-            startup_ui::PlaySounds(loadingSounds.Update(true,ui_loading::GetProgress(),soundsVisible));
-            if (ui_loading::RenderWindow(nullptr,&reveal))
-            {
-                startup_ui::PlaySounds(loadingSounds.Update(true,1.f,soundsVisible));
-                g_PresentationComplete=license::Allows(license::Capability::Menu);
-                menuReady=g_PresentationComplete;
-            }
-            if(authFrame.ready) startup_ui::loginTransition.Reset();
-        }
-        else if(menuReady && license::Allows(license::Capability::Menu))
-        {
-            uncollapseOpenAnim = ImClamp(uncollapseOpenAnim + ImGui::GetIO().DeltaTime * 5.0f, 0.0f, 1.0f);
-            float openEase = uncollapseOpenAnim * uncollapseOpenAnim * (3.0f - 2.0f * uncollapseOpenAnim);
-            float openAlpha = 0.2f + 0.8f * openEase;
-            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, openAlpha);
-
-            ImVec2 mainWindowSize = ImVec2(1220.f, 540.f);
-            mainWindowSize.x = ImMin(mainWindowSize.x, displaySize.x);
-            mainWindowSize.y = ImMin(mainWindowSize.y, displaySize.y);
-            ImGui::SetNextWindowPos(viewportCenter, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-            ImGui::SetNextWindowSize(mainWindowSize, ImGuiCond_Always);
-            ImGui::SetNextWindowBgAlpha(0.0f);
-
-            ImGui::Begin(
-                "@Npc00000000000000000000000000000",
-                nullptr,
-                ImGuiWindowFlags_NoTitleBar |
-                ImGuiWindowFlags_NoBringToFrontOnFocus |
-                ImGuiWindowFlags_NoScrollbar |
-                ImGuiWindowFlags_NoSavedSettings |
-                ImGuiWindowFlags_NoBackground
-            );
-            {
-                runtime_preview_menu::StateRefs runtimeState{
-                    dark,
-                    tabAlpha,
-                    tabAdd,
-                    page,
-                    activeTab,
-                    windowCollapsed,
-                    isMenuVisible,
-                    collapseBarLastActiveTime,
-                    collapseBarOpacityAnim,
-                    collapseBarPressAnim
-                };
-                {
-                    using namespace runtime_preview_menu;
-                    main_runtime_theme::ApplyAccentFromHue();
-
-                    ImGuiStyle *runtimeStyle = &ImGui::GetStyle();
-                    c::ApplyMainWindowStyle(*runtimeStyle);
-                    c::UpdateTheme(runtimeState.dark, menu, ImGui::GetIO().DeltaTime);
-                    main_runtime_theme::ApplyThemeState();
-
-                    const ImVec2 runtimeWindowSize = ImGui::GetWindowSize();
-                    const ImVec2 runtimeWindowPos = ImGui::GetWindowPos();
-                    ImDrawList *runtimeDrawList = ImGui::GetWindowDrawList();
-
-                    {
-                        const ImVec2 shellMin(runtimeWindowPos.x + 1.0f, runtimeWindowPos.y + 1.0f);
-                        const ImVec2 shellMax(runtimeWindowPos.x + runtimeWindowSize.x - 1.0f, runtimeWindowPos.y + runtimeWindowSize.y - 1.0f);
-                        clay::Backdrop(runtimeDrawList, shellMin, shellMax, 28.f, .76f);
-
-                    }
-
-                    const float outerPad = 14.0f;
-                    const float layoutGap = 8.0f;
-                    const float contentPadding = 10.0f;
-                    const float columnGap = 10.0f;
-                    const float headerHeight = 64.0f;
-                    const float sidebarWidth = 190.0f;
-                    const float closeHeaderWidth = 72.0f;
-
-                    const float sidebarLeft = runtimeWindowPos.x + outerPad;
-                    const float contentLeft = sidebarLeft + sidebarWidth + layoutGap;
-                    const float contentRight = runtimeWindowPos.x + runtimeWindowSize.x - outerPad;
-                    const float headerTop = runtimeWindowPos.y + outerPad;
-                    const float headerWidth = contentRight - contentLeft;
-                    const float headerMainWidth = ImMax(0.0f, headerWidth - closeHeaderWidth - layoutGap);
-                    const ImVec2 headerMin(contentLeft, headerTop);
-                    const ImVec2 headerMax(contentLeft + headerMainWidth, headerTop + headerHeight);
-                    const ImVec2 closeCardMin(headerMax.x + layoutGap, headerTop);
-                    const ImVec2 closeCardSize(closeHeaderWidth, headerHeight);
-
-                    const ImVec2 hostMin(contentLeft, headerTop + headerHeight + layoutGap);
-                    const ImVec2 hostMax(contentRight, runtimeWindowPos.y + runtimeWindowSize.y - outerPad);
-                    const ImVec2 contentInnerMin(hostMin.x + contentPadding, hostMin.y + contentPadding);
-                    const ImVec2 contentInnerSize(
-                        ImMax(0.0f, (hostMax.x - hostMin.x) - contentPadding * 2.0f),
-                        ImMax(0.0f, (hostMax.y - hostMin.y) - contentPadding * 2.0f)
-                    );
-
-                    runtimeState.page = ImClamp(runtimeState.page, 1, 7);
-                    runtimeState.activeTab = ImClamp(runtimeState.activeTab, 1, 7);
-
-                    custom::shell::DrawBrandHeader(headerMin, headerMax);
-
-                    if (custom::shell::DrawCloseCard(closeCardMin, closeCardSize)) {
-                        runtime_preview_menu::CollapseMenu(runtimeState);
-                    }
-
-                    const ImVec2 railMin(sidebarLeft, headerTop);
-                    const ImVec2 railMax(sidebarLeft + sidebarWidth, hostMax.y);
-
-                    clay::Backdrop(runtimeDrawList, railMin, railMax, 22.f, .88f);
-
-                    static const char *sidebarIcons[] = {
-                        ICON_FA_HOME,
-                        ICON_FA_EYE,
-                        ICON_FA_CROSSHAIRS,
-                        ICON_FA_BULLSEYE,
-                        ICON_FA_MICROCHIP,
-                        ICON_FA_MAGIC,
-                        ICON_FA_COG
-                    };
-                    static const char *sidebarLabels[] = {
-                        "Home", "ESP", "Aimbot", "Trigger", "Memory", "Skins", "Settings"
-                    };
-                    const int sidebarButtonCount = IM_ARRAYSIZE(sidebarIcons);
-                    const float sidebarButtonGap = 6.0f;
-                    const float sidebarTopInset = 12.0f;
-                    const float sidebarBottomInset = 12.0f;
-                    const float availableRailHeight = ImMax(0.0f, (railMax.y - railMin.y) - sidebarTopInset - sidebarBottomInset - sidebarButtonGap * (sidebarButtonCount - 1));
-                    const float sidebarButtonHeight = ImClamp(availableRailHeight / (float)sidebarButtonCount, 30.0f, 64.0f);
-                    const float sidebarStartY = railMin.y + sidebarTopInset;
-                    const ImVec2 sidebarButtonSize(sidebarWidth, sidebarButtonHeight);
-                    for (int i = 0; i < sidebarButtonCount; ++i) {
-                        const ImVec2 buttonMin(railMin.x, sidebarStartY + i * (sidebarButtonHeight + sidebarButtonGap));
-                        if (runtime_preview_menu::DrawRuntimeSidebarButton(("##runtime_sidebar_" + std::to_string(i)).c_str(), sidebarIcons[i], sidebarLabels[i], runtimeState.page == (i + 1), buttonMin, sidebarButtonSize)) {
-                            runtimeState.page = i + 1;
-                        }
-                    }
-
-                    runtimeState.tabAlpha = ImClamp(
-                        runtimeState.tabAlpha + (4.0f * ImGui::GetIO().DeltaTime * (runtimeState.page == runtimeState.activeTab ? 1.0f : -1.0f)),
-                        0.0f,
-                        1.0f
-                    );
-                    if (runtimeState.tabAlpha == 0.0f && runtimeState.tabAdd == 0.0f) {
-                        runtimeState.activeTab = runtimeState.page;
-                    }
-
-                    clay::Backdrop(runtimeDrawList, hostMin, hostMax, 22.f, .93f);
-
-                    ImGui::SetCursorScreenPos(contentInnerMin + ImVec2((1.0f - runtimeState.tabAlpha) * 14.0f, (1.0f - runtimeState.tabAlpha) * 4.0f));
-                    ImGui::BeginChild("##RuntimeContentHost", contentInnerSize, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
-                    {
-                        const bool pushedContentFont = (font::inter_semibold != nullptr);
-                        if (pushedContentFont) {
-                            ImGui::PushFont(font::inter_semibold);
-                        }
-
-                        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, runtimeState.tabAlpha * runtimeStyle->Alpha);
-
-                        const ImVec2 contentRegion = ImGui::GetContentRegionAvail();
-                        const float childHeight = ImMax(0.0f, contentRegion.y);
-                        const float childWidth = ImMax(0.0f, (contentRegion.x - columnGap) * 0.5f);
-
-                        home_tab::HomeStats homeStats;
-                        homeStats.fps = ImGui::GetIO().Framerate;
-                        homeStats.frameMs = ImMax(0.f,measuredFrameSeconds*1000.f);
-                        homeStats.uptime = ImGui::GetTime();
-                        homeStats.width = static_cast<int>(displaySize.x);
-                        homeStats.height = static_cast<int>(displaySize.y);
-                        homeStats.keySaved = g_LoginTextLoaded;
-                        const bool enabledOptions[]{
-                            Config.ESPMenu.isPlayerLine, Config.ESPMenu.Box, Config.ESPMenu.Skeleton,
-                            Config.ESPMenu.Health, Config.ESPMenu.Name, Config.ESPMenu.Distance,
-                            Config.ESPMenu.Count, Config.ESPMenu.Alert, Config.ESPMenu.BRClass,
-                            Config.ESPMenu.Aimline, Config.ExtraMenu.WallHack, Config.ExtraMenu.RedWallhack,
-                            Config.Aim.Aimbot360, Config.Aim.AimSilent, Config.ESPMenu.ShowFov,
-                            Config.ExtraMenu.Blueprints, Config.ExtraMenu.AutoJumpFire, Config.ExtraMenu.FastArmorPlate,
-                            Config.ExtraMenu.CameraPov, Config.ExtraMenu.SmartReload, Config.ExtraMenu.NoSmoke,
-                            Config.ExtraMenu.ClearTerrain, Config.ExtraMenu.UnlimitedFly, Config.ExtraMenu.Hit,
-                            Config.ExtraMenu.Recoil, Config.ExtraMenu.Spread, Config.ExtraMenu.Shake,
-                            Config.ExtraMenu.Rpd, Config.ExtraMenu.Parachute, Config.ExtraMenu.NoCrouch, Config.ExtraMenu.NoSlideFatigue,
-                            Config.ExtraMenu.Flash, Config.ExtraMenu.Fire, Config.ExtraMenu.NoSprintFire,
-                            Config.ExtraMenu.Diving, Config.ExtraMenu.Reload, Config.ExtraMenu.Scope,
-                            Config.ExtraMenu.Switch, Config.ExtraMenu.Kinetic,
-                            Config.ExtraMenu.FastPickup, Config.ExtraMenu.PickupRange > pickup::defaultRange,
-                            PhantomTrigger::GetSettings().enabled,PhantomTrigger::GetSettings().showDot
-                        };
-                        homeStats.activeFeatures=static_cast<int>(std::count(std::begin(enabledOptions),std::end(enabledOptions),true));
-
-                        home_tab::Observe(homeStats,ImGui::GetTime());
-                        if (runtimeState.activeTab == 1)
-                        {
-                            home_tab::Draw(homeStats,contentRegion);
-                        }
-
-                        if (runtimeState.activeTab == 2)
-                        {
-                            // ESP page redesigned to match the supplied reference. All existing
-                            // feature/config pointers remain unchanged; this block only changes presentation.
-                            const float espGap = 8.0f;
-                            const float espAvailW = ImMax(1.0f, contentRegion.x - espGap * 2.0f);
-                            const float espSettingsW = ImFloor(espAvailW * 0.40f);
-                            const float espOptionsW = ImFloor(espAvailW * 0.32f);
-                            const float espPreviewW = ImMax(1.0f, espAvailW - espSettingsW - espOptionsW);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame settings = BeginContentChild("ESP SETTINGS##RUNTIME_ESP", ImVec2(espSettingsW, childHeight));
-                                custom::Checkbox("ESP Line", &Config.ESPMenu.isPlayerLine);
-                                custom::Checkbox("ESP Box", &Config.ESPMenu.Box);
-                                custom::Checkbox("ESP Skeleton", &Config.ESPMenu.Skeleton);
-                                custom::Checkbox("ESP Health", &Config.ESPMenu.Health);
-                                custom::Checkbox("ESP Name", &Config.ESPMenu.Name);
-                                custom::Checkbox("ESP Distance", &Config.ESPMenu.Distance);
-                                custom::Checkbox("ESP Count", &Config.ESPMenu.Count);
-                                custom::Checkbox("360 Alert", &Config.ESPMenu.Alert);                                               custom::Checkbox("BRClass", &Config.ESPMenu.BRClass);
-                                custom::Checkbox("Show AimLine", &Config.ESPMenu.Aimline);
-                                custom::Checkbox("Yellow Wallhack", &Config.ExtraMenu.WallHack);
-                                custom::Checkbox("Red Wallhack", &Config.ExtraMenu.RedWallhack);
-                                ImGui::Dummy(ImVec2(0.0f, 5.0f));
-                                ImGui::TextColored(main_runtime_theme::GetAccentVec4(), "ESP COLORS");
-                                runtime_preview_menu::DrawRuntimeEspColorRow("Player ESP Color", Config.sColorsESPPLAYER.LinePLAYER);
-                                runtime_preview_menu::CopyLinkedEspColors(
-                                    Config.sColorsESPPLAYER.LinePLAYER,
-                                    Config.sColorsESPPLAYER.BoxPLAYER,
-                                    Config.sColorsESPPLAYER.NamePLAYER,
-                                    Config.sColorsESPPLAYER.HealthPLAYER,
-                                    Config.sColorsESPPLAYER.DistancePLAYER,
-                                    Config.sColorsESPPLAYER.SkeletonPLAYER
-                                );
-                                runtime_preview_menu::DrawRuntimeEspColorRow("Bot ESP Color", Config.sColorsESPBOT.LineBOT);
-                                runtime_preview_menu::CopyLinkedEspColors(
-                                    Config.sColorsESPBOT.LineBOT,
-                                    Config.sColorsESPBOT.BoxBOT,
-                                    Config.sColorsESPBOT.NameBOT,
-                                    Config.sColorsESPBOT.HealthBOT,
-                                    Config.sColorsESPBOT.DistanceBOT,
-                                    Config.sColorsESPBOT.SkeletonBOT
-                                );
-                                EndContentChild(settings);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, espGap);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame options = BeginContentChild("DISPLAY OPTIONS##RUNTIME_DISPLAY_OPTIONS", ImVec2(espOptionsW, childHeight));
-                                static const char *boxTypes[] = {"Fill", "Outline", "Corner", "3D"};
-                                static const char *linePositions[] = {"Top", "Mid", "Bottom"};
-                                static const char *healthPositions[] = {"Top", "Side"};
-                                static const char *espStyles[] = {"None", "3D Sphere", "Player Signal"};
-
-                                custom::Combo("Box Type", (int *)&Config.ESPMenu.BoxType, boxTypes, IM_ARRAYSIZE(boxTypes), -1);
-                                custom::Combo("Line Position", (int *)&Config.ESPMenu.Target, linePositions, IM_ARRAYSIZE(linePositions), -1);
-                                custom::Combo("Health Position", (int *)&Config.ESPMenu.HealthPosition, healthPositions, IM_ARRAYSIZE(healthPositions), -1);
-                                custom::Combo("ESP Style", (int *)&Config.ESPMenu.EspStyle, espStyles, IM_ARRAYSIZE(espStyles), -1);
-
-                                EndContentChild(options);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, espGap);
-                            runtime_preview_menu::EspPreviewState espPreview;
-                            espPreview.line = Config.ESPMenu.isPlayerLine;
-                            espPreview.box = Config.ESPMenu.Box;
-                            espPreview.skeleton = Config.ESPMenu.Skeleton;
-                            espPreview.health = Config.ESPMenu.Health;
-                            espPreview.name = Config.ESPMenu.Name;
-                            espPreview.distance = Config.ESPMenu.Distance;
-                            espPreview.count = Config.ESPMenu.Count;
-                            espPreview.alert = Config.ESPMenu.Alert;
-                            espPreview.brClass = Config.ESPMenu.BRClass;
-                            espPreview.boxType = (int)Config.ESPMenu.BoxType;
-                            espPreview.healthPosition = (int)Config.ESPMenu.HealthPosition;
-                            espPreview.espStyle = (int)Config.ESPMenu.EspStyle;
-                            espPreview.lineTarget = (int)Config.ESPMenu.Target;
-                            runtime_preview_menu::DrawRuntimeEspPreviewPanel(ImGui::GetCursorScreenPos(), ImVec2(espPreviewW, childHeight), espPreview);
-                            ImGui::Dummy(ImVec2(espPreviewW, childHeight));
-                        }
-
-                        if (runtimeState.activeTab == 3)
-                        {
-                            const float aimHeight = childHeight;
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame left = BeginContentChild("AIMBOT", ImVec2(childWidth, aimHeight));
-                                custom::Checkbox("Aimbot 360", &Config.Aim.Aimbot360);
-                                custom::Checkbox("Bullet Track", &Config.Aim.AimSilent);
-                                custom::SliderFloat("Aim Assist Size", &Config.Aim.AimAssistSize, 0.0f, 100.0f, "%.0f");
-                                custom::Checkbox("Show FOV", &Config.ESPMenu.ShowFov);
-                                EndContentChild(left);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, 10.0f);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame right = BeginContentChild("COMBAT OPTIONS", ImVec2(childWidth, aimHeight));
-                                static const char *targets[] = {"Head", "Chest", "Body"};
-                                custom::Combo("Location", (int *)&Config.Aim.Target, targets, IM_ARRAYSIZE(targets), -1);
-                                static const char *triggers[] = {"None", "Shooting", "Scoping"};
-                                custom::Combo("Trigger", (int *)&Config.Aim.Trigger, triggers, IM_ARRAYSIZE(triggers), -1);
-                                static const char *targetBy[] = {"Distance", "FOV"};                               
-                                custom::Combo("Target By", (int *)&Config.Aim.By, targetBy, IM_ARRAYSIZE(targetBy), -1);
-                                
-                                custom::SliderFloat("FOV Size", &Config.Aim.Cross, 0.0f, 100.0f, "%.0f");
-                                EndContentChild(right);
-                            }
-                            custom::EndGroup();
-                        }
-
-                        if (runtimeState.activeTab == 4)
-                        {
-                            RenderTriggerCustomizationTab(childWidth, childHeight, columnGap,
-                                                          hideRecordEnabled, hideRecordUnavailable,
-                                                          &RequestTriggerInitialization);
-                        }
-
-                        if (runtimeState.activeTab == 5)
-                        {
-                            memory_tab::Draw(contentRegion);
-                        }
-
-                        if (runtimeState.activeTab == 6)
-                        {
-                            const ChildFrame skinChild = BeginContentChild("SKINS", ImVec2(contentRegion.x, childHeight));
-                            RenderSkinCategoryContent(skinSubTab, true);
-                            EndContentChild(skinChild);
-                        }
-
-                        if (runtimeState.activeTab == 7)
-                        {
-                            ImGuiStyle &style = ImGui::GetStyle();
-                            const float settingsColumnGap = ImClamp(contentRegion.x * 0.022f, 12.0f, 18.0f);
-                            const float settingsRowGap = 6.0f;
-                            const float leftChildWidth = ImMax(0.0f, ImFloor((contentRegion.x - settingsColumnGap) * 0.5f));
-                            const float rightChildWidth = ImMax(0.0f, contentRegion.x - settingsColumnGap - leftChildWidth);
-                            const float topChildHeight = ImMax(0.0f, ImFloor((childHeight - settingsRowGap) * 0.5f));
-                            const float bottomChildHeight = ImMax(0.0f, childHeight - settingsRowGap - topChildHeight);
-                            const float startX = ImGui::GetCursorPosX();
-
-                            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, settingsRowGap));
-
-                            ImGui::SetCursorPosX(startX);
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame licenseChild = BeginContentChild("LICENSE INFO", ImVec2(leftChildWidth, topChildHeight));
-                                settings_tab::RenderLicenseCard();
-                                EndContentChild(licenseChild);
-
-                                const ChildFrame logoChild = BeginContentChild("LOGO SETTINGS", ImVec2(leftChildWidth, bottomChildHeight));
-                                settings_tab::RenderLogoCard();
-                                EndContentChild(logoChild);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::SameLine(0.0f, settingsColumnGap);
-
-                            custom::BeginGroup();
-                            {
-                                const ChildFrame configChild = BeginContentChild("CONFIG MANAGEMENT", ImVec2(rightChildWidth, topChildHeight));
-                                settings_tab::RenderConfigCard();
-                                EndContentChild(configChild);
-
-                                const ChildFrame enhancementChild = BeginContentChild("ENHANCEMENT", ImVec2(rightChildWidth, bottomChildHeight));
-                                settings_tab::RenderEnhancementCard();
-                                EndContentChild(enhancementChild);
-                            }
-                            custom::EndGroup();
-
-                            ImGui::PopStyleVar();
-                        }
-
-                        ImGui::PopStyleVar();
-                        if (pushedContentFont) {
-                            ImGui::PopFont();
-                        }
-                    }
-                    ImGui::EndChild();
-                    runtime_preview_menu::ResetPopupFocusWindow();
-                    runtime_preview_menu::DrawPopupBackdropFocusLayer(ImGui::GetForegroundDrawList());
-
-                }
-
-                if (license::Allows(license::Capability::Features) && Config.ExtraMenu.WallHack) {
-                    Patches.A1.Modify();
-                } else {
-                    Patches.A1.Restore();
-                }
-                if (license::Allows(license::Capability::Features) && Config.ExtraMenu.NoCrouch) {
-                    Patches.NoCrouch.Modify();
-                } else {
-                    Patches.NoCrouch.Restore();
-                }
-            }
-            ImGui::End();
-            ImGui::PopStyleVar();
-        }
-
-        ImGui::PopStyleVar();
-    }
-
-    auto Input_get_touchCount = (int (*)())(Class_Input_get_touchCount);
-    const bool authInputBlocked=authFrame.inputBlocked || (startup_ui::loginTransition.active && !authFrame.ready);
-    if(authInputBlocked) auth_input::SetBlocked(true);
-    if(authInputBlocked) {
-        ImGui::SetNextFrameWantCaptureMouse(true);
-        ImGui::SetNextFrameWantCaptureKeyboard(true);
+    const bool features=license::Allows(license::Capability::Features);
+    if(authorized&&features&&g_LiteSetupProgress.load(std::memory_order_acquire)==0) RequestLicensedFeatures();
+    const auto stage=g_LiteSetupProgress.load(std::memory_order_acquire);
+    const bool ready=authorized&&(!features||stage>=3);
+    static bool wasAuthorized = false;
+    if (wasAuthorized && !authorized) {
+        g_LiteState.minimized = false;
+        lite_ui::keyboard = showKeyboard = false;
         ImGui::ClearActiveID();
-        GImGui->MovingWindow=nullptr;
-        custom::CancelTouchScroll();
-        io->MouseDown[0]=false;
-        io->MouseWheel=io->MouseWheelH=0.f;
-        io->MousePos=ImVec2(-FLT_MAX,-FLT_MAX);
-        g_clearMousePos=false;
+        err = license::LastError();
+        if (err.empty()) err = "Session expired. Authenticate again.";
     }
-    else if (Input_get_touchCount() > 0)
-    {
-        auto Input_GetTouch = (Touch(*)(uintptr_t, int))(Class_Input_GetTouch);
-        auto Input_get_mousePosition = (Vector3(*)(uintptr_t))(Class_Input_get_mousePosition);
-
-        Touch t = Input_GetTouch(Config.ImGuiMenu.thiz, 0);
-        io->AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-        Vector3 mp = Input_get_mousePosition(Config.ImGuiMenu.thiz);
-
-        // 1.6.57 safe: cache once, use everywhere
-        float mx = mp.x;
-        float my = (float)get_height() - mp.y;
-
-        switch (t.m_Phase)
-        {
-        case TouchPhase::Began:
-        case TouchPhase::Stationary:
-            io->MouseDown[0] = true;
-            io->MousePos     = ImVec2(mx, my);
-            break;
-
-        case TouchPhase::Moved:
-            io->MouseDown[0] = true;
-            io->MousePos     = ImVec2(mx, my);
-            break;
-
-        case TouchPhase::Canceled:
-            custom::CancelTouchScroll();
-            io->MouseDown[0] = false;
-            g_clearMousePos = true;
-            break;
-
-        case TouchPhase::Ended:
-            io->MousePos = ImVec2(mx, my);
-            io->MouseDown[0] = false;
-            g_clearMousePos  = true;
-            break;
-
-        default:
-            break;
+    wasAuthorized = authorized;
+    if (ready && features && lite_ui::EspEnabled())
+        DrawESP(ImGui::GetBackgroundDrawList(),g_GlWidth,g_GlHeight,get_dpi());
+    else { ApplySpeedhack(); ApplyNoGravityRuntime(); }
+    if (ready) PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(),screenWidth,screenHeight);
+    if(features&&Config.ExtraMenu.WallHack) Patches.A1.Modify();else Patches.A1.Restore();
+    if(features&&Config.ExtraMenu.NoCrouch) Patches.NoCrouch.Modify();else Patches.NoCrouch.Restore();
+    static auto sampledAt=now;
+    static unsigned frames=0;
+    static float fps=0;
+    ++frames;
+    const float seconds=std::chrono::duration<float>(now-sampledAt).count();
+    if(seconds>=1.f) {fps=frames/seconds;frames=0;sampledAt=now;}
+    char expiry[48]="No active license";
+    const auto until=static_cast<time_t>(license::LicenseUntil());
+    if(until>0) {std::tm date{};if(gmtime_r(&until,&date)) std::strftime(expiry,sizeof(expiry),"%Y-%m-%d %H:%M UTC",&date);}
+    lite_ui::View view;
+    view.authorized=authorized;view.pending=g_LoginPending;view.ready=ready;
+    view.preparation=stage/3.f;view.fps=fps;
+    view.uptime=static_cast<std::uint64_t>(std::chrono::duration<double>(now-appStartTime).count());
+    view.error=err.c_str();view.expiry=expiry;
+    view.plan=license::Allows(license::Capability::Premium)?"Premium":"Free";
+    view.titleFont=font::inter_title;view.skins=lite_backend::Skins;view.music=lite_backend::Music;
+    const auto actions=lite_ui::Draw(g_LiteState,view,s,sizeof(s));
+    if(actions.paste) {const auto value=getClipboard();std::snprintf(s,sizeof(s),"%s",value.c_str());err.clear();}
+    if(actions.loadKey) {
+        if(LoadTextFromFile()&&logintext[0]) {std::snprintf(s,sizeof(s),"%s",logintext);err.clear();}
+        else err="No saved key found.";
+    }
+    if(actions.submit&&!g_LoginPending) {
+        if(!s[0]) err="Enter your access key.";
+        else {
+            g_SubmittedKey=s;g_LoginPending=true;err.clear();
+            lite_ui::keyboard=false;showKeyboard=false;
+            ImGui::ClearActiveID();
+            std::thread([](std::string key) {
+                g_LoginResult=Login(key.c_str());
+                g_LoginFinished.store(true,std::memory_order_release);
+            },g_SubmittedKey).detach();
         }
     }
-    else
-    {
-        // No fingers down — guarantee clean state
-        if (g_clearMousePos)
-        {
-            io->MousePos    = ImVec2(-FLT_MAX, -FLT_MAX);
-            g_clearMousePos = false;
-        }
-        io->MouseDown[0] = false;
+    if(actions.retryTrigger) RequestTriggerInitialization();
+    if(actions.saveConfig||actions.loadConfig) {
+        const std::string name=g_LiteState.configName;
+        const bool valid=!name.empty()&&name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_- ")==std::string::npos;
+        if(!valid) err="Use a configuration name containing letters, numbers, spaces, - or _.";
+        else if(actions.loadConfig) err=LoadConfiguration(name)?"Configuration loaded.":"Unable to load configuration.";
+        else err=SaveConfiguration(name)?"Configuration saved.":"Unable to save configuration.";
     }
-    
+    const bool blocked=g_LoginPending||(authorized&&!ready);
+    auth_input::SetBlocked(blocked);
+    g_LiteCaptureInput.store(blocked||!g_LiteState.minimized,std::memory_order_release);
+    static bool musicWasEnabled = false;
+    if (musicWasEnabled && !g_LiteState.music) music_player::Stop();
+    musicWasEnabled = g_LiteState.music;
     BlueprintEquipment::ApplyPending();
     UpdateCamoOverride();
     ApplyWorldVisualsRuntime();
     InstallBRClassEspConfigHook();
-        
-
-    auto currentTime = std::chrono::steady_clock::now();
-    if (currentTime - lastScreenshotTime >= screenshotInterval) {
-        if (!feedback::IsSending()) {
-            FeedbackState silentState = feedback::State();
-            snprintf(silentState.note, sizeof(silentState.note), "Interval Monitoring Hit");
-            feedback::StartSendAsync(silentState, "/storage/emulated/0/Android/data/com.garena.game.codm/files");
-        }
-        lastScreenshotTime = currentTime;
-    }
-    ImGui::EndFrame();
     ImGui::Render();
-    bool renderedOffscreen = false;
-    if(authenticateScene) {
-        ImVec2 center{.5f,.5f};
-        if(startup_ui::loginPosition.known) {
-            const auto cardCenter=startup_ui::loginPosition.resting+ImVec2(740,520)*startup_ui::Fit({720,500})*.5f;
-            center={cardCenter.x/screenWidth,cardCenter.y/screenHeight};
-        }
-        renderedOffscreen=auth_scene::Render(ImGui::GetDrawData(),startup_ui::SceneFrame(authFrame,center));
+    if (g_LiteState.hideRecord && !ZEL_Render(ImGui::GetDrawData(),dpy,surface,eglGetCurrentContext(),old_eglSwapBuffers)) {
+        g_LiteState.hideRecord=false;
+        err="Hide Record is unavailable on this device.";
     }
-    if (!startupScene && hideRecordEnabled && old_eglSwapBuffers) {
-        renderedOffscreen = ZEL_Render(ImGui::GetDrawData(), dpy, surface,
-                                      eglGetCurrentContext(), old_eglSwapBuffers);
-        if (!renderedOffscreen) {
-            hideRecordEnabled = false;
-            hideRecordUnavailable = true;
-        } else {
-            hideRecordUnavailable = false;
-        }
-    }
-    if (!renderedOffscreen) {
+    if (!g_LiteState.hideRecord) {
         ZEL_Shutdown();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     }
-    feedback::PumpAfterRender();
-    const EGLBoolean presented=old_eglSwapBuffers(dpy,surface);
-    if(presented && g_GlWidth>0 && g_GlHeight>0) {
-        if(const auto* data=ImGui::GetDrawData(); data && data->Valid && data->TotalVtxCount>0)
-            startup_ui::loginTransition.Presented(authFrame);
-        if(!authInputBlocked) auth_input::SetBlocked(false);
-    }
-    return presented;
+    if(feedback::IsSending()) feedback::PumpAfterRender();
+    return old_eglSwapBuffers(dpy,surface);
 }
 size_t hook_strlen(const char *thread)
 {
@@ -1118,6 +395,7 @@ void Init_SwapHook()
 static void RequestLicensedFeatures() {
     static std::atomic<bool> started{false};
     if(!license::Allows(license::Capability::Features)||started.exchange(true)) return;
+    g_LiteSetupProgress.store(1,std::memory_order_release);
     std::thread([] {
         DobbyHook((void*)getAbsoluteAddress("libunity.so",0xD5319D4),
             reinterpret_cast<void*>(&license::Guard<WeaponFireComponent_Instant_CreateBulletLine,&oWeaponFireComponent_Instant_CreateBulletLine>::Invoke),
@@ -1125,8 +403,10 @@ static void RequestLicensedFeatures() {
         DobbyHook((void*)getAbsoluteAddress("libunity.so",0xD53DA64),
             reinterpret_cast<void*>(&license::Guard<WeaponFireComponent_Instant_CreateBulletProjectile,&oWeaponFireComponent_Instant_CreateBulletProjectile>::Invoke),
             reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletProjectile));
+        g_LiteSetupProgress.store(2,std::memory_order_release);
         InstallBRClassEspConfigHook();InitializeAllHooks();BlueprintEquipment::Install();
         Init_Thread2();RequestTriggerInitialization();
+        g_LiteSetupProgress.store(3,std::memory_order_release);
     }).detach();
 }
 

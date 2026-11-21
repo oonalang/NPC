@@ -13,7 +13,15 @@ inline constexpr float defaultGain=1.f;
 std::vector<std::int16_t> Synthesize(Cue cue);
 double Duration(Cue cue);
 bool DecodeSettings(const char* text,bool& enabled,float& gain);
-#ifdef __ANDROID__
+#ifdef ETHNIR_LITE
+inline void Play(Cue,Channel=Channel::UI) {}
+inline void Stop(Channel) {}
+inline void Configure(const std::string&) {}
+inline bool Enabled() {return false;}
+inline float Gain() {return 0.f;}
+inline void SetEnabled(bool) {}
+inline void SetGain(float) {}
+#elif defined(__ANDROID__)
 void Play(Cue cue,Channel channel=Channel::UI);
 void Stop(Channel channel);
 void Configure(const std::string& folder);

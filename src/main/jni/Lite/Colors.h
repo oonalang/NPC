@@ -1,0 +1,52 @@
+#pragma once
+#include "../ImGui/imgui.h"
+namespace lite_colors {
+    inline ImU32 Bg           = IM_COL32(18,  18,  18,  255);
+    inline ImU32 TitleBg      = IM_COL32(20,  20,  20,  255);
+    inline ImU32 Text         = IM_COL32(205, 205, 205, 255);
+    inline ImU32 TextBright   = IM_COL32(245, 245, 245, 255);
+    inline ImU32 TextDim      = IM_COL32(105, 105, 110, 255);
+    inline ImU32 TextBind     = IM_COL32(120, 120, 126, 255);
+    inline ImU32 Section      = IM_COL32(225, 225, 225, 255);
+    inline ImU32 Accent       = IM_COL32(188, 130, 187, 255);
+    inline ImU32 AccentHover  = IM_COL32(205, 148, 204, 255);
+    inline ImU32 AccentDark   = IM_COL32(60,  38,  60,  255);
+    inline ImU32 CbBg         = IM_COL32(22,  22,  22,  255);
+    inline ImU32 CbBorder     = IM_COL32(42,  42,  42,  255);
+    inline ImU32 CbBorderHov  = IM_COL32(155, 105, 154, 255);
+    inline ImU32 SliderTrack  = IM_COL32(43,  43,  43,  255);
+    inline ImU32 DropdownBg   = IM_COL32(31,  31,  31,  255);
+    inline ImU32 DropdownBord = IM_COL32(45,  45,  45,  255);
+    inline ImU32 Divider      = IM_COL32(55,  55,  62,  255);
+    inline ImU32 TabBg        = IM_COL32(17,  17,  17,  255);
+    inline ImU32 ColHdr       = IM_COL32(235, 235, 235, 255);
+    inline ImU32 ColHdrLine   = IM_COL32(38,  38,  38,  255);
+    inline ImU32 SectionBg    = IM_COL32(25,  25,  25,  255);
+    inline ImU32 SectionBorder = IM_COL32(40, 40,  40,  255);
+    inline ImU32 MenuBg       = IM_COL32(18,  18,  18,   255);
+    inline ImU32 MenuTitleGradTop = IM_COL32(40, 40, 46, 255);
+    inline ImU32 MenuTitleGradBot = IM_COL32(20,  20,  26, 255);
+    inline ImU32 MenuTitleText = IM_COL32(255, 255, 255, 255);
+    inline ImU32 BoxBorder     = IM_COL32(42, 42, 42, 255);
+    inline ImU32 BoxInnerBorder = IM_COL32(26, 26, 26, 255);
+    inline ImU32 SideStrip     = IM_COL32(38, 38, 38, 255);
+    inline ImU32 ListBg        = IM_COL32(25,  25,  25,  255);
+    inline ImU32 ScrollbarTrack = IM_COL32(40, 40, 46, 255);
+    inline ImU32 ScrollbarGrab  = IM_COL32(52,  52,  58, 255);
+    inline ImU32 ScrollbarGrabHover = IM_COL32(52,  52,  58, 255);
+    inline ImU32 ScrollbarGrabActive = IM_COL32(52,  52,  58, 255);
+    inline ImU32 InputBg      = IM_COL32(31,  31,  31,  255);
+    inline ImU32 ButtonBgTop  = IM_COL32(42,  42,  48,  255);
+    inline ImU32 ButtonBgBot  = IM_COL32(34,  34,  40,  255);
+    inline ImU32 BindBg       = IM_COL32(28,  28,  34,   255);
+    inline ImU32 ButtonHeldTop = IM_COL32(34,  34,  40,  255);
+    inline ImU32 ButtonHeldBot = IM_COL32(26,  26,  32,  255);
+    inline ImU32 ButtonBorder  = IM_COL32(20,  20,  26,  255);
+    inline ImU32 DropdownGradTop = IM_COL32(42,  42,  48,  255);
+    inline ImU32 DropdownGradBot = IM_COL32(34,  34,  40,  255);
+    inline ImU32 CheckboxBg    = IM_COL32(245, 245, 245, 255);
+    inline ImU32 SliderValueBg = IM_COL32(44,  44,  44,  255);
+    inline ImU32 BindItemBg    = IM_COL32(34,  34,  40,  255);
+    inline ImU32 BindItemText  = IM_COL32(140, 137, 155, 255);
+    inline ImU32 TabSeparator = IM_COL32(150, 150, 158, 90);
+}

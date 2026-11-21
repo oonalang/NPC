@@ -1,8 +1,16 @@
 # Compact handoff
 
+## Active: ETHNIR LITE on 2026-11-21
+
+- Current task is the user-authorized new branch `feature/ethnir-lite`, based on main `f1f363e`, in `/workspace/NPC-license-hardening`. The earlier main-only instruction is superseded for this edition. Keep main/Free Trial untouched. Read [ETHNIR_LITE.md](docs/ETHNIR_LITE.md) for architecture, build/deploy steps, validation and remaining device checks.
+- Ported the supplied Celerity ImGui geometry, font subsets, sidebar/icons and controls into native C++17/GLES3. No desktop game logic was imported. Native feature/configuration APIs remain shared. Lite excludes the model/preview, UI sound engine, liquid glass, loading media and explosion; login/preparation are plain and centered. Music is opt-in. No new authored source comments.
+- Lite is the default build on this branch. Application ID `com.android.support.lite`; launcher endpoints are `/native/lite/libZANEV1.so` and `.manifest`, signed product `ETHNIR_LITE`. Session licensing still uses the existing panel/protocol; no SQL/PHP migration. Upload the separate native files before testing the Lite launcher. Do not overwrite full-edition downloads or commit a private signing key.
+- Native output `/dev/shm/npc-ethnir-lite-libs/arm64-v8a/libnets.so`: 3,910,472 bytes versus 7,488,904 on main. The single font atlas is 512×256 RGBA. Native build, GLES UI, UI sanitizer, shared trigger/pickup/hitbox, license/server and Java/release tests pass. Logs/frames are under `/dev/shm/ethnir-lite-*` with copied validation evidence in `/workspace/license-hardening/logs`.
+- Remaining: real low-end phone profiling, installed APK/game/input alignment, real music/cosmetic/Hide Record exercise. Host screenshots and callbacks do not prove those device behaviors. The supplied SF Pro and Font Awesome Pro font notices are recorded in `Assets/LITE_UI_SOURCES.md`; preserve their licensing metadata.
+
 ## Pickup update on main on 2026-11-21
 
-- The user now requires edits and updates on main only. Current worktree is `/workspace/NPC-license-hardening` on `main`, which includes the previously completed trigger follow-up fix.
+- Historical scope for the pickup task was main only; that work completed on main before the explicitly requested Lite branch.
 - Added the exact labels `Fast Pickup` and `Pickup Range` in a Pickup section under Memory → Movement. Fast Pickup defaults off. Pickup Range defaults to 1× and is adjustable from 1× to 3×. Both settings round-trip through JSON, with legacy/malformed values falling back to stock defaults.
 - `System/Hooks/Pickup.h` verifies ten plaintext code/layout fingerprints against the existing pinned ARM64 1.6.59 build. It hooks `OpenWorldDroppedPickUpMgr::TickNearbyModule`, `RefreshNearbyItem` and the BR nearby module's pickup-interval getter. Effects require feature authorization, the current owning match and a living local BR pawn. The original native item filters and request handling run normally.
 - The range multiplier scales horizontal squared distance by the multiplier squared and vertical distance linearly. Fast Pickup caps positive native scan/pickup intervals at 50 ms. Scoped overrides restore their original values after the native operation, preserve subsequent native writes and suppress nested scaling.

@@ -1,0 +1,328 @@
+#define IMGUI_DEFINE_MATH_OPERATORS
+#include <cstdint>
+struct Vector2 { float x, y; };
+struct Vector3 { float x, y, z; };
+#include "../src/main/jni/Hacks/Feature/Init_Hacks.h"
+#include "../src/main/jni/Lite/Menu.h"
+#include "../src/main/jni/Lite/Fonts.h"
+#include <cassert>
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+#ifdef LITE_GPU_TEST
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES3/gl3.h>
+#include "../src/main/jni/ImGui/imgui_impl_opengl3.h"
+#endif
+
+ImFont* F50 = nullptr;
+ImFont* F107 = nullptr;
+float menu[4]{.8f,.8f,.8f,1.f};
+float SnowBsize = 0, speedHackMultiplier = 1, jumpHeightMultiplier = 1, MpBsize = 0;
+namespace font { ImFont* inter_semibold = nullptr; ImFont* inter_title = nullptr; }
+
+namespace {
+std::size_t allocations = 0;
+void* Allocate(std::size_t size, void*) { ++allocations; return std::malloc(size); }
+void Free(void* pointer, void*) { std::free(pointer); }
+int skinCalls = 0, musicCalls = 0;
+void Skins(int category) { ++skinCalls; ImGui::Text("Category %d",category); }
+void Music() { ++musicCalls; ImGui::TextUnformatted("Music service fixture"); }
+std::vector<unsigned char> Read(const std::filesystem::path& path) {
+    std::ifstream input(path,std::ios::binary);
+    assert(input.good());
+    return {std::istreambuf_iterator<char>(input),std::istreambuf_iterator<char>()};
+}
+void CheckFrame() {
+    assert(GImGui->StyleVarStack.Size == 0 && GImGui->ColorStack.Size == 0 && GImGui->DisabledStackSize == 0);
+    const auto* data = ImGui::GetDrawData();
+    assert(data->TotalVtxCount < 25000 && data->CmdListsCount < 40);
+    for (const auto* list : data->CmdLists) {
+        for (const auto& vertex : list->VtxBuffer) assert(std::isfinite(vertex.pos.x) && std::isfinite(vertex.pos.y));
+        for (const auto& command : list->CmdBuffer) {
+            assert(command.UserCallback == nullptr);
+            assert(command.TextureId == ImGui::GetIO().Fonts->TexID);
+            assert(command.IdxOffset + command.ElemCount <= static_cast<unsigned>(list->IdxBuffer.Size));
+            for (unsigned at = command.IdxOffset; at < command.IdxOffset + command.ElemCount; ++at)
+                assert(list->IdxBuffer[at] + command.VtxOffset < static_cast<unsigned>(list->VtxBuffer.Size));
+        }
+    }
+}
+lite_ui::State state;
+lite_ui::View view;
+char key[256] = "FREETRIAL";
+lite_ui::Actions Frame() {
+    ImGui::NewFrame();
+    custom::UpdateTouchScroll();
+    const auto result = lite_ui::Draw(state,view,key,sizeof(key));
+    ImGui::Render();
+    CheckFrame();
+    return result;
+}
+ImGuiWindow* Find(const char* suffix) {
+    for (auto* window : GImGui->Windows) {
+        const std::string name = window->Name;
+        if (name.find(suffix) != std::string::npos && window->Active) return window;
+    }
+    return nullptr;
+}
+void Tap(ImVec2 point) {
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(point.x,point.y); Frame();
+    io.AddMouseButtonEvent(0,true); Frame();
+    io.AddMouseButtonEvent(0,false); Frame(); Frame();
+}
+void ValidateLayouts() {
+    auto& io = ImGui::GetIO();
+    view.ready = view.authorized = true;
+    const ImVec2 sizes[]{{1280,720},{960,540},{640,360},{360,780},{320,568},{1920,1080}};
+    for (const auto size : sizes) {
+        io.DisplaySize = size;
+        for (float zoom : {.85f,1.f,1.35f}) {
+            state.zoom = zoom;
+            for (int tab = 0; tab < 7; ++tab) {
+                state.tab = static_cast<lite_ui::Tab>(tab);
+                Frame(); Frame();
+                auto* root = Find("ETHNIR LITE##menu");
+                assert(root && root->Pos.x >= 0 && root->Pos.y >= 0);
+                assert(root->Pos.x + root->Size.x <= size.x && root->Pos.y + root->Size.y <= size.y);
+                assert(root->Flags & ImGuiWindowFlags_NoMove);
+                assert(!Find("ESP PREVIEW"));
+                for (const auto* child : GImGui->Windows) if (child->Active && child->ParentWindow &&
+                    std::strstr(child->Name,"ETHNIR LITE##menu/"))
+                    assert(std::fabs(child->CalcFontSize()-17.f*lite_widgets::scale)<.1f);
+            }
+        }
+    }
+    assert(skinCalls > 0 && musicCalls == 0);
+    state = {}; io.DisplaySize = {1280,720}; Frame(); Frame();
+    state.music = true; Frame(); assert(musicCalls == 1);
+    state.tab = lite_ui::Tab::Esp; Frame(); assert(musicCalls == 1);
+    state.minimized = true; Frame(); assert(musicCalls == 1 && Find("##lite_restore"));
+    state = {};
+    std::puts("All seven native pages fit six viewports at three scales; optional music is lazy and the preview is absent");
+}
+void ValidateStartup() {
+    state = {};
+    const auto previousMusic = musicCalls, previousSkins = skinCalls;
+    auto& io = ImGui::GetIO(); io.DisplaySize = {960,540};
+    view.ready = false; view.authorized = false;
+    for (bool pending : {false,true}) {
+        view.pending = pending;
+        Frame(); Frame();
+        const auto* login = Find("ETHNIR LITE##login");
+        assert(login);
+        const auto center = login->Pos + login->Size*.5f;
+        assert(ImLengthSqr(center-io.DisplaySize*.5f) < 1.f);
+        if (pending) {
+            const auto result = Frame();
+            assert(!result.submit && !result.paste && !result.loadKey);
+        }
+    }
+    view.authorized = true; view.pending = false; view.preparation = 2.f/3.f;
+    Frame(); assert(!Find("ETHNIR LITE##menu"));
+    assert(previousMusic == musicCalls && previousSkins == skinCalls);
+    view.ready = true; Frame(); assert(Find("ETHNIR LITE##menu"));
+    std::puts("Login stays centered, pending controls stay blocked, and menu callbacks wait for feature preparation");
+}
+ImRect checkRect, sliderRect, buttonRect, inputRect, comboRect, choiceRect;
+int choice = 0;
+bool comboOpen = false;
+bool checked = false, buttonPressed = false;
+float slider = .25f;
+ImGuiWindow* scrollWindow = nullptr;
+char text[32] = "";
+void ControlsFrame() {
+    ImGui::NewFrame(); custom::UpdateTouchScroll(); lite_ui::Theme(); lite_widgets::scale = 1;
+    ImGui::SetNextWindowPos({20,20}); ImGui::SetNextWindowSize({380,280});
+    ImGui::Begin("Control fixture",nullptr,ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
+    ImGui::BeginChild("Pan controls",{340,200},false,ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
+    scrollWindow = ImGui::GetCurrentWindow();
+    lite_widgets::Checkbox("Checkbox",&checked); checkRect = GImGui->LastItemData.Rect;
+    lite_widgets::SliderFloat("Slider",&slider,0,1,"%.2f"); sliderRect = GImGui->LastItemData.Rect;
+    buttonPressed = lite_widgets::Button("Button",{0,28}); buttonRect = GImGui->LastItemData.Rect;
+    lite_ui::Input("Input",text,sizeof(text)); inputRect = GImGui->LastItemData.Rect;
+    const char* choices[]{"Choice zero","Choice one","Choice two"};
+    comboOpen = custom::BeginCombo("Combo",choices[choice],3);
+    comboRect = GImGui->LastItemData.Rect;
+    if (comboOpen) {
+        for (int index=0;index<3;++index) {
+            if (custom::Selectable(choices[index],choice==index)) choice=index;
+            if (index==1) choiceRect=GImGui->LastItemData.Rect;
+        }
+        custom::EndCombo();
+    }
+    ImGui::Dummy({1,900});
+    ImGui::EndChild(); ImGui::End();
+    if (lite_ui::keyboard) RenderVirtualKeyboard("##lite_keyboard",text,sizeof(text),&lite_ui::keyboard);
+    ImGui::Render(); CheckFrame();
+}
+void ControlTap(ImVec2 point) {
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(point.x,point.y); ControlsFrame();
+    io.AddMouseButtonEvent(0,true); ControlsFrame();
+    io.AddMouseButtonEvent(0,false); ControlsFrame(); ControlsFrame();
+}
+void Drag(ImVec2 from, ImVec2 to) {
+    auto& io = ImGui::GetIO();
+    io.AddMousePosEvent(from.x,from.y); ControlsFrame();
+    io.AddMouseButtonEvent(0,true); ControlsFrame();
+    io.AddMousePosEvent(to.x,to.y); ControlsFrame();
+    io.AddMouseButtonEvent(0,false); ControlsFrame(); ControlsFrame();
+}
+void ResetScroll() { scrollWindow->Scroll.y = 0; scrollWindow->ScrollTarget.y = FLT_MAX; ControlsFrame(); ControlsFrame(); }
+void ValidateTouch() {
+    auto& io = ImGui::GetIO(); io.DisplaySize = {640,640};
+    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+    ControlsFrame(); ControlsFrame();
+    ControlTap(checkRect.GetCenter()); assert(checked);
+    checked = false;
+    Drag(checkRect.GetCenter(),checkRect.GetCenter()-ImVec2(0,90));
+    assert(!checked && scrollWindow->Scroll.y > 50);
+    ResetScroll();
+    const auto initial = slider;
+    Drag(sliderRect.GetCenter(),sliderRect.GetCenter()-ImVec2(0,90));
+    assert(slider == initial && scrollWindow->Scroll.y > 50);
+    ResetScroll();
+    Drag({sliderRect.Min.x+3,sliderRect.GetCenter().y},{sliderRect.Max.x,sliderRect.GetCenter().y});
+    assert(slider == 1);
+    Drag({sliderRect.Max.x-3,sliderRect.GetCenter().y},{sliderRect.Min.x,sliderRect.GetCenter().y});
+    assert(slider == 0);
+    Drag(buttonRect.GetCenter(),buttonRect.GetCenter()-ImVec2(0,90));
+    assert(!buttonPressed && scrollWindow->Scroll.y > 50);
+    ResetScroll();
+    Drag(comboRect.GetCenter(),comboRect.GetCenter()-ImVec2(0,90));
+    assert(!comboOpen && choice==0 && scrollWindow->Scroll.y>50);
+    ResetScroll(); ControlTap(comboRect.GetCenter()); assert(comboOpen);
+    ControlTap(choiceRect.GetCenter()); assert(choice==1 && !comboOpen);
+    ControlTap(inputRect.GetCenter()); assert(lite_ui::keyboard);
+    auto* keyboard = Find("##lite_keyboard"); assert(keyboard);
+    const float height = ImMin(250.f,io.DisplaySize.y*.48f);
+    const float row = (height-20.f-16.f)/5.f;
+    const float width = (io.DisplaySize.x-20.f-36.f)/10.f;
+    const ImVec2 first(10.f+width*.5f,io.DisplaySize.y-height+10.f+row*.5f);
+    ControlTap(first); assert(std::strcmp(text,"1") == 0);
+    const float action = (io.DisplaySize.x-20.f-20.f)/6.f;
+    ControlTap({10.f+(action+4.f)*2.f+action*.5f,first.y+4.f*(row+4.f)});
+    assert(std::strcmp(text,"1 ") == 0);
+    ControlTap({10.f+(action+4.f)*3.f+action*.5f,first.y+4.f*(row+4.f)});
+    assert(std::strcmp(text,"1") == 0);
+    lite_ui::keyboard = false;
+    io.AddMouseSourceEvent(ImGuiMouseSource_Mouse); io.AddMousePosEvent(-FLT_MAX,-FLT_MAX); Frame();
+    std::puts("Touch taps work; vertical drags pan without changing controls or opening dropdowns; dropdown selection and slider endpoints work; keyboard types, spaces and deletes");
+}
+void ValidateBindings() {
+    Config = {}; assert(Config.ExtraMenu.PickupRange == 1 && Config.ExtraMenu.HitboxScale == 1);
+    assert(!lite_ui::EspEnabled()); Config.ESPMenu.EspStyle = EspStyle3DSphere; assert(lite_ui::EspEnabled());
+    Config = {}; state = {}; view.ready = view.authorized = true; state.tab = lite_ui::Tab::Esp;
+    auto& io = ImGui::GetIO(); io.DisplaySize = {1280,720};
+    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen); Frame(); Frame();
+    auto* panel = Find("/players_"); assert(panel);
+    const auto row = panel->DC.CursorStartPos + ImVec2(50,50);
+    Tap(row); assert(Config.ESPMenu.isPlayerLine);
+    assert(!Config.Aim.AimSilent && !Config.ExtraMenu.Hit && !Config.ESPMenu.Box);
+    io.AddMouseSourceEvent(ImGuiMouseSource_Mouse); io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);
+    state = {}; Frame(); Frame();
+    std::puts("Source-derived controls bind the existing Config fields; the visual-work gate includes style-only ESP");
+}
+void ValidateBudget() {
+    auto& io = ImGui::GetIO(); io.DisplaySize = {1280,720}; state = {}; view.ready = true;
+    for (int i = 0; i < 40; ++i) Frame();
+    const auto previous = allocations;
+    const int vertices = ImGui::GetDrawData()->TotalVtxCount;
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 600; ++i) { Frame(); assert(ImGui::GetDrawData()->TotalVtxCount == vertices); }
+    const double elapsed = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+    assert(allocations == previous);
+    std::printf("Idle UI: %d vertices, %d command lists, zero ImGui allocations across 600 warm frames (host %.3f ms/frame)\n",
+        vertices,ImGui::GetDrawData()->CmdListsCount,elapsed/600.);
+}
+#ifdef LITE_GPU_TEST
+void Screenshot(const std::filesystem::path& path) {
+    const auto size = ImGui::GetIO().DisplaySize;
+    glBindFramebuffer(GL_FRAMEBUFFER,0); glViewport(0,0,int(size.x),int(size.y));
+    glClearColor(.12f,.13f,.14f,1); glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(size.x*size.y*4));
+    glPixelStorei(GL_PACK_ALIGNMENT,1);
+    glReadPixels(0,0,int(size.x),int(size.y),GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+    assert(glGetError() == GL_NO_ERROR);
+    std::ofstream output(path,std::ios::binary); output << "P6\n" << int(size.x) << ' ' << int(size.y) << "\n255\n";
+    for (int y=int(size.y)-1; y>=0; --y) for (int x=0; x<int(size.x); ++x)
+        output.write(reinterpret_cast<const char*>(pixels.data()+(y*int(size.x)+x)*4),3);
+    assert(output.good());
+}
+void ValidateGL() {
+    glActiveTexture(GL_TEXTURE2); glDisable(GL_BLEND); glEnable(GL_CULL_FACE); glEnable(GL_DEPTH_TEST);
+    glEnable(GL_SCISSOR_TEST); glViewport(4,5,510,250); glScissor(7,8,90,100);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    GLint actual[4]; glGetIntegerv(GL_VIEWPORT,actual);
+    assert(actual[0] == 4 && actual[1] == 5 && actual[2] == 510 && actual[3] == 250);
+    glGetIntegerv(GL_SCISSOR_BOX,actual);
+    assert(actual[0] == 7 && actual[1] == 8 && actual[2] == 90 && actual[3] == 100);
+    glGetIntegerv(GL_ACTIVE_TEXTURE,actual); assert(actual[0] == GL_TEXTURE2);
+    assert(!glIsEnabled(GL_BLEND) && glIsEnabled(GL_CULL_FACE) && glIsEnabled(GL_DEPTH_TEST) && glIsEnabled(GL_SCISSOR_TEST));
+    assert(glGetError() == GL_NO_ERROR);
+    glDisable(GL_SCISSOR_TEST); glDisable(GL_CULL_FACE); glDisable(GL_DEPTH_TEST); glActiveTexture(GL_TEXTURE0);
+    std::puts("GLES3 direct rendering restores game viewport, scissor, texture unit and enable states");
+}
+#endif
+}
+int main(int argc, char** argv) {
+    assert(argc >= 2);
+    ImGui::SetAllocatorFunctions(Allocate,Free);
+#ifdef LITE_GPU_TEST
+    const auto getDisplay = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
+    assert(getDisplay);
+    const auto display = getDisplay(EGL_PLATFORM_SURFACELESS_MESA,EGL_DEFAULT_DISPLAY,nullptr);
+    EGLint major,minor; assert(eglInitialize(display,&major,&minor) && eglBindAPI(EGL_OPENGL_ES_API));
+    const EGLint attributes[]{EGL_SURFACE_TYPE,EGL_PBUFFER_BIT,EGL_RENDERABLE_TYPE,EGL_OPENGL_ES3_BIT_KHR,
+        EGL_RED_SIZE,8,EGL_GREEN_SIZE,8,EGL_BLUE_SIZE,8,EGL_ALPHA_SIZE,8,EGL_NONE};
+    EGLConfig config; EGLint count; assert(eglChooseConfig(display,attributes,&config,1,&count) && count);
+    const EGLint contextAttributes[]{EGL_CONTEXT_CLIENT_VERSION,3,EGL_NONE};
+    const auto context = eglCreateContext(display,config,EGL_NO_CONTEXT,contextAttributes);
+    const EGLint surfaceAttributes[]{EGL_WIDTH,1920,EGL_HEIGHT,1280,EGL_NONE};
+    const auto surface = eglCreatePbufferSurface(display,config,surfaceAttributes);
+    assert(context != EGL_NO_CONTEXT && surface != EGL_NO_SURFACE && eglMakeCurrent(display,surface,surface,context));
+    std::printf("GLES: %s\n",glGetString(GL_VERSION));
+#endif
+    ImGui::CreateContext();
+    auto& io = ImGui::GetIO(); io.IniFilename = io.LogFilename = nullptr;
+    io.DisplaySize = {1280,720}; io.DeltaTime = 1.f/60.f;
+    const std::filesystem::path root = argv[1];
+    const auto body = Read(root/"src/main/jni/Assets/lite-body.ttf"), title = Read(root/"src/main/jni/Assets/lite-title.otf"),
+        icons = Read(root/"src/main/jni/Assets/lite-icons.ttf");
+    const auto fonts = lite_fonts::Load(*io.Fonts,body.data(),body.size(),title.data(),title.size(),icons.data(),icons.size());
+    assert(fonts.body && fonts.title); io.FontDefault = fonts.body; view.titleFont = fonts.title;
+    io.Fonts->Build();
+    for (ImWchar icon : {0xf013,0xf015,0xf05b,0xf07b,0xf0e7,0xf1fc,0xf500}) assert(fonts.body->FindGlyphNoFallback(icon));
+    assert(io.Fonts->TexWidth*io.Fonts->TexHeight*4 <= 2*1024*1024);
+    std::printf("Font atlas: %dx%d (%d bytes RGBA), source text fonts with merged sidebar icons\n",io.Fonts->TexWidth,io.Fonts->TexHeight,io.Fonts->TexWidth*io.Fonts->TexHeight*4);
+#ifdef LITE_GPU_TEST
+    assert(ImGui_ImplOpenGL3_Init("#version 300 es")); ImGui_ImplOpenGL3_NewFrame();
+#endif
+    view.skins = Skins; view.music = Music; view.expiry = "2030-01-01 00:00 UTC"; view.plan = "Premium";
+    ValidateLayouts(); ValidateStartup(); ValidateTouch(); ValidateBindings(); ValidateBudget();
+#ifdef LITE_GPU_TEST
+    assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
+    io.DisplaySize = {1280,720}; state = {}; view.ready = true;
+    const char* names[]{"home","esp","aim","trigger","memory","skins","settings"};
+    for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm")); }
+    ValidateGL();
+    state = {}; state.tab = lite_ui::Tab::Memory; io.DisplaySize = {360,780}; Frame(); Frame(); Screenshot(output/"portrait.ppm");
+    state = {}; io.DisplaySize = {960,540}; view.ready = view.authorized = false; Frame(); Frame(); Screenshot(output/"login.ppm");
+    view.pending = true; Frame(); Screenshot(output/"authenticating.ppm");
+    view.authorized = true; view.pending = false; view.preparation = 2.f/3.f; Frame(); Screenshot(output/"loading.ppm");
+    ImGui_ImplOpenGL3_Shutdown();
+#endif
+    ImGui::DestroyContext();
+#ifdef LITE_GPU_TEST
+    eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
+    eglDestroySurface(display,surface); eglDestroyContext(display,context); eglTerminate(display);
+#endif
+    return 0;
+}

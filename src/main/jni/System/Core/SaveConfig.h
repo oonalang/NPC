@@ -24,7 +24,7 @@ extern float speedHackMultiplier;
 
 std::string androidFilesDir = "/storage/emulated/0/Android/data/com.garena.game.codm/files/";
 
-void SaveConfiguration(const std::string& filename) {
+bool SaveConfiguration(const std::string& filename) {
     nlohmann::json config;
     const auto frames=frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1);
     config["FrameRate"]["Custom"]=frames.custom;
@@ -96,10 +96,10 @@ void SaveConfiguration(const std::string& filename) {
 
     std::string filePath = configDir + "/" + filename + ".json";
     std::ofstream file(filePath);
-    if (file.is_open()) {
-        file << std::setw(4) << config;
-        file.close();
-    }
+    if (!file.is_open()) return false;
+    file << std::setw(4) << config;
+    file.close();
+    return !file.fail();
 }
 
 bool LoadConfiguration(const std::string& filename) {
