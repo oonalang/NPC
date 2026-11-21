@@ -3,6 +3,7 @@
 #include <iomanip>
 #include "../Hooks/FrameRate.h"
 #include "../Hooks/SlideFatigue.h"
+#include "../Hooks/Pickup.h"
 #include <sstream>
 #include <ctime>
 
@@ -59,6 +60,8 @@ void SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
     config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
     config["ExtraMenu"]["NoSlideFatigue"] = Config.ExtraMenu.NoSlideFatigue;
+    config["ExtraMenu"]["FastPickup"] = Config.ExtraMenu.FastPickup;
+    config["ExtraMenu"]["PickupRange"] = pickup::NormalizeRange(Config.ExtraMenu.PickupRange);
     config["ExtraMenu"]["Recoil"] = Config.ExtraMenu.Recoil;
     config["ExtraMenu"]["Shake"] = Config.ExtraMenu.Shake;
     config["ExtraMenu"]["Spread"] = Config.ExtraMenu.Spread;
@@ -202,6 +205,18 @@ bool LoadConfiguration(const std::string& filename) {
             menu[2] = config["menu"][2].get<float>();
         }
 
+        bool fastPickup = false;
+        float pickupRange = pickup::defaultRange;
+        const auto extra = config.find("ExtraMenu");
+        if (extra != config.end() && extra->is_object()) {
+            const auto fast = extra->find("FastPickup");
+            const auto range = extra->find("PickupRange");
+            if (fast != extra->end() && fast->is_boolean()) fastPickup = fast->get<bool>();
+            if (range != extra->end() && range->is_number()) pickupRange = pickup::NormalizeRange(range->get<float>());
+        }
+        Config.ExtraMenu.FastPickup = fastPickup;
+        Config.ExtraMenu.PickupRange = pickupRange;
+        pickup::Publish(fastPickup, pickupRange);
         return true;
     }
     catch (const std::exception& e) {

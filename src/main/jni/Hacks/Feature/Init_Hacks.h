@@ -189,6 +189,8 @@ sColorsESPBOT sColorsESPBOT{0};
         bool WalkUnderWater;
         bool NoCrouch;
         bool NoSlideFatigue;
+        bool FastPickup = false;
+        float PickupRange = 1.f;
         float FlySpeed = 1.0f;
         bool UnlimitedFly;
         bool Frame;

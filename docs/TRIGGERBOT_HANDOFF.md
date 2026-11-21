@@ -27,14 +27,15 @@ The repository is <https://github.com/oonalang/NPC>.
 
 | Variant | Local review branch | Implementation commit | Worktree |
 | --- | --- | --- | --- |
-| Main-based | `fix/br-trigger-performance` | `78f4930` | `/workspace/NPC-license-hardening` |
+| Main-based | `main` | `78f4930` | `/workspace/NPC-license-hardening` |
 | Free Trial | `fix/br-trigger-performance-trial` | `edbce37` | `/dev/shm/npc-br-trigger-trial` |
 
-Remote refs checked on 2026-11-21 are `main` at `c7c0162` and
-`free-trial-build` at `03c13b9`. The main ref records the requested rollback
-to the tree at `a4e4b27`. These review branches retain their separate bases.
-The current fix and this handoff are local commits awaiting publication.
-Use `git log -1` to obtain each branch's latest documentation commit.
+The original review bases checked on 2026-11-21 were `main` at `c7c0162`
+and `free-trial-build` at `03c13b9`. The main base records the requested
+rollback to the tree at `a4e4b27`. The main-based review work was subsequently
+incorporated into `main` during the pickup update. The user now requires
+edits and updates on main only. The Free Trial row records the earlier local
+port. Use `git log -1` for the current main tip.
 
 The main-based branch already contains the following local work.
 
@@ -305,9 +306,9 @@ server-side damage remain unmeasured.
 
 ## Compact handoff memory
 
-- Work from `/workspace/NPC-license-hardening` on `fix/br-trigger-performance` or the separate Free Trial worktree at `/dev/shm/npc-br-trigger-trial`.
+- Work from `/workspace/NPC-license-hardening` on `main`. The user's current direction is to apply edits and updates to main only.
 - The latest user problem is a slow second sniper shot while hardscoping. Both and ADS Only are relevant. Earlier BR FPS and glass reports remain part of device validation.
-- Runtime fix commits are `78f4930` and `edbce37`. Documentation follows in subsequent local commits. Remote heads observed on 2026-11-21 are main `c7c0162` and Free Trial `03c13b9`.
+- Runtime fix commits are main-based `78f4930` and the earlier Free Trial port `edbce37`. Main includes the former review branch's work. The original review bases were main `c7c0162` and Free Trial `03c13b9`.
 - An acknowledged release shot can prepare its next non-firing press during an eligible cooldown update. `Primed` holds that press and defers target physics until native readiness returns.
 - Release still requires completed ADS, accepted input and fresh body/world/smoke checks. Native bolt, cooldown and weapon input rules determine eligibility.
 - Pending release recovery can use a genuinely sampled blocked-to-ready cycle. `readinessSampled` prevents skipped calls from supplying false evidence. The 500 ms fallback remains for uncertain attempts.

@@ -5,6 +5,7 @@
 #include "../../Security/Access.h"
 #define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
 #include "SlideFatigue.h"
+#include "Pickup.h"
 #include "Hitbox.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"

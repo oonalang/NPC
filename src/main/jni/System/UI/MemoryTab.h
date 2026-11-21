@@ -8,6 +8,7 @@
 #include "../../ImGui/TouchScroll.h"
 #include "../../BlueprintTierFilter.h"
 #include "../Hooks/SlideFatigue.h"
+#include "../Hooks/Pickup.h"
 #include "../Hooks/Hitbox.h"
 #include "../Audio/UiSounds.h"
 #include <algorithm>
@@ -45,6 +46,17 @@ inline void Movement() {
     custom::Checkbox("No Parachute",&Config.ExtraMenu.Parachute);
     custom::Checkbox("Fast Dive",&Config.ExtraMenu.Diving);
     custom::Checkbox("Unlimited Fly",&Config.ExtraMenu.UnlimitedFly);
+    ImGui::Spacing();
+    ImGui::TextColored(c::accent,"PICKUP");
+    ImGui::Separator();
+    ImGui::BeginDisabled(!pickup::available.load());
+    const bool fastChanged = custom::Checkbox("Fast Pickup",&Config.ExtraMenu.FastPickup);
+    const bool rangeChanged = custom::SliderFloat("Pickup Range",&Config.ExtraMenu.PickupRange,
+        pickup::defaultRange,pickup::maximumRange,"%.2fx");
+    ImGui::EndDisabled();
+    if(fastChanged||rangeChanged) pickup::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange);
+    if(!pickup::available.load()&&ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Unavailable for this game build");
 }
 inline void MovementTuning() {
     if(Config.ExtraMenu.UnlimitedFly) custom::SliderFloat("Fly Speed",&Config.ExtraMenu.FlySpeed,1.f,10.f,"%.0f");

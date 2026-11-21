@@ -38,10 +38,26 @@ static void Touch(ImVec2 point,ImVec2 size) {
     auto& io=ImGui::GetIO();io.AddMousePosEvent(point.x,point.y);Frame(size);
     io.AddMouseButtonEvent(0,true);Frame(size);io.AddMouseButtonEvent(0,false);Frame(size);Frame(size);
 }
+static ImVec2 FindControl(ImGuiWindow* window,const char* label,ImVec2 size) {
+    auto& io=ImGui::GetIO();
+    io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
+    const auto id=window->GetID(label);
+    const float x=window->InnerRect.GetCenter().x;
+    const float step=ImMax(1.f,window->InnerRect.GetHeight()*.5f);
+    for(float scroll=0;scroll<=window->ScrollMax.y+step;scroll+=step) {
+        window->Scroll.y=ImMin(scroll,window->ScrollMax.y);window->ScrollTarget.y=FLT_MAX;Pump(size);
+        for(float y=window->InnerClipRect.Min.y+4;y<window->InnerClipRect.Max.y-4;y+=2) {
+            io.AddMousePosEvent(x,y);Frame(size);
+            if(GImGui->HoveredId==id) return {x,y};
+        }
+    }
+    std::fprintf(stderr,"Control could not be reached: %s\n",label);
+    assert(false);return {};
+}
 int main() {
     ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.DeltaTime=1.f/60.f;
     ImFontConfig config;config.SizePixels=20.f;io.Fonts->AddFontDefault(&config);io.Fonts->Build();
-    c::ApplyTheme();slide_fatigue::available=true;
+    c::ApplyTheme();slide_fatigue::available=true;pickup::available=true;
     ui_sounds::observer=[](ui_sounds::Cue){++clicks;};
     for(float scale:{.8f,1.f,1.15f}) {
         c::scale=scale;
@@ -70,6 +86,14 @@ int main() {
     Touch(category,size);assert(memory_tab::selected==memory_tab::Category::Weapons);
     memory_tab::selected=memory_tab::Category::Movement;movement->Scroll.y=0;movement->ScrollTarget.y=FLT_MAX;Pump(size);
     const auto first=movement->DC.CursorStartPos+ImVec2(30,12);Touch(first,size);assert(Config.ExtraMenu.NoCrouch);
+    movement->Scroll.y=movement->ScrollMax.y;movement->ScrollTarget.y=FLT_MAX;Pump(size);
+    const auto pickupToggle=FindControl(movement,"Fast Pickup",size);
+    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);Touch(pickupToggle,size);
+    assert(Config.ExtraMenu.FastPickup&&pickup::Read().fast);
+    const auto slider=FindControl(movement,"Pickup Range",size);
+    io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+    Touch({movement->InnerRect.Max.x-30.f,slider.y},size);
+    assert(Config.ExtraMenu.PickupRange>1.f&&pickup::Read().range==Config.ExtraMenu.PickupRange);
     ImGui::DestroyContext();
-    std::puts("Four Memory categories fit landscape/narrow layouts; movement scrolls silently, category taps switch and checkbox taps still work");
+    std::puts("Four Memory categories fit landscape/narrow layouts; movement scrolls silently and pickup toggle/range controls accept input");
 }

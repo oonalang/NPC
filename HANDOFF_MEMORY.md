@@ -1,5 +1,14 @@
 # Compact handoff
 
+## Pickup update on main on 2026-11-21
+
+- The user now requires edits and updates on main only. Current worktree is `/workspace/NPC-license-hardening` on `main`, which includes the previously completed trigger follow-up fix.
+- Added the exact labels `Fast Pickup` and `Pickup Range` in a Pickup section under Memory → Movement. Fast Pickup defaults off. Pickup Range defaults to 1× and is adjustable from 1× to 3×. Both settings round-trip through JSON, with legacy/malformed values falling back to stock defaults.
+- `System/Hooks/Pickup.h` verifies ten plaintext code/layout fingerprints against the existing pinned ARM64 1.6.59 build. It hooks `OpenWorldDroppedPickUpMgr::TickNearbyModule`, `RefreshNearbyItem` and the BR nearby module's pickup-interval getter. Effects require feature authorization, the current owning match and a living local BR pawn. The original native item filters and request handling run normally.
+- The range multiplier scales horizontal squared distance by the multiplier squared and vertical distance linearly. Fast Pickup caps positive native scan/pickup intervals at 50 ms. Scoped overrides restore their original values after the native operation, preserve subsequent native writes and suppress nested scaling.
+- Pickup sanitizer/configuration tests and all ten supplied-ELF fingerprints pass. Memory layout/touch tests verify both controls can be reached by scrolling and operated. The ARM64 native build, hardening verifier, full Triggerbot suite and shared Hitbox/config regressions pass. Live pickup timing, accepted distance and server behavior still require device verification.
+- Run `sh tests/run-pickup-tests.sh /workspace/dumps/libunity.so` and `sh tests/run-memory-tab-tests.sh` for the new coverage. Logs are `/workspace/license-hardening/logs/pickup-*.log`. The current native output is `/dev/shm/npc-br-trigger-main-libs/arm64-v8a/libnets.so`.
+
 ## Trigger follow-up on 2026-11-21
 
 - Current review worktrees are `/workspace/NPC-license-hardening` on `fix/br-trigger-performance` and `/dev/shm/npc-br-trigger-trial` on `fix/br-trigger-performance-trial`. Runtime fix commits are `78f4930` and `edbce37`. Remote main was checked at `c7c0162` and Free Trial at `03c13b9`. The fixes are committed locally for review.

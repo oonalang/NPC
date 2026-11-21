@@ -313,6 +313,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     custom::UpdateTouchScroll();
     music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
+    pickup::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     static auto lastHitboxProbe=frameTime;
     if(Config.ExtraMenu.Hit&&hitbox::NeedsProbe()&&
@@ -735,6 +736,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             Config.ExtraMenu.Flash, Config.ExtraMenu.Fire, Config.ExtraMenu.NoSprintFire,
                             Config.ExtraMenu.Diving, Config.ExtraMenu.Reload, Config.ExtraMenu.Scope,
                             Config.ExtraMenu.Switch, Config.ExtraMenu.Kinetic,
+                            Config.ExtraMenu.FastPickup, Config.ExtraMenu.PickupRange > pickup::defaultRange,
                             PhantomTrigger::GetSettings().enabled,PhantomTrigger::GetSettings().showDot
                         };
                         homeStats.activeFeatures=static_cast<int>(std::count(std::begin(enabledOptions),std::end(enabledOptions),true));
@@ -1087,8 +1089,9 @@ void Init_Thread2()
         for(unsigned attempt=0;attempt<80;++attempt) {
             frame_rate::Install(base,install);
             slide_fatigue::Install(base,install);
+            pickup::Install(base,install);
             hitbox::Install(base,install);
-            if(frame_rate::available.load()&&slide_fatigue::available.load()&&hitbox::available.load()) break;
+            if(frame_rate::available.load()&&slide_fatigue::available.load()&&pickup::available.load()&&hitbox::available.load()) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         running=false;
