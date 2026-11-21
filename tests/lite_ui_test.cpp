@@ -7,6 +7,8 @@ struct Vector3 { float x, y, z; };
 #include "../src/main/jni/Lite/Fonts.h"
 #include "../src/main/jni/Lite/FrostedSidebar.h"
 #include "../src/main/jni/Lite/TouchInput.h"
+#include "../src/main/jni/Lite/InputRouting.h"
+#include <thread>
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
@@ -278,6 +280,8 @@ void ValidateTouch() {
     std::puts("Touch taps work; vertical drags pan without changing controls or opening dropdowns; dropdown selection and slider endpoints work; keyboard types, spaces and deletes");
 }
 #include "lite_touch_checks.h"
+#include "lite_restore_checks.h"
+#include "lite_routing_checks.h"
 void ValidateBindings() {
     Config = {}; assert(Config.ExtraMenu.PickupRange == 1 && Config.ExtraMenu.HitboxScale == 1);
     assert(!lite_ui::EspEnabled()); Config.ESPMenu.EspStyle = EspStyle3DSphere; assert(lite_ui::EspEnabled());
@@ -402,7 +406,7 @@ int main(int argc, char** argv) {
     } else
 #endif
     {
-    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateBindings(); ValidateBudget();
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
     ValidateBlur();ValidateSidebarReference();
@@ -410,6 +414,7 @@ int main(int argc, char** argv) {
     const char* names[]{"home","esp","aim","trigger","memory","skins","settings"};
     for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); PrepareSidebar(); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm"),true); }
     ValidateGL();
+    state.minimized=true;PrepareSidebar();Frame();Frame();Screenshot(output/"restore.ppm",true);state.minimized=false;
     state = {}; state.tab = lite_ui::Tab::Memory; io.DisplaySize = {360,780}; PrepareSidebar(); Frame(); Frame(); Screenshot(output/"portrait.ppm",true);
     state = {}; io.DisplaySize = {960,540}; view.ready = view.authorized = false; view.sidebarTexture=allowedTexture=nullptr; Frame(); Frame(); Screenshot(output/"login.ppm");
     view.pending = true; Frame(); Screenshot(output/"authenticating.ppm");

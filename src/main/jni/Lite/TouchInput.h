@@ -21,6 +21,12 @@ class Input {
     }
 public:
     static void Configure(ImGuiIO& io) { io.ConfigInputTrickleEventQueue=false; }
+    void Ignore(ImGuiIO& io) {
+        io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
+        if(held) Release(io,true);
+        else if(!io.MouseDown[0]) io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);
+        blocked=false;
+    }
     void Update(ImGuiIO& io, const Sample* sample, ImVec2 resolution) {
         io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
         if(!sample) {

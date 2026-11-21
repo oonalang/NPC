@@ -1,6 +1,8 @@
 #pragma once
 #include "Widgets.h"
 #include "SidebarStyle.h"
+#include "RestoreGesture.h"
+#include "WindowPlacement.h"
 #include "StartupView.h"
 #include "../System/UI/MemoryTab.h"
 #include "../System/UI/Keyboard.h"
@@ -17,6 +19,8 @@ struct State {
     bool minimized = false, music = false, hideRecord = false;
     float zoom = 1.f;
     int skinCategory = 0;
+    lite_restore::Swipe restore;
+    lite_placement::Placement placement;
     char configName[64] = "lite";
 };
 struct View {
@@ -198,19 +202,39 @@ inline void EspColors(const char* label, float* line, float* box, float* name, f
     }
 }
 
+inline void PreparePlacement(State& state,const View& view) {
+    const auto& io=ImGui::GetIO();
+    const auto layout=Fit(io.DisplaySize);
+    const auto pos=state.placement.Position(io.DisplaySize,layout.size);
+    const ImRect header(pos,pos+ImVec2(layout.sidebar,92.f*layout.scale*state.zoom));
+    state.placement.Update(ImGui::GetFrameCount(),view.ready && view.interactive && !state.minimized && !state.restore.Captures(),
+        io.DisplaySize,layout.size,header,io.MousePos,io.MouseClicked[0],io.MouseDown[0],ImMax(7.f,7.f*layout.scale));
+    if(state.placement.Tracking()) custom::CancelTouchScroll();
+}
+
 inline Actions Draw(State& state, const View& view, char* key, std::size_t capacity) {
     Actions actions;
     Theme();
     const auto layout = Fit(ImGui::GetIO().DisplaySize);
     lite_widgets::scale = layout.scale * state.zoom;
     c::scale = lite_widgets::scale;
-    if (state.minimized) {
-        ImGui::SetNextWindowPos({12, ImGui::GetIO().DisplaySize.y - 52}, ImGuiCond_Always);
-        ImGui::SetNextWindowSize({152, 40}, ImGuiCond_Always);
+    PreparePlacement(state,view);
+    const auto& pointer=ImGui::GetIO();
+    const auto restore=lite_restore::Fit(pointer.DisplaySize,layout.scale);
+    if(state.restore.Update(view.ready && view.interactive && state.minimized,restore,pointer.MousePos,
+        pointer.MouseClicked[0],pointer.MouseDown[0],pointer.MouseReleased[0])) {
+        state.minimized=false;keyboard=false;ImGui::ClearActiveID();
+    }
+    if (view.ready && state.minimized) {
+        ImGui::SetNextWindowPos(restore.hit.Min,ImGuiCond_Always);
+        ImGui::SetNextWindowSize(restore.hit.GetSize(),ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
-        ImGui::Begin("##lite_restore", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::Begin("##lite_restore", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
         ImGui::SetWindowFontScale(1.f);
-        if (lite_widgets::Button("ETHNIR LITE", {152,40})) state.minimized = false;
+        const unsigned alpha=static_cast<unsigned>(160.f+95.f*state.restore.Progress());
+        ImGui::GetWindowDrawList()->AddRectFilled(restore.line.Min,restore.line.Max,
+            IM_COL32(255,255,255,alpha),restore.line.GetHeight()*.5f);
         ImGui::End();
         ImGui::PopStyleVar();
         return actions;
@@ -267,9 +291,10 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::End();
         ImGui::PopStyleVar(2);
     } else {
-        ImGui::PushItemFlag(ImGuiItemFlags_Disabled,!view.interactive);
-        lite_sidebar::Shadow((ImGui::GetIO().DisplaySize-layout.size)*.5f,layout.size,view.startup.reveal);
-        ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize*.5f, ImGuiCond_Always, {.5f,.5f});
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled,!view.interactive || state.restore.Captures());
+        const auto menuPos=state.placement.Position(ImGui::GetIO().DisplaySize,layout.size);
+        lite_sidebar::Shadow(menuPos,layout.size,view.startup.reveal);
+        ImGui::SetNextWindowPos(menuPos,ImGuiCond_Always);
         ImGui::SetNextWindowSize(layout.size, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
         ImGui::Begin("ETHNIR LITE##menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |

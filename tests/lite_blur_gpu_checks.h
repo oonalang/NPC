@@ -174,7 +174,7 @@ void PrepareSidebar() {
     if (!view.ready || state.minimized) return;
     Backdrop();
     const auto layout=lite_ui::Fit(ImGui::GetIO().DisplaySize);
-    const auto pos=(ImGui::GetIO().DisplaySize-layout.size)*.5f;
+    const auto pos=state.placement.Position(ImGui::GetIO().DisplaySize,layout.size);
     const auto texture=lite_blur::Capture({pos.x,pos.y,layout.sidebar,layout.size.y},
         int(ImGui::GetIO().DisplaySize.x),int(ImGui::GetIO().DisplaySize.y),ImGui::GetTime());
     assert(texture.id);

@@ -37,12 +37,12 @@
 #include "Trigger/TriggerRuntime.h"
 #include "Trigger/TriggerOverlay.h"
 #include "CaptureOverlay/HideRecord.h"
-#include "System/UI/AuthenticateInput.h"
 #include "Lite/Fonts.h"
 #include "Lite/Menu.h"
 #include "Lite/NativeBackend.h"
 #include "Lite/FrostedSidebar.h"
 #include "Lite/TouchInput.h"
+#include "Lite/InputRouting.h"
 #include "System/UI/ReducedMotion.h"
 
 static void RequestTriggerInitialization();
@@ -143,7 +143,8 @@ struct sRegion
 std::chrono::steady_clock::time_point appStartTime = std::chrono::steady_clock::now();
 
 static std::atomic<unsigned> g_LiteSetupProgress{0};
-static std::atomic<bool> g_LiteCaptureInput{true};
+static lite_routing::Router g_LiteRouting;
+static std::atomic<std::uint64_t> g_LiteTouchResolution{0};
 static lite_ui::State g_LiteState;
 static lite_startup::Motion g_LiteStartup;
 static bool g_LiteTriedKey = false;
@@ -155,7 +156,18 @@ static bool g_LoginPending = false;
 static std::string g_LoginResult;
 static std::string g_SubmittedKey;
 static int (*g_AuthOriginalTouchCount)()=nullptr;
-static int AuthTouchCount() { return g_LiteCaptureInput.load(std::memory_order_acquire) ? 0 : auth_input::TouchCount(g_AuthOriginalTouchCount); }
+static int AuthTouchCount() {
+    const int count=g_AuthOriginalTouchCount?g_AuthOriginalTouchCount():0;
+    if(count<=0) return g_LiteRouting.Filter(0,0,{},lite_touch::Phase::Ended);
+    const auto packed=g_LiteTouchResolution.load(std::memory_order_acquire);
+    const auto width=static_cast<unsigned>(packed>>32),height=static_cast<unsigned>(packed);
+    if(!m_unity || !api2 || !width || !height) return count;
+    const auto getTouch=reinterpret_cast<Touch(*)(uintptr_t,int)>(Class_Input_GetTouch);
+    const auto touch=getTouch(Config.ImGuiMenu.thiz,0);
+    const auto phase=touch.m_Phase>=TouchPhase::Began && touch.m_Phase<=TouchPhase::Canceled ?
+        static_cast<lite_touch::Phase>(touch.m_Phase):lite_touch::Phase::Canceled;
+    return g_LiteRouting.Filter(count,touch.m_FingerId,{touch.m_Position.x/width,1.f-touch.m_Position.y/height},phase);
+}
 
 std::vector<sRegion> trapRegions;
 uintptr_t address = 0;
@@ -165,16 +177,26 @@ EGLBoolean (*old_eglSwapBuffers)(EGLDisplay dpy, EGLSurface surface);
 static void PollLiteTouch(ImGuiIO& io) {
     static lite_touch::Input input;
     if(!m_unity || !api1 || !api2 || !api4 || !api5) { input.Update(io,nullptr,{}); return; }
+    const int width=get_width(),height=get_height();
+    if(width<=0 || height<=0) { input.Update(io,nullptr,{}); return; }
+    g_LiteTouchResolution.store((std::uint64_t(static_cast<unsigned>(width))<<32)|static_cast<unsigned>(height),std::memory_order_release);
     const auto count = g_AuthOriginalTouchCount ? g_AuthOriginalTouchCount : reinterpret_cast<int(*)()>(Class_Input_get_touchCount);
-    if (count && count() > 0) {
+    const int touches=count?count():0;
+    if (touches > 0) {
         const auto getTouch = reinterpret_cast<Touch(*)(uintptr_t,int)>(Class_Input_GetTouch);
         if(!getTouch) { input.Update(io,nullptr,{}); return; }
         const auto touch = getTouch(Config.ImGuiMenu.thiz,0);
         const auto phase=touch.m_Phase>=TouchPhase::Began && touch.m_Phase<=TouchPhase::Canceled ?
             static_cast<lite_touch::Phase>(touch.m_Phase) : lite_touch::Phase::Canceled;
+        const bool captured=g_LiteRouting.Filter(touches,touch.m_FingerId,
+            {touch.m_Position.x/width,1.f-touch.m_Position.y/height},phase)==0;
         const lite_touch::Sample sample{touch.m_FingerId,{touch.m_Position.x,touch.m_Position.y},phase};
-        input.Update(io,&sample,{static_cast<float>(get_width()),static_cast<float>(get_height())});
+        if(!captured && phase==lite_touch::Phase::Began && GImGui->OpenPopupStack.Size)
+            ImGui::ClosePopupToLevel(0,true);
+        if(captured) input.Update(io,&sample,{static_cast<float>(width),static_cast<float>(height)});
+        else input.Ignore(io);
     } else {
+        g_LiteRouting.Filter(0,0,{},lite_touch::Phase::Ended);
         input.Update(io,nullptr,{});
     }
 }
@@ -303,9 +325,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     lite_ui::View view;
     view.authorized=authorized;view.pending=g_LoginPending;view.ready=ready;
     view.interactive=presentation.interactive;view.startup=presentation;
+    lite_ui::PreparePlacement(g_LiteState,view);
     if (ready && !g_LiteState.minimized) {
         const auto layout=lite_ui::Fit(io.DisplaySize);
-        const auto position=(io.DisplaySize-layout.size)*.5f;
+        const auto position=g_LiteState.placement.Position(io.DisplaySize,layout.size);
         const auto texture=lite_blur::Capture({position.x,position.y,layout.sidebar,layout.size.y},
             g_GlWidth,g_GlHeight,std::chrono::duration<double>(now-appStartTime).count());
         view.sidebarTexture=reinterpret_cast<ImTextureID>(static_cast<std::uintptr_t>(texture.id));
@@ -342,9 +365,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         else if(actions.loadConfig) err=LoadConfiguration(name)?"Configuration loaded.":"Unable to load configuration.";
         else err=SaveConfiguration(name)?"Configuration saved.":"Unable to save configuration.";
     }
-    const bool blocked=g_LoginPending||(authorized&&!presentation.interactive);
-    auth_input::SetBlocked(blocked);
-    g_LiteCaptureInput.store(blocked||!g_LiteState.minimized,std::memory_order_release);
+    g_LiteRouting.Publish(lite_routing::VisibleRegions());
     static bool musicWasEnabled = false;
     if (musicWasEnabled && !g_LiteState.music) music_player::Stop();
     musicWasEnabled = g_LiteState.music;
