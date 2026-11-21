@@ -90,6 +90,7 @@ FILE_LIST              += $(wildcard $(LOCAL_PATH)/System/Texture/*.c*)
 FILE_LIST              += $(wildcard $(LOCAL_PATH)/*.c*)
 FILE_LIST              += $(LOCAL_PATH)/System/Audio/DriveMusic.cpp
 FILE_LIST              += $(LOCAL_PATH)/Lite/WidgetBindings.cpp
+FILE_LIST              += $(LOCAL_PATH)/Lite/FrostedSidebar.cpp
 FILE_LIST              += $(LOCAL_PATH)/Security/LicenseRuntime.cpp
 FILE_LIST              += $(LOCAL_PATH)/System/Hooks/Hitbox.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerRuntime.cpp

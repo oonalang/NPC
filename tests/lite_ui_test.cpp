@@ -5,6 +5,7 @@ struct Vector3 { float x, y, z; };
 #include "../src/main/jni/Hacks/Feature/Init_Hacks.h"
 #include "../src/main/jni/Lite/Menu.h"
 #include "../src/main/jni/Lite/Fonts.h"
+#include "../src/main/jni/Lite/FrostedSidebar.h"
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
@@ -30,6 +31,7 @@ std::size_t allocations = 0;
 void* Allocate(std::size_t size, void*) { ++allocations; return std::malloc(size); }
 void Free(void* pointer, void*) { std::free(pointer); }
 int skinCalls = 0, musicCalls = 0;
+ImTextureID allowedTexture = nullptr;
 void Skins(int category) { ++skinCalls; ImGui::Text("Category %d",category); }
 void Music() { ++musicCalls; ImGui::TextUnformatted("Music service fixture"); }
 std::vector<unsigned char> Read(const std::filesystem::path& path) {
@@ -45,7 +47,7 @@ void CheckFrame() {
         for (const auto& vertex : list->VtxBuffer) assert(std::isfinite(vertex.pos.x) && std::isfinite(vertex.pos.y));
         for (const auto& command : list->CmdBuffer) {
             assert(command.UserCallback == nullptr);
-            assert(command.TextureId == ImGui::GetIO().Fonts->TexID);
+            assert(command.TextureId == ImGui::GetIO().Fonts->TexID || (allowedTexture && command.TextureId == allowedTexture));
             assert(command.IdxOffset + command.ElemCount <= static_cast<unsigned>(list->IdxBuffer.Size));
             for (unsigned at = command.IdxOffset; at < command.IdxOffset + command.ElemCount; ++at)
                 assert(list->IdxBuffer[at] + command.VtxOffset < static_cast<unsigned>(list->VtxBuffer.Size));
@@ -105,6 +107,61 @@ void ValidateLayouts() {
     state.minimized = true; Frame(); assert(musicCalls == 1 && Find("##lite_restore"));
     state = {};
     std::puts("All seven native pages fit six viewports at three scales; optional music is lazy and the preview is absent");
+}
+std::uint64_t DrawHash() {
+    std::uint64_t result=1469598103934665603ull;
+    for (const auto* list : ImGui::GetDrawData()->CmdLists) for (const auto& vertex : list->VtxBuffer) {
+        const auto* bytes=reinterpret_cast<const unsigned char*>(&vertex);
+        for (std::size_t index=0;index<sizeof(vertex);++index) { result^=bytes[index];result*=1099511628211ull; }
+    }
+    return result;
+}
+void ValidateMotion() {
+    using namespace lite_startup;
+    for (int fps : {15,30,60,90,120}) {
+        Motion motion;
+        bool sawMenu=false,sawInteractive=false;
+        for (int step=0;step<fps*3;++step) {
+            const double now=double(step)/fps;
+            const auto value=motion.Update(now,true,true);
+            if (now<minimumLoadingSeconds+finishSeconds) assert(!value.showMenu);
+            if (value.interactive) assert(value.showMenu && value.reveal==1.f);
+            if (value.showMenu && !sawMenu) {
+                assert(now>=minimumLoadingSeconds+finishSeconds);
+                assert(now<=minimumLoadingSeconds+finishSeconds+2./fps+.0001);
+                sawMenu=true;
+            }
+            if (value.interactive && !sawInteractive) {
+                assert(now<=minimumLoadingSeconds+finishSeconds+revealSeconds+3./fps+.0001);
+                sawInteractive=true;
+            }
+        }
+        assert(sawMenu && sawInteractive);
+        assert(!motion.Update(5,false,false).showMenu);
+        assert(!motion.Update(6,true,true).showMenu);
+    }
+    Motion waiting;
+    assert(!waiting.Update(0,true,false).showMenu);
+    assert(!waiting.Update(20,true,false).showMenu);
+    assert(!waiting.Update(20.1,true,true).showMenu);
+    assert(waiting.Update(20.6,true,true).showMenu);
+    Motion reduced;
+    assert(reduced.Update(0,false,false,true).reducedMotion);
+    assert(!reduced.Update(1,true,false,true).showMenu);
+    assert(reduced.Update(2,true,true,true).interactive);
+    Motion rewind;
+    rewind.Update(10,true,false);
+    assert(std::fabs(rewind.Update(10.5,true,false).elapsed-.5)<.00001);
+    assert(std::fabs(rewind.Update(5,true,false).elapsed-.5)<.00001);
+    assert(std::fabs(rewind.Update(std::nan(""),true,false).elapsed-.5)<.00001);
+    state={}; view.ready=false; view.authorized=true; view.pending=false;
+    auto& io=ImGui::GetIO(); io.DisplaySize={960,540};
+    view.startup={}; view.startup.elapsed=.2; Frame(); const auto first=DrawHash();
+    view.startup.elapsed=.6; Frame(); assert(first!=DrawHash());
+    view.startup.reducedMotion=true; Frame(); const auto frozen=DrawHash();
+    view.startup.elapsed=5.; Frame(); assert(frozen==DrawHash());
+    view.startup={};
+    std::puts("Startup: bounded presentation at 15-120 FPS, backend readiness, full reveal input gate, revocation, rewind/NaN clocks, animated geometry and reduced-motion freeze passed");
 }
 void ValidateStartup() {
     state = {};
@@ -223,6 +280,11 @@ void ValidateBindings() {
     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen); Frame(); Frame();
     auto* panel = Find("/players_"); assert(panel);
     const auto row = panel->DC.CursorStartPos + ImVec2(50,50);
+    view.interactive=false; view.startup.reveal=.2f; Frame(); Frame();
+    Tap(row); assert(!Config.ESPMenu.isPlayerLine);
+    for (const auto* list : ImGui::GetDrawData()->CmdLists) for (const auto& vertex : list->VtxBuffer)
+        assert((vertex.col>>24)<=51);
+    view.interactive=true; view.startup.reveal=1.f;
     Tap(row); assert(Config.ESPMenu.isPlayerLine);
     assert(!Config.Aim.AimSilent && !Config.ExtraMenu.Hit && !Config.ESPMenu.Box);
     io.AddMouseSourceEvent(ImGuiMouseSource_Mouse); io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);
@@ -242,10 +304,11 @@ void ValidateBudget() {
         vertices,ImGui::GetDrawData()->CmdListsCount,elapsed/600.);
 }
 #ifdef LITE_GPU_TEST
-void Screenshot(const std::filesystem::path& path) {
+#include "lite_blur_gpu_checks.h"
+void Screenshot(const std::filesystem::path& path, bool backdrop = false) {
     const auto size = ImGui::GetIO().DisplaySize;
     glBindFramebuffer(GL_FRAMEBUFFER,0); glViewport(0,0,int(size.x),int(size.y));
-    glClearColor(.12f,.13f,.14f,1); glClear(GL_COLOR_BUFFER_BIT);
+    if (backdrop) Backdrop(); else { glClearColor(.12f,.13f,.14f,1); glClear(GL_COLOR_BUFFER_BIT); }
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     std::vector<unsigned char> pixels(static_cast<std::size_t>(size.x*size.y*4));
     glPixelStorei(GL_PACK_ALIGNMENT,1);
@@ -255,6 +318,26 @@ void Screenshot(const std::filesystem::path& path) {
     for (int y=int(size.y)-1; y>=0; --y) for (int x=0; x<int(size.x); ++x)
         output.write(reinterpret_cast<const char*>(pixels.data()+(y*int(size.x)+x)*4),3);
     assert(output.good());
+}
+void CaptureStartup(const std::filesystem::path& output) {
+    std::filesystem::create_directories(output);
+    auto& io=ImGui::GetIO(); io.DisplaySize={960,540}; io.DeltaTime=1.f/30.f;
+    auto* title=view.titleFont;
+    state={}; view={}; view.titleFont=title; view.plan="Premium"; view.expiry="2030-01-01 00:00 UTC"; view.fps=60;
+    lite_startup::Motion motion;
+    Frame(); Frame();
+    for (int index=0;index<180;++index) {
+        const double time=double(index)/30.;
+        view.pending=time>=.9 && time<2.; view.authorized=time>=2.;
+        view.startup=motion.Update(time,view.authorized,time>=3.8);
+        view.ready=view.startup.showMenu; view.interactive=view.startup.interactive;
+        view.preparation=time<2.5 ? 1.f/3.f : time<3.8 ? 2.f/3.f : 1.f;
+        view.uptime=static_cast<std::uint64_t>(time);
+        PrepareSidebar(); Frame();
+        char name[48]; std::snprintf(name,sizeof(name),"frame-%04d.ppm",index);
+        Screenshot(output/name,view.ready);
+    }
+    std::puts("Native login/loading/check/reveal frames captured; server and setup timing use fixtures");
 }
 void ValidateGL() {
     glActiveTexture(GL_TEXTURE2); glDisable(GL_BLEND); glEnable(GL_CULL_FACE); glEnable(GL_DEPTH_TEST);
@@ -306,18 +389,29 @@ int main(int argc, char** argv) {
     assert(ImGui_ImplOpenGL3_Init("#version 300 es")); ImGui_ImplOpenGL3_NewFrame();
 #endif
     view.skins = Skins; view.music = Music; view.expiry = "2030-01-01 00:00 UTC"; view.plan = "Premium";
-    ValidateLayouts(); ValidateStartup(); ValidateTouch(); ValidateBindings(); ValidateBudget();
+#ifdef LITE_GPU_TEST
+    const char* capture=std::getenv("LITE_CAPTURE_STARTUP");
+    if (capture && std::strcmp(capture,"1")==0) {
+        assert(argc>=3); CaptureStartup(argv[2]);
+    } else
+#endif
+    {
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidateBindings(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
+    ValidateBlur();
     io.DisplaySize = {1280,720}; state = {}; view.ready = true;
     const char* names[]{"home","esp","aim","trigger","memory","skins","settings"};
-    for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm")); }
+    for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); PrepareSidebar(); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm"),true); }
     ValidateGL();
-    state = {}; state.tab = lite_ui::Tab::Memory; io.DisplaySize = {360,780}; Frame(); Frame(); Screenshot(output/"portrait.ppm");
-    state = {}; io.DisplaySize = {960,540}; view.ready = view.authorized = false; Frame(); Frame(); Screenshot(output/"login.ppm");
+    state = {}; state.tab = lite_ui::Tab::Memory; io.DisplaySize = {360,780}; PrepareSidebar(); Frame(); Frame(); Screenshot(output/"portrait.ppm",true);
+    state = {}; io.DisplaySize = {960,540}; view.ready = view.authorized = false; view.sidebarTexture=allowedTexture=nullptr; Frame(); Frame(); Screenshot(output/"login.ppm");
     view.pending = true; Frame(); Screenshot(output/"authenticating.ppm");
     view.authorized = true; view.pending = false; view.preparation = 2.f/3.f; Frame(); Screenshot(output/"loading.ppm");
-    ImGui_ImplOpenGL3_Shutdown();
+#endif
+    }
+#ifdef LITE_GPU_TEST
+    lite_blur::Release(); ImGui_ImplOpenGL3_Shutdown();
 #endif
     ImGui::DestroyContext();
 #ifdef LITE_GPU_TEST

@@ -41,6 +41,8 @@
 #include "Lite/Fonts.h"
 #include "Lite/Menu.h"
 #include "Lite/NativeBackend.h"
+#include "Lite/FrostedSidebar.h"
+#include "System/UI/ReducedMotion.h"
 
 static void RequestTriggerInitialization();
 static void RequestLicensedFeatures();
@@ -143,6 +145,7 @@ std::chrono::steady_clock::time_point appStartTime = std::chrono::steady_clock::
 static std::atomic<unsigned> g_LiteSetupProgress{0};
 static std::atomic<bool> g_LiteCaptureInput{true};
 static lite_ui::State g_LiteState;
+static lite_startup::Motion g_LiteStartup;
 static bool g_LiteTriedKey = false;
 static std::string err;
 static char s[256];
@@ -269,7 +272,11 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     const bool features=license::Allows(license::Capability::Features);
     if(authorized&&features&&g_LiteSetupProgress.load(std::memory_order_acquire)==0) RequestLicensedFeatures();
     const auto stage=g_LiteSetupProgress.load(std::memory_order_acquire);
-    const bool ready=authorized&&(!features||stage>=3);
+    static bool reducedLoaded = false, reducedMotion = false;
+    if (!reducedLoaded && VM) { reducedMotion=startup_ui::ReducedMotionEnabled(VM); reducedLoaded=true; }
+    const auto presentation=g_LiteStartup.Update(std::chrono::duration<double>(now-appStartTime).count(),
+        authorized,authorized&&(!features||stage>=3),reducedMotion);
+    const bool ready=presentation.showMenu;
     static bool wasAuthorized = false;
     if (wasAuthorized && !authorized) {
         g_LiteState.minimized = false;
@@ -296,6 +303,14 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if(until>0) {std::tm date{};if(gmtime_r(&until,&date)) std::strftime(expiry,sizeof(expiry),"%Y-%m-%d %H:%M UTC",&date);}
     lite_ui::View view;
     view.authorized=authorized;view.pending=g_LoginPending;view.ready=ready;
+    view.interactive=presentation.interactive;view.startup=presentation;
+    if (ready && !g_LiteState.minimized) {
+        const auto layout=lite_ui::Fit(io.DisplaySize);
+        const auto position=(io.DisplaySize-layout.size)*.5f;
+        const auto texture=lite_blur::Capture({position.x,position.y,layout.sidebar,layout.size.y},
+            g_GlWidth,g_GlHeight,std::chrono::duration<double>(now-appStartTime).count());
+        view.sidebarTexture=reinterpret_cast<ImTextureID>(static_cast<std::uintptr_t>(texture.id));
+    }
     view.preparation=stage/3.f;view.fps=fps;
     view.uptime=static_cast<std::uint64_t>(std::chrono::duration<double>(now-appStartTime).count());
     view.error=err.c_str();view.expiry=expiry;
@@ -327,7 +342,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         else if(actions.loadConfig) err=LoadConfiguration(name)?"Configuration loaded.":"Unable to load configuration.";
         else err=SaveConfiguration(name)?"Configuration saved.":"Unable to save configuration.";
     }
-    const bool blocked=g_LoginPending||(authorized&&!ready);
+    const bool blocked=g_LoginPending||(authorized&&!presentation.interactive);
     auth_input::SetBlocked(blocked);
     g_LiteCaptureInput.store(blocked||!g_LiteState.minimized,std::memory_order_release);
     static bool musicWasEnabled = false;

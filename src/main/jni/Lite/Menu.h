@@ -1,5 +1,6 @@
 #pragma once
 #include "Widgets.h"
+#include "StartupView.h"
 #include "../System/UI/MemoryTab.h"
 #include "../System/UI/Keyboard.h"
 #include "../System/Hooks/FrameRate.h"
@@ -18,7 +19,9 @@ struct State {
     char configName[64] = "lite";
 };
 struct View {
-    bool authorized = false, pending = false, ready = false;
+    bool authorized = false, pending = false, ready = false, interactive = true;
+    ImTextureID sidebarTexture = nullptr;
+    lite_startup::Frame startup;
     float preparation = 0.f, fps = 0.f;
     std::uint64_t uptime = 0;
     const char* error = "";
@@ -211,40 +214,56 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
 
     if (!view.ready) {
         const auto display = ImGui::GetIO().DisplaySize;
-        const ImVec2 size(ImMin(420.f,display.x-20.f), ImMin(310.f,display.y-20.f));
+        const bool error = view.error && *view.error;
+        const ImVec2 size(ImMin(view.authorized?340.f:380.f,display.x-24.f),
+            ImMin(view.authorized?288.f:(error?344.f:302.f),display.y-24.f));
+        const float alpha = view.authorized && view.startup.active && !view.startup.reducedMotion ?
+            lite_startup::Ease(float(view.startup.elapsed/lite_startup::introFadeSeconds))*(1.f-lite_startup::Ease((view.startup.finish-.88f)/.12f)) : 1.f;
         ImGui::SetNextWindowPos(display*.5f, ImGuiCond_Always, {.5f,.5f});
         ImGui::SetNextWindowSize(size, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {24,22});
-        ImGui::Begin("ETHNIR LITE##login", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove);
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha,ImGui::GetStyle().Alpha*alpha);
+        ImGui::Begin("ETHNIR LITE##login", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground);
         ImGui::SetWindowFontScale(1.f);
         lite_widgets::scale = 1.f;
-        ImGui::TextUnformatted("ETHNIR LITE");
-        ImGui::Separator();
-        ImGui::Spacing();
-        if (view.authorized) {
-            ImGui::TextUnformatted("Preparing features");
-            ImGui::ProgressBar(ImClamp(view.preparation,0.f,1.f), {-1,5}, "");
-            ImGui::TextDisabled("Opening your interface");
-        } else {
+        lite_startup::Card();
+        if (view.authorized) lite_startup::Loading(view.titleFont,view.preparation,view.startup);
+        else {
+            const auto pos = ImGui::GetWindowPos();
+            const ImVec2 center(pos.x+size.x*.5f,pos.y);
+            lite_startup::Centered(view.titleFont,26,{center.x,pos.y+23},"ETHNIR",lite_startup::Ink(242));
+            lite_startup::Edition(center,pos.y+56);
+            lite_startup::Centered(nullptr,12,{center.x,pos.y+80},view.pending?"Checking your access":"Sign in to continue",lite_startup::Ink(136));
+            ImGui::SetCursorPos({24,105});
             ImGui::BeginDisabled(view.pending);
-            Input("Access key", key, capacity);
-            ImGui::Spacing();
-            const float half = (ImGui::GetContentRegionAvail().x - 8.f) * .5f;
-            actions.paste = lite_widgets::Button("Paste key", {half,30});
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{12,10});
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,6.f);
+            Input("Access key",key,capacity);
+            ImGui::PopStyleVar(2);
+            ImGui::SetCursorPos({24,171});
+            const float half = (ImGui::GetContentRegionAvail().x-8.f)*.5f;
+            actions.paste = lite_startup::Secondary("Paste key",{half,28});
             ImGui::SameLine(0,8);
-            actions.loadKey = lite_widgets::Button("Load saved", {half,30});
-            ImGui::Spacing();
-            actions.submit = lite_widgets::Button(view.pending ? "Authenticating..." : "Authenticate", {0,34});
+            actions.loadKey = lite_startup::Secondary("Load saved",{half,28});
             ImGui::EndDisabled();
-            if (view.pending) {
-                const float progress = static_cast<float>(std::fmod(ImGui::GetTime()*.55,1.));
-                ImGui::ProgressBar(progress, {-1,3}, "");
-            }
+            ImGui::SetCursorPos({24,211});
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled,view.pending);
+            actions.submit = lite_startup::Primary("Authenticate",view.pending,view.startup.reducedMotion,
+                {ImGui::GetContentRegionAvail().x,38});
+            ImGui::PopItemFlag();
+            if (error) {
+                ImGui::SetCursorPos({24,263});
+                ImGui::BeginChild("##login_error",{size.x-48,ImMax(20.f,size.y-275)},false,
+                    ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
+                ImGui::TextWrapped("%s",view.error);
+                ImGui::EndChild();
+            } else lite_startup::Centered(nullptr,11,{center.x,pos.y+270},"Secure access",lite_startup::Ink(100));
         }
-        if (view.error && *view.error) ImGui::TextWrapped("%s", view.error);
         ImGui::End();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
     } else {
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled,!view.interactive);
         ImGui::SetNextWindowPos(ImGui::GetIO().DisplaySize*.5f, ImGuiCond_Always, {.5f,.5f});
         ImGui::SetNextWindowSize(layout.size, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
@@ -253,8 +272,10 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         lite_widgets::SetFontScale();
         const auto pos = ImGui::GetWindowPos();
         auto* draw = ImGui::GetWindowDrawList();
-        draw->AddRectFilled(pos, {pos.x+layout.sidebar,pos.y+layout.size.y}, IM_COL32(14,14,16,255),
-            20.f, ImDrawFlags_RoundCornersLeft);
+        if (view.sidebarTexture) draw->AddImageRounded(view.sidebarTexture,pos,{pos.x+layout.sidebar,pos.y+layout.size.y},
+            {0,1},{1,0},IM_COL32_WHITE,20.f,ImDrawFlags_RoundCornersLeft);
+        draw->AddRectFilled(pos,{pos.x+layout.sidebar,pos.y+layout.size.y},
+            view.sidebarTexture?IM_COL32(8,8,10,175):IM_COL32(14,14,16,255),20.f,ImDrawFlags_RoundCornersLeft);
         draw->AddLine({pos.x+layout.sidebar,pos.y}, {pos.x+layout.sidebar,pos.y+layout.size.y}, lite_colors::SideStrip);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10,0)*layout.scale);
         ImGui::BeginChild("##sidebar", {layout.sidebar,layout.size.y}, false,
@@ -409,6 +430,14 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::PopStyleVar();
         ImGui::End();
         ImGui::PopStyleVar();
+        ImGui::PopItemFlag();
+        if (view.startup.reveal < 1.f) for (auto* window : GImGui->Windows) {
+            if (!window->Active || std::strcmp(window->RootWindow->Name,"ETHNIR LITE##menu")) continue;
+            for (auto& vertex : window->DrawList->VtxBuffer) {
+                const unsigned alpha = static_cast<unsigned>((vertex.col>>24)*view.startup.reveal);
+                vertex.col = (vertex.col&0x00ffffffu)|(alpha<<24);
+            }
+        }
     }
     if (keyboard && editBuffer) RenderVirtualKeyboard("##lite_keyboard",editBuffer,editCapacity,&keyboard);
     return actions;

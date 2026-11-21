@@ -9,7 +9,7 @@ if [ ! -f "$headers/EGL/egl.h" ] && [ -d /workspace/glass-validation/include ]; 
 fi
 if [ "${LITE_GPU_TEST:-0}" = 1 ]; then
     extra_flags="-DLITE_GPU_TEST -DWL_EGL_PLATFORM -DIMGUI_IMPL_OPENGL_ES3 -I$headers"
-    extra_sources="$project_dir/src/main/jni/ImGui/imgui_impl_opengl3.cpp"
+    extra_sources="$project_dir/src/main/jni/ImGui/imgui_impl_opengl3.cpp $project_dir/src/main/jni/Lite/FrostedSidebar.cpp"
     extra_libraries="-Wl,-l:libEGL.so.1,-l:libGL.so.1"
 else
     extra_flags="-fsanitize=address,undefined -fno-omit-frame-pointer"
