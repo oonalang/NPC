@@ -134,8 +134,10 @@ GlassPath TraceGlassPath(Address base, const ViewRay& ray, float distance, RayCo
     return CheckGlassPath(contacts, static_cast<std::size_t>(count), nearest, distance,
         [base](Address address) noexcept {
             auto collider = reinterpret_cast<Object>(address);
-            if (!Bind<IsLiveObject>(base, 0x52B7CE4)(nullptr, collider, nullptr, nullptr)) return false;
-            return IsGlassMaterial(base, Bind<SharedMaterial>(base, 0x52D98B8)(collider, nullptr));
+            if (!Bind<IsLiveObject>(base, 0x52B7CE4)(nullptr, collider, nullptr, nullptr))
+                return ContactKind::Unavailable;
+            return IsGlassMaterial(base, Bind<SharedMaterial>(base, 0x52D98B8)(collider, nullptr))
+                ? ContactKind::Glass : ContactKind::Solid;
         });
 }
 }

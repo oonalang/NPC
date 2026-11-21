@@ -750,13 +750,16 @@ void IdleSniperAcquisition() {
 void GlassPaths() {
     constexpr std::uintptr_t glass = 1, breakable = 12, penetrable = 33;
     constexpr std::uintptr_t wall = 6, solidGlass = 31, enemy = 100;
-    const auto isGlass = [](std::uintptr_t collider) { return IsPassableGlass(static_cast<int>(collider)); };
+    const auto classify = [](std::uintptr_t collider) {
+        if (collider == 999) return ContactKind::Unavailable;
+        return IsPassableGlass(static_cast<int>(collider)) ? ContactKind::Glass : ContactKind::Solid;
+    };
     Require(IsPassableGlass(glass) && IsPassableGlass(breakable) && IsPassableGlass(penetrable) &&
             !IsPassableGlass(0) && !IsPassableGlass(solidGlass) && !IsPassableGlass(wall),
             "only the native passable glass material types can be skipped");
 
     RayContacts contacts{{{enemy, 68.f}, {breakable, 63.f}, {glass, 60.f}}};
-    auto path = CheckGlassPath(contacts, 3, {glass, 60.f}, centerRay.maxDistance, isGlass);
+    auto path = CheckGlassPath(contacts, 3, {glass, 60.f}, centerRay.maxDistance, classify);
     ViewRay shortened;
     float advance = 0.f;
     Require(path.verified && path.firstSolid.collider == enemy && path.lastPaneDistance == 63.f &&
@@ -765,28 +768,31 @@ void GlassPaths() {
             "unsorted hits select the nearest candidate after two panes and retain the original range cap");
 
     contacts = {{{enemy, 20.f}, {wall, 10.001f}, {glass, 10.f}}};
-    path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, isGlass);
+    path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, classify);
     Require(path.verified && path.firstSolid.collider == wall && path.firstSolid.distance < 20.f,
             "a wall right behind glass still blocks the original world ray");
     contacts[1] = {solidGlass, 10.f};
-    path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, isGlass);
+    path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, classify);
     Require(path.verified && path.firstSolid.collider == solidGlass && path.firstSolid.distance == 10.f,
             "impenetrable glass blocks even when another pane touches it");
 
     contacts = {{{breakable, 12.f}, {glass, 10.f}}};
-    path = CheckGlassPath(contacts, 2, {0, 10.f}, 20.f, isGlass);
+    path = CheckGlassPath(contacts, 2, {0, 10.f}, 20.f, classify);
     Require(path.verified && path.lastPaneDistance == 12.f && !path.firstSolid.collider,
             "world obstruction can clear when every intervening contact is passable glass");
-    Require(!CheckGlassPath(contacts, 2, {wall, 10.f}, 20.f, isGlass).verified &&
-            !CheckGlassPath(contacts, 2, {0, 9.f}, 20.f, isGlass).verified,
+    Require(!CheckGlassPath(contacts, 2, {wall, 10.f}, 20.f, classify).verified &&
+            !CheckGlassPath(contacts, 2, {0, 9.f}, 20.f, classify).verified,
             "a differing collider or nearest distance cannot clear the first native hit");
+    contacts[1] = {999, 12.f};
+    Require(!CheckGlassPath(contacts, 2, {glass, 10.f}, 20.f, classify).verified,
+            "a collider that unloaded during the query is never used as the next candidate");
 
     contacts = {{{glass, 10.f}, {breakable, 12.f}, {penetrable, 14.f}, {enemy, 20.f}}};
-    Require(!CheckGlassPath(contacts, 4, {glass, 10.f}, 20.f, isGlass).verified &&
+    Require(!CheckGlassPath(contacts, 4, {glass, 10.f}, 20.f, classify).verified &&
             !CompleteContactCount(32, 32) && !CompleteContactCount(33, 64) &&
             CompleteContactCount(32, 64), "pane and hit counts are bounded and a full native buffer is rejected");
     contacts[1].distance = std::numeric_limits<float>::quiet_NaN();
-    Require(!CheckGlassPath(contacts, 4, {glass, 10.f}, 20.f, isGlass).verified,
+    Require(!CheckGlassPath(contacts, 4, {glass, 10.f}, 20.f, classify).verified,
             "a malformed contact cannot hide a blocker");
 }
 

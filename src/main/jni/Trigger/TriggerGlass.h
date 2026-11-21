@@ -23,6 +23,7 @@ struct GlassPath {
 };
 
 using RayContacts = std::array<RayContact, MaxGlassContacts>;
+enum class ContactKind { Unavailable, Solid, Glass };
 
 inline bool IsPassableGlass(int materialType) noexcept {
     return materialType == 1 || materialType == 12 || materialType == 33;
@@ -42,9 +43,9 @@ inline float GlassRetraceTolerance(const ViewRay& ray, float distance) noexcept 
                                      std::fabs(ray.origin.y), std::fabs(ray.origin.z)}));
 }
 
-template<class IsGlass>
+template<class Classify>
 GlassPath CheckGlassPath(RayContacts& contacts, std::size_t count, RayContact nearest,
-                         float distance, IsGlass isGlass) noexcept {
+                         float distance, Classify classify) noexcept {
     if (!count || count > contacts.size() || !std::isfinite(distance) || distance <= 0.f ||
         !std::isfinite(nearest.distance) || nearest.distance < 0.f || nearest.distance > distance)
         return {};
@@ -65,7 +66,9 @@ GlassPath CheckGlassPath(RayContacts& contacts, std::size_t count, RayContact ne
     GlassPath path{true, {}, -1.f};
     std::size_t panes = 0;
     for (auto at = contacts.begin(); at != end; ++at) {
-        if (!isGlass(at->collider)) {
+        const auto kind = classify(at->collider);
+        if (kind == ContactKind::Unavailable) return {};
+        if (kind == ContactKind::Solid) {
             path.firstSolid = *at;
             return path;
         }
