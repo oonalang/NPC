@@ -1,5 +1,4 @@
 #include "NativeQueries.h"
-#include "NativeProfile.h"
 #include "NativeRay.h"
 
 #include <algorithm>
@@ -96,24 +95,6 @@ bool BodyGroup(int group, bool avatar) noexcept {
     return group != 6 && group != 32 &&
            ((group >= 1 && group <= 31) || (group == 0 && avatar));
 }
-
-bool BulletIgnorable(Address base, const OwnedImpact& impact) noexcept {
-    if (!base || !impact.object) return false;
-    const Address material = Read<Address>(reinterpret_cast<Address>(impact.object), 0x78);
-    if (!material) return false;
-    constexpr Address CanIgnoreForBullet = 0x66F8D74;
-    if (!IsVerifiedExecutableAddress(base + CanIgnoreForBullet)) return false;
-    using Predicate = bool(*)(Object, Method);
-    return Bind<Predicate>(base, CanIgnoreForBullet)(reinterpret_cast<Object>(material), nullptr);
-}
-
-Point3 AdvancePoint(const ViewRay& ray, float distance) noexcept {
-    return {
-        ray.origin.x + ray.direction.x * distance,
-        ray.origin.y + ray.direction.y * distance,
-        ray.origin.z + ray.direction.z * distance
-    };
-}
 }
 
 bool BuildNativeRay(Address base, ViewRay& ray,
@@ -131,35 +112,14 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     OwnedImpact impact{base_, Bind<Object(*)(Object, Method)>(base_, 0x62588E4)(nullptr, nullptr)};
     if (!impact.object) return false;
     using BroadTrace = bool(*)(Object, Point3, Point3, float, int, Object, int, Method);
-    Point3 traceOrigin = ray.origin;
-    float advanced = 0.0f;
-    float firstSurface = -1.0f;
-    Address collider = 0;
-    for (int restarts = 0; ; ++restarts) {
-        const float remaining = ray.maxDistance - advanced;
-        if (remaining <= 0.0f) return true;
-        const bool broadHit = Bind<BroadTrace>(base_, 0x66F17EC)(
-            nullptr, traceOrigin, ray.direction, remaining, LocalBulletTrace,
-            impact.object, 0, nullptr);
-        if (!broadHit) return true;
-        collider = Read<Address>(reinterpret_cast<Address>(impact.object), 0x18);
-        if (!collider) return false;
-        if (!BulletIgnorable(base_, impact)) break;
-        if (restarts >= MaxPassthroughRestarts) return true;
-        const float impactDistance = Read<float>(reinterpret_cast<Address>(impact.object), 0x5C);
-        if (!std::isfinite(impactDistance) || impactDistance < 0.0f ||
-            impactDistance >= remaining) return false;
-        const float surfaceDistance = advanced + impactDistance;
-        if (firstSurface < 0.0f) firstSurface = surfaceDistance;
-        if (!WithinPassthroughDepth(surfaceDistance, firstSurface)) return true;
-        const float step = impactDistance + PassthroughStep;
-        if (step >= remaining) return true;
-        advanced += step;
-        traceOrigin = AdvancePoint(ray, advanced);
-    }
+    const bool broadHit = Bind<BroadTrace>(base_, 0x66F17EC)(
+        nullptr, ray.origin, ray.direction, ray.maxDistance, LocalBulletTrace,
+        impact.object, 0, nullptr);
+    if (!broadHit) return true;
     result.hit = true;
     result.nearest = true;
-    result.passthroughAdvance = advanced;
+    const Address collider = Read<Address>(reinterpret_cast<Address>(impact.object), 0x18);
+    if (!collider) return false;
     const Object map = Bind<Object(*)(Object, Method)>(base_, 0x8011E2C)(nullptr, nullptr);
     if (!map) return false;
     const Object target = Bind<Object(*)(Object, Object, Method)>(base_, 0x78AF19C)(
@@ -180,8 +140,8 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     using DetailTrace = bool(*)(Object, Object, Object, Point3, Point3,
                                float, int, Object*, Method);
     const bool detailed = Bind<DetailTrace>(base_, 0x66FE6B4)(
-        nullptr, target, reinterpret_cast<Object>(collider), traceOrigin,
-        ray.direction, ray.maxDistance - advanced, 0, &impact.object, nullptr);
+        nullptr, target, reinterpret_cast<Object>(collider), ray.origin,
+        ray.direction, ray.maxDistance, 0, &impact.object, nullptr);
     if (!detailed || !impact.object) return true;
     const Address address = reinterpret_cast<Address>(impact.object);
     const int group = Read<int>(address, 0x70);
@@ -189,7 +149,7 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     result.detailed = BodyGroup(group, avatar);
     if (!result.detailed) return true;
     result.point = Read<Point3>(address, 0x28);
-    result.distance = advanced + Read<float>(address, 0x5C);
+    result.distance = Read<float>(address, 0x5C);
     const auto actor = Read<std::uint32_t>(info, 0x30);
     if (actor == 0) return false;
 
@@ -202,29 +162,15 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
 Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
                                          const ViewRay& ray, const BodyHit& hit) noexcept {
     if (!base_ || !std::isfinite(hit.distance) || hit.distance <= 0) return Occlusion::Unavailable;
-    const float advance = hit.passthroughAdvance;
-    if (!std::isfinite(advance) || advance < 0.0f || advance >= hit.distance)
-        return Occlusion::Unavailable;
-    const Point3 start = advance > 0.0f ? AdvancePoint(ray, advance) : ray.origin;
-    const float distance = hit.distance - advance;
-    float blockerDistance = 0.0f;
+    float blockerDistance = 0;
     using WorldTrace = bool(*)(Object, Point3, Point3, float, float*, int, Method);
     const bool blocked = Bind<WorldTrace>(base_, 0x66F2708)(
-        nullptr, start, ray.direction, distance, &blockerDistance, 0, nullptr);
+        nullptr, ray.origin, ray.direction, hit.distance, &blockerDistance, 0, nullptr);
     if (!blocked) return Occlusion::Clear;
     if (!std::isfinite(blockerDistance) || blockerDistance < 0) return Occlusion::Unavailable;
     const float tolerance = std::max(0.0001f,
-        8.0f * std::numeric_limits<float>::epsilon() * distance);
-    if (blockerDistance + tolerance >= distance) return Occlusion::Clear;
-    OwnedImpact impact{base_, Bind<Object(*)(Object, Method)>(base_, 0x62588E4)(nullptr, nullptr)};
-    if (impact.object) {
-        using BroadTrace = bool(*)(Object, Point3, Point3, float, int, Object, int, Method);
-        if (Bind<BroadTrace>(base_, 0x66F17EC)(nullptr, start, ray.direction, distance,
-                                              LocalBulletTrace, impact.object, 0, nullptr) &&
-            BulletIgnorable(base_, impact))
-            return Occlusion::Clear;
-    }
-    return Occlusion::Blocked;
+        8.0f * std::numeric_limits<float>::epsilon() * hit.distance);
+    return blockerDistance + tolerance < hit.distance ? Occlusion::Blocked : Occlusion::Clear;
 }
 
 Occlusion NativeTargetQueries::CheckSmoke(const ContextIdentity&,

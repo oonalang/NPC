@@ -314,7 +314,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
     music_player::Init(VM);
     slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-    pickup_tweaks::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange>0.f,Config.ExtraMenu.PickupRange);
     static auto lastHitboxProbe=frameTime;
     if(Config.ExtraMenu.Hit&&hitbox::NeedsProbe()&&
        frameTime-lastHitboxProbe>=std::chrono::seconds(1)) {
@@ -735,7 +734,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
                             Config.ExtraMenu.Rpd, Config.ExtraMenu.Parachute, Config.ExtraMenu.NoCrouch, Config.ExtraMenu.NoSlideFatigue,
                             Config.ExtraMenu.Flash, Config.ExtraMenu.Fire, Config.ExtraMenu.NoSprintFire,
                             Config.ExtraMenu.Diving, Config.ExtraMenu.Reload, Config.ExtraMenu.Scope,
-                            Config.ExtraMenu.Switch, Config.ExtraMenu.Kinetic, Config.ExtraMenu.FastPickup,
+                            Config.ExtraMenu.Switch, Config.ExtraMenu.Kinetic,
                             PhantomTrigger::GetSettings().enabled,PhantomTrigger::GetSettings().showDot
                         };
                         homeStats.activeFeatures=static_cast<int>(std::count(std::begin(enabledOptions),std::end(enabledOptions),true));

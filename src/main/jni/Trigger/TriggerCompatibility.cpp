@@ -127,15 +127,7 @@ void FormatCompatibility(const CompatibilityReport& report, char* output,
     std::size_t used = 0;
     auto append = [&](const char* format, auto... args) {
         if (used >= capacity - 1) return;
-        int count = 0;
-        if constexpr (sizeof...(args) == 0) {
-            // Literal-only fragments carry no conversions, so they are written
-            // through an explicit %s rather than being used as the format
-            // itself. This branch never instantiates the non-literal call.
-            count = std::snprintf(output + used, capacity - used, "%s", format);
-        } else {
-            count = std::snprintf(output + used, capacity - used, format, args...);
-        }
+        const int count = std::snprintf(output + used, capacity - used, format, args...);
         if (count < 0) return;
         const auto written = static_cast<std::size_t>(count);
         used += written < capacity - used ? written : capacity - used - 1;

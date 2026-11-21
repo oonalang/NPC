@@ -54,7 +54,6 @@ struct BodyHit {
     std::uint64_t targetGeneration = 0;
     Point3 point{};
     float distance = 0.0f;
-    float passthroughAdvance = 0.0f;
 };
 
 enum class Occlusion : std::uint8_t { Unavailable, Clear, Blocked };
@@ -90,22 +89,6 @@ DecisionStatus ExplainDecision(const Settings&, const Frame&, TargetResult,
 TargetResult EvaluateTarget(TargetQueries& queries,
                             const ContextIdentity& context,
                             const ViewRay& ray) noexcept;
-
-
-// Body verification and occlusion verification are exposed separately so a
-// caller can keep the body result fresh every frame while re-validating the
-// world and smoke stages at a lower rate. Returns false when the ray did not
-// reach an eligible body and stores the matching target result in failure.
-bool EvaluateBody(TargetQueries& queries,
-                  const ContextIdentity& context,
-                  const ViewRay& ray,
-                  BodyHit& hit,
-                  TargetResult& failure) noexcept;
-
-TargetResult EvaluateOcclusion(TargetQueries& queries,
-                               const ContextIdentity& context,
-                               const ViewRay& ray,
-                               const BodyHit& hit) noexcept;
 
 
 

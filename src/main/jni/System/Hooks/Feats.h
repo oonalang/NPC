@@ -6,7 +6,6 @@
 #define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
 #include "SlideFatigue.h"
 #include "Hitbox.h"
-#include "PickupTweaks.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -962,11 +961,6 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 }
 
 inline void InitializeAllHooks() {
-
-   //-- BR Fast Pickup / Pickup Range
-    LICENSE_HOOK_LIB("libunity.so", "0x90F6DE8", pickup_tweaks::HookAutoPickUpInterval, pickup_tweaks::origAutoPickUpInterval);
-    LICENSE_HOOK_LIB("libunity.so", "0x89FF498", pickup_tweaks::HookBRManagerTick, pickup_tweaks::origBRManagerTick);
-    LICENSE_HOOK_LIB("libunity.so", "0x8A00DA0", pickup_tweaks::HookInitMaxPickUpDistance, pickup_tweaks::origInitMaxPickUpDistance);
 
             //--MP VIEW
     LICENSE_HOOK_LIB("libunity.so", "0XC34782C", hook_get_m_MaxPovmp, get_m_MaxPovmp);

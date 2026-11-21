@@ -170,36 +170,17 @@ bool GetViewportCenter(float& normalizedX, float& normalizedY) noexcept {
 #endif
 }
 
-bool EvaluateBody(TargetQueries& queries,
-                  const ContextIdentity& context,
-                  const ViewRay& ray,
-                  BodyHit& hit,
-                  TargetResult& failure) noexcept {
-    hit = {};
-    if (!ValidRay(ray)) {
-        failure = TargetResult::InvalidRay;
-        return false;
-    }
-    if (!queries.TraceBody(context, ray, hit)) {
-        failure = TargetResult::QueryUnavailable;
-        return false;
-    }
+TargetResult EvaluateTarget(TargetQueries& queries,
+                            const ContextIdentity& context,
+                            const ViewRay& ray) noexcept {
+    if (!ValidRay(ray)) return TargetResult::InvalidRay;
+    BodyHit hit{};
+    if (!queries.TraceBody(context, ray, hit)) return TargetResult::QueryUnavailable;
     if (!hit.hit || !hit.enemy || !hit.alive || !hit.detailed || !hit.nearest ||
         hit.targetGeneration == 0) {
-        failure = TargetResult::NoEligibleBody;
-        return false;
+        return TargetResult::NoEligibleBody;
     }
-    if (!ValidHit(ray, hit)) {
-        failure = TargetResult::InvalidHit;
-        return false;
-    }
-    return true;
-}
-
-TargetResult EvaluateOcclusion(TargetQueries& queries,
-                               const ContextIdentity& context,
-                               const ViewRay& ray,
-                               const BodyHit& hit) noexcept {
+    if (!ValidHit(ray, hit)) return TargetResult::InvalidHit;
     const auto world = queries.CheckWorld(context, ray, hit);
     if (world == Occlusion::Unavailable) return TargetResult::QueryUnavailable;
     if (world != Occlusion::Clear) return TargetResult::WorldBlocked;
@@ -207,15 +188,6 @@ TargetResult EvaluateOcclusion(TargetQueries& queries,
     if (smoke == Occlusion::Unavailable) return TargetResult::QueryUnavailable;
     if (smoke != Occlusion::Clear) return TargetResult::SmokeBlocked;
     return TargetResult::Eligible;
-}
-
-TargetResult EvaluateTarget(TargetQueries& queries,
-                            const ContextIdentity& context,
-                            const ViewRay& ray) noexcept {
-    BodyHit hit{};
-    TargetResult failure = TargetResult::InvalidRay;
-    if (!EvaluateBody(queries, context, ray, hit, failure)) return failure;
-    return EvaluateOcclusion(queries, context, ray, hit);
 }
 
 bool NeedsAimState(const Settings& settings, const Frame& frame,

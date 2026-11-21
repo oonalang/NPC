@@ -68,14 +68,6 @@ struct LocalState {
     Frame lastFrame{};
     bool hasFrame = false;
     NativeCancellation cancellation;
-    TargetResult verifiedTarget = TargetResult::InvalidRay;
-    ContextIdentity verifiedIdentity{};
-    std::uint64_t verifiedUpdate = 0;
-    bool verifiedCached = false;
-    TargetResult occlusionResult = TargetResult::InvalidRay;
-    std::uint64_t occlusionGeneration = 0;
-    std::uint64_t occlusionMillis = 0;
-    bool occlusionCached = false;
     bool stopAfterUpdate = false;
     bool syntheticInput = false;
     bool releaseSequence = false;
@@ -143,7 +135,6 @@ ContextIdentity Identity(std::uintptr_t match, std::uintptr_t pawn,
     if (local.epoch != epoch) {
         local.controller.Reset();
         local.cancellation.Reset();
-        local.verifiedCached = false;
         local.epoch = epoch;
         for (auto& generation : local.generations) ++generation;
     }
@@ -163,18 +154,9 @@ void Merge(void* param, const Intent& intent) noexcept {
         });
 }
 
-constexpr float TargetTraceDistance = 500.0f;
-
-// The world and smoke queries only matter together with the body the ray is
-// already resting on, so a body that was cleared moments ago keeps its verdict
-// for a few frames. Blocked verdicts are never cached, so stepping out of
-// cover is still picked up on the next frame.
-constexpr std::uint64_t OcclusionRevalidateMillis = 33;
-
 bool PrepareViewRay(bool needed, bool sampleViewport, ViewRay& ray) noexcept {
     float centerX = .5f, centerY = .5f;
     const bool ready = needed && BuildNativeRay(library,ray,centerX,centerY,sampleViewport);
-    if (ready && ray.maxDistance > TargetTraceDistance) ray.maxDistance = TargetTraceDistance;
     if (ready && sampleViewport) {
         std::uint32_t x = 0, y = 0;
         std::memcpy(&x,&centerX,sizeof(x)); std::memcpy(&y,&centerY,sizeof(y));
@@ -336,51 +318,14 @@ void DecidePreparedInput(void* owner, void* param) {
     status.store(RuntimeStatus::Ready,std::memory_order_release);
     ViewRay ray;
     const bool needTarget = NeedsTargetQuery(settings,frame,local.controller);
-    const bool reuseTarget = needTarget && !settings.showDot && local.verifiedCached &&
-        local.verifiedTarget == TargetResult::Eligible &&
-        local.verifiedIdentity == frame.identity &&
-        local.controller.HasOwnedInput() &&
-        frame.updateId > local.verifiedUpdate;
-    const bool rayReady = reuseTarget ||
-        PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
+    const bool rayReady = PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
     frame.contextValid = frame.contextValid && (!needTarget || rayReady);
     NativeTargetQueries queries(library,match,pawn);
     TargetResult target = TargetResult::InvalidRay;
     frame.targetValid = false;
     if (needTarget && rayReady) {
-        if (reuseTarget) {
-            target = local.verifiedTarget;
-        } else {
-            BodyHit body{};
-            TargetResult bodyFailure = TargetResult::InvalidRay;
-            if (!EvaluateBody(queries,frame.identity,ray,body,bodyFailure)) {
-                target = bodyFailure;
-                local.occlusionCached = false;
-            } else {
-                const bool cleared = local.occlusionCached &&
-                    local.occlusionResult == TargetResult::Eligible &&
-                    local.occlusionGeneration == body.targetGeneration &&
-                    frame.nowMillis >= local.occlusionMillis &&
-                    frame.nowMillis - local.occlusionMillis < OcclusionRevalidateMillis;
-                if (cleared) {
-                    target = TargetResult::Eligible;
-                } else {
-                    target = EvaluateOcclusion(queries,frame.identity,ray,body);
-                    local.occlusionGeneration = body.targetGeneration;
-                    local.occlusionMillis = frame.nowMillis;
-                    local.occlusionResult = target;
-                    local.occlusionCached = true;
-                }
-            }
-            local.verifiedTarget = target;
-            local.verifiedIdentity = frame.identity;
-            local.verifiedUpdate = frame.updateId;
-            local.verifiedCached = true;
-        }
+        target = EvaluateTarget(queries,frame.identity,ray);
         frame.targetValid = target == TargetResult::Eligible;
-    } else {
-        local.verifiedCached = false;
-        local.occlusionCached = false;
     }
     const auto intent = local.controller.Step(settings,frame);
     const auto decision = local.cancellation.Resolve(frame.identity,frame.manualActive,release,intent,

@@ -10,7 +10,6 @@
 #include "../../BlueprintTierFilter.h"
 #include "../../Trigger/TriggerDotStyle.h"
 #include "../Hooks/Hitbox.h"
-#include "../Hooks/PickupTweaks.h"
 
 extern JavaVM* VM;
 
@@ -75,8 +74,6 @@ void LoadConfig() {
         else if (key == "ExtraMenu.Diving") Config.ExtraMenu.Diving = (valueStr == "1");
         else if (key == "ExtraMenu.WallHack") Config.ExtraMenu.WallHack = (valueStr == "1");
         else if (key == "ExtraMenu.Blueprints") Config.ExtraMenu.Blueprints = (valueStr == "1");
-        else if (key == "ExtraMenu.FastPickup") Config.ExtraMenu.FastPickup = (valueStr == "1");
-        else if (key == "ExtraMenu.PickupRange") Config.ExtraMenu.PickupRange = std::stof(valueStr);
         else if (key == "ExtraMenu.BlueprintTiers") BlueprintTierFilter::SetMask(static_cast<uint32_t>(std::stoul(valueStr)));
         else if (key == "TriggerDot.Radius") TriggerDotStyle::appearance.radius = std::stof(valueStr);
         else if (key == "TriggerDot.Outline") TriggerDotStyle::appearance.outline = std::stof(valueStr);
@@ -88,7 +85,6 @@ void LoadConfig() {
     file.close();
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
     hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
-    pickup_tweaks::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange>0.f,Config.ExtraMenu.PickupRange);
 }
 
 void SaveConfig() {
@@ -137,8 +133,6 @@ void SaveConfig() {
     file << "ExtraMenu.Diving " << Config.ExtraMenu.Diving << "\n";
     file << "ExtraMenu.WallHack " << Config.ExtraMenu.WallHack << "\n";
     file << "ExtraMenu.Blueprints " << Config.ExtraMenu.Blueprints << "\n";
-    file << "ExtraMenu.FastPickup " << Config.ExtraMenu.FastPickup << "\n";
-    file << "ExtraMenu.PickupRange " << Config.ExtraMenu.PickupRange << "\n";
     file << "ExtraMenu.BlueprintTiers " << BlueprintTierFilter::GetMask() << "\n";
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
     file << "TriggerDot.Radius " << TriggerDotStyle::appearance.radius << "\n";

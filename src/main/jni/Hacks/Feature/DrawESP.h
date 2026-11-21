@@ -720,8 +720,6 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
     if (!Tools::IsPtrValid(EnemyPawns) || !EnemyPawns->getSize()) return;
 
     Pawn **pawns = (Pawn **)EnemyPawns->getItems();
-    Camera *camera = Camera::get_main();
-    bool anyBoxPawn = false;
     for (int i = 0; i < EnemyPawns->getSize(); i++) {
         Pawn *pawn = pawns[i];
         if (!Tools::IsPtrValid(pawn)) continue;
@@ -766,12 +764,20 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         Vector3 pEnemyPawn_headPos = pawn->get_HeadPosition();
         Vector3 pEnemyPawn_rootPos = pawn->get_LastPawnPos();
 
-        Vector3 HeadSc = Camera::WorldToScreenPoint(camera, pEnemyPawn_headPos);
-        Vector3 RootSc = Camera::WorldToScreenPoint(camera, pEnemyPawn_rootPos);
+        Vector3 HeadSc = Camera::get_main()->WorldToScreenPoint(pEnemyPawn_headPos);
+        Vector3 RootSc = Camera::get_main()->WorldToScreenPoint(pEnemyPawn_rootPos);
 
         float distanceToMe = Vector3::Distance(pLocalPawn_rootPos, pEnemyPawn_rootPos);
-
+        float actualHeight = Vector3::Distance(pEnemyPawn_headPos, pEnemyPawn_rootPos);
+        
         if (HeadSc.z > 0 && pawn->m_IsAlive()) {
+            
+            AttackableTargetInfo *m_AttackableInfoPtr = pawn->m_AttackableInfo();
+            if (m_AttackableInfoPtr != nullptr && isAlive) {
+                if (Tools::IsPtrValid(pawn) && Tools::IsPtrValid(pawn->get_PlayerName())) {
+                    std::string playerName = pawn->get_PlayerName()->CString();
+                }
+            }
 
             Vector2 screen(sWidth, sHeight);
             Vector2 location(RootSc.x, HeadSc.y);
@@ -874,7 +880,9 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
                     AddSkeletonToDrawESP(draw, pawn, isBot, sHeight);
                 }
                 
-                anyBoxPawn = true;
+                if (Config.ESPMenu.Vehicle) {
+                    DrawVehicleESP(draw, sWidth, sHeight);
+                }
 
                 if ((Config.ESPMenu.Name || (Config.ESPMenu.Health && Config.ESPMenu.HealthPosition == EspHealthPosition::HealthTop)) && distanceToMe <= 300.0f) {
                     float scaleFactor = 1.0f;
@@ -977,12 +985,6 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
                 }
             }
         }
-    }
-
-    // Drawn once for the frame: the labels do not depend on the pawn, so this
-    // used to redraw the same set once per on-screen enemy.
-    if (anyBoxPawn && Config.ESPMenu.Vehicle) {
-        DrawVehicleESP(draw, sWidth, sHeight);
     }
 
 // ================= CODM-STYLE 3-COLUMN COUNTER (PLAYERS / ENEMIES / BOTS) =================
