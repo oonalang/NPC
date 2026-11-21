@@ -207,13 +207,13 @@ bool NeedsWeaponReadiness(const Settings& settings, const Frame& frame,
 
 bool NeedsTargetQuery(const Settings& settings, const Frame& frame,
                       const Controller& controller) noexcept {
-    const bool automatic = frame.fireMode == FireMode::Automatic ||
-                           frame.fireMode == FireMode::BurstAutomatic;
-    const bool single = frame.fireMode == FireMode::Single ||
-                        frame.fireMode == FireMode::BurstSingle ||
-                        frame.fireMode == FireMode::SingleRelease;
-    return NeedsWeaponReadiness(settings,frame,controller) && (automatic || (single &&
-               (frame.shotReady || controller.HasOwnedInput())));
+    const bool supported = frame.fireMode == FireMode::Automatic ||
+                           frame.fireMode == FireMode::BurstAutomatic ||
+                           frame.fireMode == FireMode::Single ||
+                           frame.fireMode == FireMode::BurstSingle ||
+                           frame.fireMode == FireMode::SingleRelease;
+    return supported && NeedsWeaponReadiness(settings,frame,controller) &&
+        (frame.shotReady || controller.HasOwnedInputFor(frame.identity));
 }
 
 Intent EvaluateInput(const Settings& settings, const Frame& input,

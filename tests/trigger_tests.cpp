@@ -803,6 +803,76 @@ void InputQueryBudget() {
             queries.bodyCalls == before, "single-shot cooldown skips idle target queries");
 }
 
+void AutomaticCooldownQueryBudget() {
+    for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
+        Settings settings{true, mode, false};
+        Controller controller;
+        Queries queries;
+        auto frame = Ready(FireMode::Automatic);
+        frame.aiming = frame.fullyAimed = mode == Mode::ADSOnly;
+        frame.shotReady = false;
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).passthrough &&
+                queries.bodyCalls == 0 && !controller.HasOwnedInput(),
+                "an idle automatic weapon skips all target work during native cooldown");
+        ++frame.updateId;
+        frame.shotReady = true;
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).down &&
+                queries.bodyCalls == 1 && queries.worldCalls == 1 && queries.smokeCalls == 1,
+                "an automatic weapon checks and presses on its first ready update");
+        ++frame.updateId;
+        frame.shotReady = false;
+        auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.held && !intent.down && queries.bodyCalls == 2,
+                "a held automatic weapon keeps tracking through the native shot interval");
+        ++frame.updateId;
+        queries.world = Occlusion::Blocked;
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.up && !intent.held && queries.bodyCalls == 3 && queries.smokeCalls == 2,
+                "cover cancels held input immediately during an automatic shot interval");
+        ++frame.updateId;
+        queries.world = Occlusion::Clear;
+        frame.shotReady = true;
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).down &&
+                queries.bodyCalls == 4, "automatic fire reacquires using current geometry");
+        ++frame.identity.weapon;
+        ++frame.updateId;
+        frame.shotReady = false;
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).passthrough &&
+                queries.bodyCalls == 4 && !controller.HasOwnedInput(),
+                "a new weapon in cooldown does not inherit ownership or trigger a ray");
+    }
+}
+
+void BattleRoyaleRangeBudget() {
+    const auto largeMap = VisibleTraceDistance(.3f, 4000.f);
+    Require(BattleRoyaleTraceDistance(largeMap, 240.f) == 500.f,
+            "a large camera far plane does not set the length of short-weapon BR traces");
+    Require(BattleRoyaleTraceDistance(largeMap, 900.f) == 932.f,
+            "long-range weapons keep their native range plus camera allowance");
+    Require(BattleRoyaleTraceDistance(380.f, 240.f) == 380.f,
+            "the weapon limit never extends past the camera range");
+    for (const auto unknownRange : {0.f, -1.f, std::numeric_limits<float>::infinity(),
+                                   std::numeric_limits<float>::quiet_NaN()}) {
+        Require(BattleRoyaleTraceDistance(largeMap, unknownRange) == largeMap,
+                "unknown native weapon range retains the validated camera range");
+    }
+
+    Queries queries;
+    Controller controller;
+    auto frame = Ready();
+    auto ray = centerRay;
+    ray.maxDistance = BattleRoyaleTraceDistance(largeMap, 900.f);
+    queries.body.point = {0, 0, 890.f};
+    queries.body.distance = 890.f;
+    Require(EvaluateInput(enabled, frame, ray, queries, controller).down && queries.smokeCalls == 1,
+            "a target beyond the minimum BR limit can still be acquired with a long-range weapon");
+    ray.maxDistance = BattleRoyaleTraceDistance(largeMap, 240.f);
+    ++frame.updateId;
+    ++frame.identity.weapon;
+    Require(EvaluateInput(enabled, frame, ray, queries, controller).passthrough && queries.smokeCalls == 1,
+            "changing to a shorter-range weapon cannot reuse the earlier ranged hit");
+}
+
 void CancellationAndSettings() {
     NativeCancellation cancellation;
     const auto identity = Ready().identity;
@@ -858,6 +928,8 @@ int main() {
     AdsAndModeChanges();
     TargetValidation();
     InputQueryBudget();
+    AutomaticCooldownQueryBudget();
+    BattleRoyaleRangeBudget();
     CancellationAndSettings();
     std::cout << "Passed " << checks << " trigger behavior checks\n";
 }

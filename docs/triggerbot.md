@@ -13,7 +13,7 @@ so this change repairs NPC's existing path.
 - NPC base: `bd3fb7187311d2e2abfa7306aca425954f176771`
 - Purple reference: `fd895e5f1023712a331fcdf530371e1332e557cc`
 
-All 46 pinned code fingerprints and seven diagnostic probes match the supplied
+All 48 pinned code fingerprints and seven diagnostic probes match the supplied
 ELF when virtual addresses are mapped through its program headers. The checked
 trigger RVAs map to file offsets at `RVA - 0x4000` in this image.
 
@@ -25,7 +25,7 @@ also use the ARM64 indirect aggregate return convention. Preserve these bindings
 Eight method bodies in the disk image are encoded. Their disk fingerprints are
 checked by the offline verifier rather than compared with the loaded bodies.
 Runtime validation requires the pinned build ID, readable executable ranges for
-all 46 code locations, and exact prefixes for the 38 stable locations, including all five
+all 48 code locations, and exact prefixes for the 40 stable locations, including all five
 input hook entry points. The encoded methods must be readable and no longer
 match their known encoded disk prefixes before hooks can be installed. Unknown
 builds and changed stable entry points leave automatic input disabled. Live
@@ -169,6 +169,23 @@ Core burst enums are exercised by the state-machine tests; this does not enable
 the excluded native burst or specialized handlers. No FPS gain or device
 reaction time has been measured. Logs are
 `/workspace/license-hardening/logs/trigger-all-weapons-*.log`.
+
+## Battle Royale frame time
+
+The first native physics ray used the camera's entire visible distance even on
+a miss. An enemy candidate adds detail, world and smoke checks on the same input
+update. The range now follows the active weapon on the verified BR pawn path.
+For a valid native range, the ray stops at the greater of 500 world units and
+weapon range plus 32 units of camera allowance, within the camera's visible
+distance. An unavailable weapon range uses the camera distance. The BR pawn
+type is checked once per match and pawn lifetime, while range is sampled for
+each long BR query so a weapon or attachment change can take effect immediately.
+
+An automatic weapon with no held input waits for native readiness before
+tracing. It checks and presses on its first ready update. Held input still
+checks current geometry through cooldown so losing a target cancels it
+immediately. Host tests cover the range bounds, weapon changes and the skipped
+cooldown queries. A BR device capture is needed to measure the frame time gain.
 
 ## Validation
 

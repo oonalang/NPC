@@ -76,6 +76,9 @@ class Controller {
 public:
     static constexpr std::uint64_t shotAcknowledgementTimeoutMillis = 500;
     bool HasOwnedInput() const noexcept { return phase_ == Phase::Held; }
+    bool HasOwnedInputFor(const ContextIdentity& identity) const noexcept {
+        return hasContext_ && identity_ == identity && HasOwnedInput();
+    }
     bool HasPendingShot() const noexcept { return phase_ == Phase::AwaitShot; }
     bool IsRearming() const noexcept { return phase_ == Phase::Rearm || phase_ == Phase::RejectedRelease; }
     bool NeedsFreshTarget(const Frame& frame) const noexcept {
@@ -144,6 +147,7 @@ public:
 
         if (IsAutomatic(frame.fireMode)) {
             const bool wasHeld = IsOwned();
+            if (!wasHeld && !frame.shotReady) return {};
             phase_ = Phase::Held;
 
 

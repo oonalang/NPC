@@ -11,6 +11,7 @@
 
 #if defined(__aarch64__)
 #include "NativeQueries.h"
+#include "TriggerRange.h"
 #include "../IL2CppSDKGenerator/Dobby/dobby.h"
 #endif
 
@@ -65,6 +66,9 @@ struct LocalState {
     std::uint64_t epoch = 0;
     std::uint64_t generations[5]{1,1,1,1,1};
     std::uintptr_t previous[5]{};
+    std::uint64_t modeMatch = 0;
+    std::uint64_t modePawn = 0;
+    bool battleRoyale = false;
     Frame lastFrame{};
     bool hasFrame = false;
     NativeCancellation cancellation;
@@ -144,6 +148,15 @@ ContextIdentity Identity(std::uintptr_t match, std::uintptr_t pawn,
     }
     return {local.generations[0],local.generations[1],local.generations[2],
             local.generations[3],local.generations[4]};
+}
+
+bool IsBattleRoyale(const ContextIdentity& context, std::uintptr_t pawn) noexcept {
+    if (local.modeMatch != context.match || local.modePawn != context.pawn) {
+        local.battleRoyale = At<Getter>(0x8016060)(nullptr, nullptr) == pawn;
+        local.modeMatch = context.match;
+        local.modePawn = context.pawn;
+    }
+    return local.battleRoyale;
 }
 
 void Merge(void* param, const Intent& intent) noexcept {
@@ -324,6 +337,10 @@ void DecidePreparedInput(void* owner, void* param) {
     TargetResult target = TargetResult::InvalidRay;
     frame.targetValid = false;
     if (needTarget && rayReady) {
+        if (ray.maxDistance > MinimumBattleRoyaleTraceLimit && IsBattleRoyale(frame.identity, pawn)) {
+            const float weaponRange = At<FloatGetter>(0x5476A10)(weapon, nullptr);
+            ray.maxDistance = BattleRoyaleTraceDistance(ray.maxDistance, weaponRange);
+        }
         target = EvaluateTarget(queries,frame.identity,ray);
         frame.targetValid = target == TargetResult::Eligible;
     }
