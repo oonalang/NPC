@@ -60,8 +60,9 @@ dispatch, and requires that function to lie in the verified module's executable
 segments. This preserves subtype restrictions without rejecting every override.
 Burst modes remain unsupported. The ammo query is reused within each input
 decision to avoid a second native call and inconsistent samples. Readiness
-binding validation is separate from invoking the predicate: confirmation waits,
-cleanup, blocked input and incomplete required ADS do not call `CanFire`.
+binding validation is separate from invoking the predicate. Pending release
+shots and prepared follow-ups sample valid native readiness to detect cooldown
+recovery. Cleanup, blocked input and incomplete required ADS skip that call.
 
 ## Sniper input
 
@@ -76,24 +77,37 @@ inherits the base handler. The client permits these two known handlers without
 calling or replacing their preparation routines.
 
 A prepared release input follows the native release/up flags regardless of the
-weapon's ordinary single-shot flag. Release input requires completed ADS in either trigger
-setting. An eligible frame arms the press; a later freshly validated frame
-commits its release while the weapon can fire. The controller then waits for
-shot acknowledgement before another press. Acknowledgement can rearm on that
-same update if native readiness, full ADS and fresh geometry all permit it;
-it no longer reserves an extra idle update for acknowledgement alone. A verified decrease in
-the owning fire component's native clip count can acknowledge a shot whose
-callback was missed. If neither acknowledgement source changes, a named
-500 ms deadline clears the owned input neutrally and permits a new attempt
-only after a fresh target query and the original readiness checks. This
-deadline starts after submission; it adds no delay before initial acquisition. Loss of the target,
-smoke/world obstruction, incomplete ADS, disabled trigger or a blocked weapon
-cancels an armed press without generating a shooting release edge. One neutral
-cleanup frame precedes any new press. Physical user input always takes priority.
+weapon's ordinary single-shot flag. Release input requires completed ADS in
+either trigger setting. An eligible frame arms the press. A later freshly
+validated frame commits its release while the weapon can fire.
+
+An acknowledged shot can prepare the next non-firing press during native
+cooldown if full ADS, accepted input, ammo and fresh geometry permit it.
+The prepared press holds through cooldown with target queries deferred until
+readiness recovers. Its firing release then uses fresh body, world and smoke
+checks on the first native-ready update. The native fire-check gate must accept
+the preparation update.
+
+Shot acknowledgement comes from local dispatch callbacks or a verified clip
+decrease in the owning fire component. Pending release shots also observe
+sampled native readiness. An eligible blocked-to-ready cycle permits a freshly
+checked retry when both acknowledgement sources remain unchanged. A named
+500 ms deadline supplies neutral recovery if neither acknowledgement nor
+readiness recovery is observed. An unsampled false readiness value supplies
+no recovery evidence. Native rejection handling also checks current clip
+consumption before rejecting the pending release.
+
+At a firing release, loss of the target or smoke/world obstruction cancels the
+prepared input. Incomplete ADS, disabled trigger, manual takeover, invalid
+context and blocked weapon state also cancel preparation. Cancellation uses
+neutral cleanup before another press. Physical user input always takes priority.
 
 Press-to-fire weapons retain their native input semantics. A confirmed single
 press now releases without another target trace; its next press still needs
 fresh geometry and native readiness. Live firing still requires device validation.
+
+The current follow-up fix, branch history, regression results and device
+validation gaps are recorded in [the Triggerbot handoff](TRIGGERBOT_HANDOFF.md).
 
 ## Reaction and input-work revision
 
@@ -151,12 +165,13 @@ and server timing remain outside this controller's scheduling.
   ADS Only and release-fire weapons still sample required aim state. The partial
   ADS percentage getter runs only if the native fully-aimed flag is false.
 - Binding the native `CanFire` method still verifies its executable address and
-  retains its `MethodInfo`. The predicate is invoked when an input decision can
-  use it, rather than during confirmation-only or cleanup updates.
+  retains its `MethodInfo`. The predicate runs when the input decision or
+  pending release recovery needs readiness. Cleanup updates defer that call.
 - Confirmed press-fire cleanup skips body/world/smoke queries. A confirmed
-  release-fire shot can rearm immediately when ready, using a fresh target and
-  obstruction check. Native cooldown, manual input, context changes and rejected
-  releases still prevent new input; timeout/cancellation cleanup stays neutral.
+  release-fire shot can prepare a follow-up during an eligible cooldown update
+  after fresh target and obstruction checks. Native readiness gates its firing
+  release. Manual input, context changes and rejected releases retain their
+  cancellation and recovery paths.
 - A hidden dot performs no screen-width, screen-height or viewport projection
   calls. Camera origin, direction and clipping planes are sampled afresh;
   visible dot validation remains unchanged. The camera sampler has no heap
