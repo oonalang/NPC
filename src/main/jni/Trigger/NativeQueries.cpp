@@ -2,6 +2,7 @@
 #include "NativeProfile.h"
 #include "NativeRay.h"
 #include "TriggerGlass.h"
+#include "WorldDiagnostics.h"
 
 #include <algorithm>
 #include <cmath>
@@ -98,14 +99,15 @@ struct OwnedImpact {
 
 using DetailTrace = bool(*)(Object,Object,Object,Point3,Point3,float,int,Object*,Method);
 
-ContactKind VerifyWorldCharacter(Address base,Object actor,Object collider,const ViewRay& ray,float distance) noexcept {
+ContactKind VerifyWorldCharacter(Address base,Object actor,Object collider,const ViewRay& ray,float distance,int& group) noexcept {
     OwnedImpact impact{base,Bind<Object(*)(Object,Method)>(base,0x62588E4)(nullptr,nullptr)};
     if(!impact.object) return ContactKind::Unavailable;
     const bool detailed=Bind<DetailTrace>(base,0x66FE6B4)(nullptr,actor,collider,ray.origin,
         ray.direction,distance,0,&impact.object,nullptr);
     if(!impact.object) return ContactKind::Unavailable;
     const auto address=reinterpret_cast<Address>(impact.object);
-    const auto kind=VerifiedCharacterContact(detailed,Read<int>(address,0x70),Read<unsigned char>(address,0x8D)!=0);
+    group=Read<int>(address,0x70);
+    const auto kind=VerifiedCharacterContact(detailed,group,Read<unsigned char>(address,0x8D)!=0);
     if(kind!=ContactKind::Character) return kind;
     const float hitDistance=Read<float>(address,0x5C);
     if(!Read<Address>(address,0x18) || !Finite(Read<Point3>(address,0x28)) ||
@@ -114,10 +116,14 @@ ContactKind VerifyWorldCharacter(Address base,Object actor,Object collider,const
     return kind;
 }
 
-bool IsGlassMaterial(Address base, Object material) noexcept {
-    if (!material) return false;
+int PhysicalMaterialType(Address base,Object material) noexcept {
+    if(!material) return -1;
     using MaterialType = int(*)(Object, Object, Method);
-    return IsPassableGlass(Bind<MaterialType>(base, 0x66F1E00)(nullptr, material, nullptr));
+    return Bind<MaterialType>(base,0x66F1E00)(nullptr,material,nullptr);
+}
+
+bool IsGlassMaterial(Address base, Object material) noexcept {
+    return IsPassableGlass(PhysicalMaterialType(base,material));
 }
 
 bool TraceContacts(Address base,const ViewRay& ray,float distance,int traceFlag,
@@ -259,25 +265,63 @@ Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
     using SharedMaterial=Object(*)(Object,Method);
     const auto lookup=Bind<Object(*)(Object,Object,Method)>(base_,0x78AF19C);
     Object map=nullptr;
-    return ResolveWorldOcclusion(hit.distance,blocked,blockerDistance,
+    WorldDiagnostic diagnostic;
+    diagnostic.targetDistance=hit.distance;diagnostic.worldDistance=blocked?blockerDistance:-1.f;
+    diagnostic.reason=blocked?WorldProbeReason::InvalidDistance:WorldProbeReason::Clear;
+    const RayContacts* sampled=nullptr;
+    std::size_t classification=0;
+    const auto result=ResolveWorldOcclusion(hit.distance,blocked,blockerDistance,
         [&](RayContacts& contacts,std::size_t& size) noexcept {
+            diagnostic.reason=WorldProbeReason::ContactsUnavailable;
             if(!tracedTarget_ || !tracedCollider_) return false;
             int count=0;
-            if(!TraceContacts(base_,ray,hit.distance,WorldTraceFlag,contacts,count)) return false;
+            const bool complete=TraceContacts(base_,ray,hit.distance,WorldTraceFlag,contacts,count);
+            if(count>0) diagnostic.contacts=static_cast<std::uint32_t>(count);
+            if(!complete) {
+                if(count>static_cast<int>(MaxGlassContacts)) diagnostic.reason=WorldProbeReason::ContactLimit;
+                return false;
+            }
             map=Bind<Object(*)(Object,Method)>(base_,0x8011E2C)(nullptr,nullptr);
             size=static_cast<std::size_t>(count);
+            for(std::size_t index=0;index<size;++index) {
+                const auto distance=contacts[index].distance;
+                if(std::isfinite(distance) && distance>=0.f &&
+                    (diagnostic.contactDistance<0.f || distance<diagnostic.contactDistance))
+                    diagnostic.contactDistance=distance;
+            }
+            sampled=&contacts;
+            diagnostic.reason=map?WorldProbeReason::ContactMismatch:WorldProbeReason::MapUnavailable;
             return map!=nullptr;
         },
         [&](Address address) noexcept {
+            if(sampled && classification<diagnostic.contacts) diagnostic.contactDistance=(*sampled)[classification++].distance;
+            diagnostic.owner=WorldProbeOwner::Unknown;diagnostic.material=diagnostic.group=-1;
             const auto collider=reinterpret_cast<Object>(address);
-            if(!Bind<IsLiveObject>(base_,0x52B7CE4)(nullptr,collider,nullptr,nullptr)) return ContactKind::Unavailable;
-            if(IsCharacterWorldContact(address,tracedCollider_,0,pawn_,tracedTarget_)) return ContactKind::Character;
+            if(!Bind<IsLiveObject>(base_,0x52B7CE4)(nullptr,collider,nullptr,nullptr)) {
+                diagnostic.reason=WorldProbeReason::ColliderUnavailable;return ContactKind::Unavailable;
+            }
+            if(IsCharacterWorldContact(address,tracedCollider_,0,pawn_,tracedTarget_)) {
+                diagnostic.owner=WorldProbeOwner::Body;diagnostic.reason=WorldProbeReason::Character;
+                return ContactKind::Character;
+            }
             const auto actor=reinterpret_cast<Address>(lookup(map,collider,nullptr));
-            if(IsCharacterWorldContact(address,tracedCollider_,actor,pawn_,tracedTarget_))
-                return VerifyWorldCharacter(base_,reinterpret_cast<Object>(actor),collider,ray,hit.distance);
-            return IsGlassMaterial(base_,Bind<SharedMaterial>(base_,0x52D98B8)(collider,nullptr)) ?
-                ContactKind::Glass : ContactKind::Solid;
+            diagnostic.owner=actor==pawn_?WorldProbeOwner::Self:actor==tracedTarget_?WorldProbeOwner::Target:
+                actor?WorldProbeOwner::Other:WorldProbeOwner::World;
+            if(IsCharacterWorldContact(address,tracedCollider_,actor,pawn_,tracedTarget_)) {
+                const auto kind=VerifyWorldCharacter(base_,reinterpret_cast<Object>(actor),collider,ray,hit.distance,diagnostic.group);
+                diagnostic.reason=kind==ContactKind::Character?WorldProbeReason::Character:
+                    kind==ContactKind::Solid?WorldProbeReason::Shield:WorldProbeReason::CharacterUnavailable;
+                return kind;
+            }
+            diagnostic.material=PhysicalMaterialType(base_,Bind<SharedMaterial>(base_,0x52D98B8)(collider,nullptr));
+            const bool glass=IsPassableGlass(diagnostic.material);
+            diagnostic.reason=glass?WorldProbeReason::Glass:WorldProbeReason::Solid;
+            return glass?ContactKind::Glass:ContactKind::Solid;
         });
+    diagnostic.result=result;
+    if(result==Occlusion::Clear) diagnostic.reason=blocked?WorldProbeReason::Endpoint:WorldProbeReason::Clear;
+    PublishWorldDiagnostic(diagnostic);
+    return result;
 }
 
 Occlusion NativeTargetQueries::CheckSmoke(const ContextIdentity&,

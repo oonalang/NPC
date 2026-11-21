@@ -6,6 +6,7 @@
 #include "StartupView.h"
 #include "../System/UI/MemoryTab.h"
 #include "../System/UI/Keyboard.h"
+#include "../System/UI/TriggerDiagnostics.h"
 #include "../System/Hooks/FrameRate.h"
 #include "../Trigger/TriggerRuntime.h"
 #include "../Trigger/TriggerDotStyle.h"
@@ -397,6 +398,7 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                     actions.retryTrigger=changed&&settings.enabled;
                     ImGui::TextWrapped("%s",PhantomTrigger::DecisionStatusText(PhantomTrigger::GetDecisionStatus()));
                     if (lite_widgets::Button("Retry setup",{0,0})) actions.retryTrigger=true;
+                    if(settings.enabled) RenderTriggerDiagnostics(PhantomTrigger::GetDecisionStatus());
                 });
                 Panel("crosshair", 300, [&] {
                     auto settings=PhantomTrigger::GetSettings();

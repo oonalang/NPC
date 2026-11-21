@@ -34,7 +34,7 @@ Login uses a compact centered matte card, a centered ETHNIR title and spaced LIT
 - Enemy projection/drawing is skipped when all supported visual options are off. Speed/gravity maintenance and existing license revocation restoration still run. Aim/trigger/native feature callbacks are unchanged.
 - The periodic automatic screenshot/upload loop is removed from Lite's render loop. Existing explicit feedback service code is retained.
 
-Measured ARM64 release library size with the same NDK: **3,932,264 bytes** versus main's **7,488,904 bytes**, about **47.5% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
+Measured ARM64 release library size with the same NDK: **3,935,352 bytes** versus main's **7,488,904 bytes**, about **47.5% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
 
 ## Files
 
@@ -103,6 +103,10 @@ The shared trigger/pickup/hitbox/license/Java results above belong to the initia
 The handle/drag/routing follow-up uses `ethnir-lite-v4-*` logs and reruns the ARM64 build, native hardening, UI sanitizer and GLES suites. New checks cover six viewport sizes, valid upward restore, rejected taps/wrong-direction/outside/canceled/resized gestures, release capture, no accidental toggle after opening, title-only dragging, persistent/clamped placement, and outside passthrough in all three UI states. Routing tests cover latched ownership across panel crossings, repeated releases, recovery for the next finger, concurrent snapshot publication, and actual Config bindings. These are host/integration checks, not installed-phone results.
 
 The subsequent false-obstruction fix is documented in [Triggerbot integration](triggerbot.md#false-world-obstruction-follow-up). It adds character-aware verification to the world-contact fallback and distinguishes unavailable queries from confirmed cover. It reruns Triggerbot sanitizer/profile, supplied-ELF, ARM64/hardening and Hitbox checks under the `ethnir-trigger-cover-*` prefix. It does not establish the exact collider in the supplied recording or a device FPS result.
+
+The user confirmed rebuilding and injecting the native library, then supplied screenshots showing the rejection persists. The next diagnostic revision, `obstruction-3`, adds a bounded last-world-ray snapshot and visible sample age to the Lite Triggerbot panel. It reports contact classification, material, owner and distances without adding a raycast or changing firing policy. See [device diagnostics](triggerbot.md#device-obstruction-diagnostics). This is an investigation build; the phone-side cause and correction remain unverified.
+
+Diagnostic validation passes the trigger sanitizer/profile, pinned-ELF, Lite UI sanitizer and GLES, ARM64/hardening and production-root release-verifier checks. The snapshot is 48 bytes and its concurrency test publishes 20,000 coherent updates. Rendered fresh/stale/narrow diagnostic fixtures were inspected, including the wrapped revision tag and access to the last line after scrolling. Final binary SHA-256 is `e48d8d3955c888f328ff4b73749a9a501d5ba491309f8b500a20a06985b303de`. Logs use `ethnir-trigger-diagnostics-*`. No new native binding or source comment was added.
 
 Capture the actual login/loading/check/reveal sequence using `LITE_GPU_TEST=1 LITE_CAPTURE_STARTUP=1 sh tests/run-lite-ui-tests.sh /tmp/lite-startup`. This emits 180 native frames at 30 FPS. Authentication/setup times and session data are fixtures; the presentation controller and all UI drawing are production code. The striped menu backdrop is a GPU blur test pattern; runtime blur uses the game image.
 
