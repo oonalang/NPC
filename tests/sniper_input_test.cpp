@@ -43,6 +43,7 @@ Frame Ready() {
     f.identity = {1,2,3,4,5};
     f.updateId = 1;
     f.contextValid = f.bindingsReady = f.ammoAvailable = f.shotReady = true;
+    f.readinessSampled = true;
     f.aiming = f.fullyAimed = f.targetValid = true;
     f.fireMode = FireMode::SingleRelease;
     return f;
@@ -137,7 +138,7 @@ int main() {
     controller.Step(enabled,frame);
     ++frame.updateId;
     Require(controller.Step(enabled,frame).commitRelease, "release not submitted for rejection test");
-    controller.RejectPendingShot();
+    Require(controller.RejectPendingShot(frame), "unconfirmed native rejection was not recorded");
     ++frame.updateId;
     intent = controller.Step(enabled,frame);
     Require(intent.passthrough && !intent.up && !intent.down && !controller.HasPendingShot(),
@@ -145,6 +146,67 @@ int main() {
     ++frame.updateId;
     Require(controller.Step(enabled,frame).down,
             "native rejection left the sniper permanently awaiting an ack");
+
+    for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
+        const Settings settings{true, mode, false};
+        controller.Reset();
+        cancellation.Reset();
+        frame = Ready();
+        frame.clipAmmo = 5;
+        native.Prepare();
+        native.Merge(controller.Step(settings, frame));
+        ++frame.updateId;
+        native.Prepare();
+        native.Merge(controller.Step(settings, frame));
+        Require(native.NativeReleaseShot(), "follow-up test failed to submit its first native release");
+        --frame.clipAmmo;
+        Require(!controller.RejectPendingShot(frame) && controller.HasPendingShot(),
+                "cleared native result flags cannot reject a shot with verified clip consumption");
+
+        ++frame.updateId;
+        frame.shotReady = false;
+        native.Prepare();
+        intent = controller.Step(settings, frame);
+        decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+        native.Merge(decision.input);
+        Require(native.param[0x18] && native.param[0x1C] && native.result[0x15] &&
+                !native.result[0x16] && !native.NativeReleaseShot(),
+                "cooldown preparation merges one down edge without a firing release");
+
+        ++frame.updateId;
+        native.Prepare();
+        intent = controller.Step(settings, frame);
+        decision = cancellation.Resolve(frame.identity, false, true, intent, true);
+        native.Merge(decision.input);
+        Require(native.param[0x1C] && !native.result[0x15] && !native.result[0x16] &&
+                !native.NativeReleaseShot(),
+                "prepared cooldown holds without repeating button edges");
+
+        ++frame.updateId;
+        frame.shotReady = true;
+        native.Prepare();
+        native.Merge(controller.Step(settings, frame));
+        Require(native.NativeReleaseShot() && !native.result[0x15] && native.result[0x16],
+                "first native-ready update consumes exactly one follow-up release");
+    }
+
+    for (const bool callback : {false, true}) {
+        controller.Reset();
+        frame = Ready();
+        frame.clipAmmo = 5;
+        controller.Step(enabled, frame);
+        ++frame.updateId;
+        controller.Step(enabled, frame);
+        auto observation = frame;
+        ++observation.identity.component;
+        Require(!controller.RejectPendingShot(observation) && controller.HasPendingShot(),
+                "rejection from another component cannot change pending ownership");
+        observation = frame;
+        if (callback) ++observation.shotSerial;
+        else --observation.clipAmmo;
+        Require(!controller.RejectPendingShot(observation) && controller.HasPendingShot(),
+                "native rejection cannot override real shot evidence");
+    }
 
     for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
         const Settings settings{true, mode, false};

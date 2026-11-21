@@ -65,7 +65,8 @@ bool ValidHit(const ViewRay& ray, const BodyHit& hit) noexcept {
 
 bool NeedsWeaponState(const Settings& settings, const Frame& frame,
                       const Controller& controller) noexcept {
-    return controller.NeedsFreshTarget(frame) && settings.enabled &&
+    const bool needed = controller.NeedsFreshTarget(frame) || controller.NeedsReadinessObservation(frame);
+    return needed && settings.enabled &&
         (settings.mode == Mode::Both || settings.mode == Mode::ADSOnly) &&
         frame.contextValid && frame.bindingsReady && !frame.manualActive &&
         frame.ammoAvailable && !frame.hardBlocked && frame.fireMode != FireMode::Unsupported;
@@ -151,7 +152,8 @@ DecisionStatus ExplainDecision(const Settings& settings, const Frame& frame,
     if (frame.fireMode == FireMode::Unsupported) return DecisionStatus::Unsupported;
     if (((settings.mode == Mode::ADSOnly || frame.fireMode == FireMode::SingleRelease)) &&
         (!frame.aiming || !frame.fullyAimed)) return DecisionStatus::Aiming;
-    if (!frame.shotReady && !controller.HasOwnedInput()) return DecisionStatus::Cooldown;
+    if (!frame.shotReady &&
+        (frame.fireMode == FireMode::SingleRelease || !controller.HasOwnedInput())) return DecisionStatus::Cooldown;
     if (target == TargetResult::WorldBlocked) return DecisionStatus::WorldBlocked;
     if (target == TargetResult::SmokeBlocked) return DecisionStatus::SmokeBlocked;
     if (target == TargetResult::QueryUnavailable) return DecisionStatus::QueryUnavailable;
@@ -212,8 +214,10 @@ bool NeedsTargetQuery(const Settings& settings, const Frame& frame,
                            frame.fireMode == FireMode::Single ||
                            frame.fireMode == FireMode::BurstSingle ||
                            frame.fireMode == FireMode::SingleRelease;
-    return supported && NeedsWeaponReadiness(settings,frame,controller) &&
-        (frame.shotReady || controller.HasOwnedInputFor(frame.identity));
+    return supported && controller.NeedsFreshTarget(frame) &&
+        NeedsWeaponReadiness(settings,frame,controller) &&
+        (frame.shotReady || controller.HasOwnedInputFor(frame.identity) ||
+         controller.CanPrepareFollowup(frame));
 }
 
 Intent EvaluateInput(const Settings& settings, const Frame& input,

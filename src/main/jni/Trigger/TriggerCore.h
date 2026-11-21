@@ -55,6 +55,7 @@ struct Frame {
 
     bool targetValid = false;
     bool shotReady = false;
+    bool readinessSampled = false;
     std::uint64_t shotSerial = 0;
     FireMode fireMode = FireMode::Unsupported;
     std::uint64_t nowMillis = 0;
@@ -75,21 +76,35 @@ struct Intent {
 class Controller {
 public:
     static constexpr std::uint64_t shotAcknowledgementTimeoutMillis = 500;
-    bool HasOwnedInput() const noexcept { return phase_ == Phase::Held; }
+    bool HasOwnedInput() const noexcept { return phase_ == Phase::Held || phase_ == Phase::Primed; }
     bool HasOwnedInputFor(const ContextIdentity& identity) const noexcept {
         return hasContext_ && identity_ == identity && HasOwnedInput();
     }
     bool HasPendingShot() const noexcept { return phase_ == Phase::AwaitShot; }
     bool IsRearming() const noexcept { return phase_ == Phase::Rearm || phase_ == Phase::RejectedRelease; }
+    bool NeedsReadinessObservation(const Frame& frame) const noexcept {
+        return hasContext_ && identity_ == frame.identity &&
+            (!hasUpdate_ || frame.updateId > lastUpdate_) &&
+            fireMode_ == FireMode::SingleRelease && frame.fireMode == FireMode::SingleRelease &&
+            (phase_ == Phase::AwaitShot || phase_ == Phase::Primed);
+    }
+    bool CanPrepareFollowup(const Frame& frame) const noexcept {
+        return phase_ == Phase::AwaitShot && NeedsReadinessObservation(frame) &&
+            frame.readinessSampled && ShotObserved(frame);
+    }
     bool NeedsFreshTarget(const Frame& frame) const noexcept {
         if (!hasContext_ || identity_ != frame.identity) return true;
         if (hasUpdate_ && frame.updateId <= lastUpdate_) return false;
         if (phase_ == Phase::RejectedRelease) return false;
-        if (phase_ == Phase::AwaitShot) return ShotObserved(frame);
+        if (phase_ == Phase::AwaitShot) return ShotObserved(frame) || ReadinessRecovered(frame);
+        if (phase_ == Phase::Primed) return frame.readinessSampled && frame.shotReady;
         return !NeedsPressCleanup(frame);
     }
-    void RejectPendingShot() noexcept {
-        if (phase_ == Phase::AwaitShot) phase_ = Phase::RejectedRelease;
+    bool RejectPendingShot(const Frame& observation) noexcept {
+        if (!hasContext_ || identity_ != observation.identity ||
+            phase_ != Phase::AwaitShot || ShotObserved(observation)) return false;
+        phase_ = Phase::RejectedRelease;
+        return true;
     }
     void Reset() noexcept {
         *this = Controller{};
@@ -108,6 +123,7 @@ public:
             return {};
         }
 
+        const bool prepareFollowup = CanPrepareFollowup(frame);
         hasUpdate_ = true;
         lastUpdate_ = frame.updateId;
 
@@ -128,12 +144,23 @@ public:
         }
 
         if (phase_ == Phase::AwaitShot) {
-            if (ShotObserved(frame)) {
+            const bool canObserve = !modeChanged && StateEligible(settings, frame);
+            if (!canObserve) observedNativeCooldown_ = false;
+            if (ShotObserved(frame) || (canObserve && ReadinessRecovered(frame))) {
                 phase_ = Phase::Rearm;
             } else if (AcknowledgementExpired(frame)) {
                 phase_ = Phase::Rearm;
                 return {false, false, false, false};
-            } else return {};
+            } else {
+                if (canObserve && frame.readinessSampled && !frame.shotReady)
+                    observedNativeCooldown_ = true;
+                return {};
+            }
+        }
+
+        if (phase_ == Phase::Primed && (!frame.readinessSampled || !frame.shotReady)) {
+            if (modeChanged || !StateEligible(settings, frame)) return ReleaseOwned();
+            return {true, false, false, false};
         }
 
         if (NeedsPressCleanup(frame)) {
@@ -154,7 +181,7 @@ public:
             return {true, !wasHeld, false, false};
         }
 
-        if (frame.fireMode == FireMode::SingleRelease && phase_ == Phase::Held) {
+        if (frame.fireMode == FireMode::SingleRelease && IsOwned()) {
             if (!frame.shotReady)
                 return {true, false, false, false};
             RememberSubmission(frame);
@@ -171,17 +198,22 @@ public:
         if (phase_ == Phase::Rearm) {
             phase_ = Phase::Idle;
         }
-        if (!frame.shotReady) {
+        if (!frame.shotReady && !prepareFollowup) {
             return {};
         }
 
         RememberSubmission(frame);
-        phase_ = Phase::Held;
+        phase_ = frame.shotReady ? Phase::Held : Phase::Primed;
         return {true, true, false, false};
     }
 
 private:
-    enum class Phase : std::uint8_t { Idle, Held, AwaitShot, RejectedRelease, Rearm };
+    enum class Phase : std::uint8_t { Idle, Held, Primed, AwaitShot, RejectedRelease, Rearm };
+
+    bool ReadinessRecovered(const Frame& frame) const noexcept {
+        return observedNativeCooldown_ && frame.readinessSampled && frame.shotReady &&
+            fireMode_ == FireMode::SingleRelease && frame.fireMode == FireMode::SingleRelease;
+    }
 
     bool NeedsPressCleanup(const Frame& frame) const noexcept {
         return phase_ == Phase::Held &&
@@ -201,6 +233,7 @@ private:
         submittedShotSerial_ = frame.shotSerial;
         submittedMillis_ = frame.nowMillis;
         submittedClipAmmo_ = frame.clipAmmo;
+        observedNativeCooldown_ = false;
     }
 
     static bool IsAutomatic(FireMode mode) noexcept {
@@ -212,7 +245,7 @@ private:
                mode == FireMode::BurstSingle || mode == FireMode::SingleRelease;
     }
 
-    static bool Eligible(const Settings& settings, const Frame& frame) noexcept {
+    static bool StateEligible(const Settings& settings, const Frame& frame) noexcept {
         const bool validMode = settings.mode == Mode::Both ||
                                settings.mode == Mode::ADSOnly;
         const bool adsReady = (settings.mode == Mode::Both ||
@@ -221,11 +254,15 @@ private:
                                (frame.aiming && frame.fullyAimed));
         return settings.enabled && validMode && frame.contextValid &&
                frame.bindingsReady && frame.ammoAvailable && !frame.hardBlocked &&
-               frame.targetValid && IsSupported(frame.fireMode) && adsReady;
+               IsSupported(frame.fireMode) && adsReady;
+    }
+
+    static bool Eligible(const Settings& settings, const Frame& frame) noexcept {
+        return frame.targetValid && StateEligible(settings, frame);
     }
 
     bool IsOwned() const noexcept {
-        return phase_ == Phase::Held;
+        return HasOwnedInput();
     }
 
     Intent ReleaseOwned() noexcept {
@@ -244,6 +281,7 @@ private:
     Phase phase_ = Phase::Idle;
     bool hasContext_ = false;
     bool hasUpdate_ = false;
+    bool observedNativeCooldown_ = false;
 };
 
 }

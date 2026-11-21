@@ -32,6 +32,7 @@ Frame Ready(FireMode mode = FireMode::Automatic) {
     frame.ammoAvailable = true;
     frame.targetValid = true;
     frame.shotReady = true;
+    frame.readinessSampled = true;
     frame.fireMode = mode;
     return frame;
 }
@@ -232,7 +233,7 @@ void AcknowledgedReleaseGuards() {
                 case 1: queries.world=Occlusion::Blocked; break;
                 case 2: queries.smoke=Occlusion::Blocked; break;
                 case 3: frame.fullyAimed=false; break;
-                case 4: frame.shotReady=false; break;
+                case 4: frame.shotReady=false; frame.readinessSampled=false; break;
                 case 5: frame.manualActive=true; break;
                 case 6: settings.enabled=false; break;
                 case 7: frame.contextValid=false; break;
@@ -265,8 +266,9 @@ void WeaponStateWorkBudget() {
             "Both-mode release-fire retains its required native aim and readiness checks");
     controller.Step(enabled,frame);++frame.updateId;
     controller.Step(enabled,frame);++frame.updateId;
-    Require(!NeedsAimState(enabled,frame,controller)&&!NeedsWeaponReadiness(enabled,frame,controller),
-            "pending shot confirmation samples neither aim nor native readiness");
+    Require(NeedsAimState(enabled,frame,controller)&&NeedsWeaponReadiness(enabled,frame,controller)&&
+            !NeedsTargetQuery(enabled,frame,controller),
+            "pending release observes aim and readiness without repeating target physics");
     ++frame.shotSerial;
     Require(NeedsAimState(enabled,frame,controller)&&NeedsWeaponReadiness(enabled,frame,controller),
             "new confirmation permits fresh native state checks without a timer delay");
@@ -383,14 +385,17 @@ void AmmoAcknowledgementAndQueryBudget() {
     const auto calls=queries.bodyCalls;
     ++frame.updateId;++frame.nowMillis;frame.clipAmmo=5;frame.shotReady=false;
     const auto acknowledged=EvaluateInput(enabled,frame,centerRay,queries,controller);
-    Require(acknowledged.passthrough&&!controller.HasPendingShot()&&queries.bodyCalls==calls,
-            "native clip consumption confirms a missing callback without a target scan or firing edge");
+    Require(acknowledged.down&&acknowledged.held&&!acknowledged.up&&!acknowledged.commitRelease&&
+            !controller.HasPendingShot()&&queries.bodyCalls==calls+1,
+            "native clip consumption permits a freshly checked non-firing follow-up press during cooldown");
     ++frame.updateId;++frame.nowMillis;frame.shotReady=false;
-    Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough&&queries.bodyCalls==calls,
-            "ammo acknowledgement still respects the weapon cooldown");
+    const auto cooling=EvaluateInput(enabled,frame,centerRay,queries,controller);
+    Require(cooling.held&&!cooling.up&&!cooling.down&&queries.bodyCalls==calls+1,
+            "prepared follow-up respects cooldown without repeated geometry work");
     ++frame.updateId;++frame.nowMillis;frame.shotReady=true;queries.body.alive=false;
-    Require(EvaluateInput(enabled,frame,centerRay,queries,controller).passthrough&&queries.bodyCalls==calls+1,
-            "rearming never reuses an earlier enemy result");
+    const auto canceled=EvaluateInput(enabled,frame,centerRay,queries,controller);
+    Require(canceled.up&&!canceled.commitRelease&&queries.bodyCalls==calls+2,
+            "prepared follow-up rechecks the enemy before any firing release");
     controller.Reset();queries=Queries{};frame=ReleaseReady();frame.clipAmmo=5;
     EvaluateInput(enabled,frame,centerRay,queries,controller);++frame.updateId;
     EvaluateInput(enabled,frame,centerRay,queries,controller);++frame.updateId;frame.clipAmmo=6;
@@ -437,6 +442,182 @@ void SniperReactionCadence() {
     frame.nowMillis=1500;frame.shotSerial=1;
     Require(EvaluateInput(enabled,frame,centerRay,queries,controller).down,
             "real acknowledgement permits ready rearming at the timeout boundary");
+}
+
+void ScopedFollowupCadence() {
+    for (const auto rate : {30u, 60u, 120u}) {
+        for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
+            for (const bool callback : {false, true}) {
+                for (const auto cooldownMillis : {120u, 700u}) {
+                    const Settings settings{true, mode, false};
+                    Controller controller;
+                    Queries queries;
+                    auto frame = ReleaseReady();
+                    frame.clipAmmo = 5;
+                    frame.nowMillis = 10000;
+                    EvaluateInput(settings, frame, centerRay, queries, controller);
+                    ++frame.updateId;
+                    frame.nowMillis += 1000 / rate;
+                    Require(EvaluateInput(settings, frame, centerRay, queries, controller).commitRelease,
+                            "scoped cadence submits its first shot");
+
+                    for (unsigned shot = 0; shot < 2; ++shot) {
+                        const auto submittedAt = frame.nowMillis;
+                        const auto before = queries.bodyCalls;
+                        ++frame.updateId;
+                        frame.nowMillis += 1000 / rate;
+                        frame.shotReady = false;
+                        if (callback) ++frame.shotSerial;
+                        else --frame.clipAmmo;
+                        auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+                        Require(intent.down && intent.held && !intent.up && !intent.commitRelease &&
+                                queries.bodyCalls == before + 1,
+                                "confirmed scoped follow-up prepares during native cooldown after fresh geometry");
+                        Require(!EvaluateInput(settings, frame, centerRay, queries, controller).down &&
+                                queries.bodyCalls == before + 1,
+                                "cooldown preparation cannot repeat in one input update");
+
+                        unsigned tick = 2;
+                        while (tick * 1000 / rate < cooldownMillis) {
+                            ++frame.updateId;
+                            frame.nowMillis = submittedAt + tick * 1000 / rate;
+                            Require(NeedsAimState(settings, frame, controller) &&
+                                    NeedsWeaponReadiness(settings, frame, controller) &&
+                                    !NeedsTargetQuery(settings, frame, controller),
+                                    "prepared cooldown samples weapon state without repeating target physics");
+                            intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+                            Require(intent.held && !intent.down && !intent.up && !intent.commitRelease &&
+                                    queries.bodyCalls == before + 1,
+                                    "cooldown never emits a second firing edge or repeated target scans");
+                            ++tick;
+                        }
+                        ++frame.updateId;
+                        frame.nowMillis = submittedAt + tick * 1000 / rate;
+                        frame.shotReady = true;
+                        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+                        Require(intent.up && intent.commitRelease && !intent.down &&
+                                queries.bodyCalls == before + 2,
+                                "follow-up releases on the first native-ready update with fresh geometry");
+                    }
+                }
+            }
+        }
+    }
+}
+
+void PendingReleaseReadinessRecovery() {
+    for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
+        for (const auto clip : {-1, 5}) {
+            const Settings settings{true, mode, false};
+            Controller controller;
+            Queries queries;
+            auto frame = ReleaseReady();
+            frame.clipAmmo = clip;
+            frame.nowMillis = 10000;
+            EvaluateInput(settings, frame, centerRay, queries, controller);
+            ++frame.updateId;
+            frame.nowMillis += 10;
+            EvaluateInput(settings, frame, centerRay, queries, controller);
+            const auto before = queries.bodyCalls;
+            for (unsigned tick = 1; tick < 12; ++tick) {
+                ++frame.updateId;
+                frame.nowMillis += 10;
+                frame.shotReady = false;
+                Require(NeedsAimState(settings, frame, controller) &&
+                        NeedsWeaponReadiness(settings, frame, controller),
+                        "pending release observes valid native cooldown without waiting for its deadline");
+                const auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+                Require(intent.passthrough && controller.HasPendingShot() && queries.bodyCalls == before,
+                        "pending cooldown observation adds no target traces or firing edges");
+            }
+            ++frame.updateId;
+            frame.nowMillis += 10;
+            frame.shotReady = true;
+            const auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+            Require(intent.down && !intent.up && !intent.commitRelease &&
+                    !controller.HasPendingShot() && queries.bodyCalls == before + 1 &&
+                    frame.nowMillis < 10010 + Controller::shotAcknowledgementTimeoutMillis,
+                    "observed native recovery rearms a missing-confirmation release before 500 ms");
+            ++frame.updateId;
+            Require(EvaluateInput(settings, frame, centerRay, queries, controller).commitRelease,
+                    "readiness recovery preserves separate press and release updates");
+        }
+    }
+
+    for (int failure = 0; failure < 7; ++failure) {
+        Controller controller;
+        Queries queries;
+        auto frame = ReleaseReady();
+        auto settings = enabled;
+        EvaluateInput(settings, frame, centerRay, queries, controller);
+        ++frame.updateId;
+        EvaluateInput(settings, frame, centerRay, queries, controller);
+        const auto before = queries.bodyCalls;
+        ++frame.updateId;
+        frame.shotReady = false;
+        switch (failure) {
+            case 0: frame.readinessSampled = false; break;
+            case 1: settings.enabled = false; break;
+            case 2: frame.fullyAimed = false; break;
+            case 3: frame.hardBlocked = true; break;
+            case 4: frame.ammoAvailable = false; break;
+            case 5: frame.contextValid = false; break;
+            case 6: frame.fireMode = FireMode::Single; break;
+        }
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).passthrough,
+                "unavailable readiness does not submit another input");
+        frame = ReleaseReady();
+        frame.updateId = 4;
+        const auto intent = EvaluateInput(enabled, frame, centerRay, queries, controller);
+        Require(intent.passthrough && controller.HasPendingShot() && queries.bodyCalls == before,
+                "unsampled or ineligible false readiness cannot acknowledge a shot");
+    }
+}
+
+void ScopedFollowupCancellation() {
+    for (int failure = 0; failure < 13; ++failure) {
+        Controller controller;
+        NativeCancellation cancellation;
+        Queries queries;
+        auto frame = ReleaseReady();
+        auto settings = enabled;
+        frame.clipAmmo = 5;
+        auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        cancellation.Resolve(frame.identity, false, true, intent, true);
+        ++frame.updateId;
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        cancellation.Resolve(frame.identity, false, true, intent, true);
+        ++frame.updateId;
+        --frame.clipAmmo;
+        frame.shotReady = false;
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        cancellation.Resolve(frame.identity, false, true, intent, true);
+        Require(intent.down && controller.HasOwnedInput(), "cancellation test prepares a scoped follow-up");
+        ++frame.updateId;
+        switch (failure) {
+            case 0: settings.enabled = false; break;
+            case 1: frame.manualActive = true; break;
+            case 2: frame.fullyAimed = false; break;
+            case 3: frame.hardBlocked = true; break;
+            case 4: frame.ammoAvailable = false; break;
+            case 5: frame.contextValid = false; break;
+            case 6: frame.bindingsReady = false; break;
+            case 7: settings.mode = Mode::ADSOnly; break;
+            case 8: ++frame.identity.weapon; break;
+            case 9: queries.body.alive = false; frame.shotReady = true; break;
+            case 10: queries.world = Occlusion::Blocked; frame.shotReady = true; break;
+            case 11: queries.smoke = Occlusion::Blocked; frame.shotReady = true; break;
+            case 12: queries.available = false; frame.shotReady = true; break;
+        }
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        const auto decision = cancellation.Resolve(frame.identity, frame.manualActive, true, intent, true);
+        Require(!decision.input.down && !decision.input.up && !decision.input.commitRelease &&
+                !controller.HasOwnedInput(),
+                "invalidated follow-up cancels without leaking a firing release");
+        if (failure == 1)
+            Require(decision.input.passthrough && !decision.stopResult,
+                    "manual takeover of a prepared follow-up retains physical input");
+    }
 }
 
 void DecisionFeedback() {
@@ -988,6 +1169,9 @@ int main() {
     MissingAcknowledgementRecovery();
     AmmoAcknowledgementAndQueryBudget();
     SniperReactionCadence();
+    ScopedFollowupCadence();
+    PendingReleaseReadinessRecovery();
+    ScopedFollowupCancellation();
     DecisionFeedback();
     ReleaseShotLifetimes();
     ReleaseShotCancellation();

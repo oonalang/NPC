@@ -320,8 +320,10 @@ void DecidePreparedInput(void* owner, void* param) {
             }
         }
     }
-    if (NeedsWeaponReadiness(settings,frame,local.controller))
+    if (NeedsWeaponReadiness(settings,frame,local.controller)) {
         frame.shotReady = readiness.Sample(weapon);
+        frame.readinessSampled = true;
+    }
     const bool allowReleaseSequence = frame.fireMode == FireMode::SingleRelease;
     if (installation.load(std::memory_order_acquire) != 2) {
         local.controller.Reset();
@@ -397,8 +399,12 @@ void Update(void* controller, float deltaTime, Metadata metadata) {
         committedShots.load(std::memory_order_acquire) == local.lastFrame.shotSerial) {
         const auto result = Field<std::uintptr_t>(local.scope,0x40);
         if (result && !Field<bool>(result,0x13)) {
-            local.controller.RejectPendingShot();
-            local.stopAfterUpdate = true;
+            auto observation = local.lastFrame;
+            observation.shotSerial = committedShots.load(std::memory_order_acquire);
+            const auto component = At<ObjectGetter>(0x5472E48)(local.previous[2], nullptr);
+            observation.clipAmmo = component && component == local.previous[3]
+                ? Field<int>(component, 0xA8) : -1;
+            if (local.controller.RejectPendingShot(observation)) local.stopAfterUpdate = true;
         }
     }
 
