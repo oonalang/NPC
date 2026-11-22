@@ -59,6 +59,7 @@ inline void MovementTuning() {
     custom::SliderFloat("High Jump",&jumpHeightMultiplier,.5f,5.f,"%.2fx");
 }
 inline void WeaponControl() {
+    custom::Checkbox("Hitbox",&Config.ExtraMenu.Hit);
     custom::Checkbox("No Recoil",&Config.ExtraMenu.Recoil);
     custom::Checkbox("No Spread",&Config.ExtraMenu.Spread);
     custom::Checkbox("No Shake",&Config.ExtraMenu.Shake);

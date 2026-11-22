@@ -56,6 +56,7 @@ void LoadConfig() {
         else if (key == "ExtraMenu.Kinetic") Config.ExtraMenu.Kinetic = (valueStr == "1");
         else if (key == "ExtraMenu.Recoil") Config.ExtraMenu.Recoil = (valueStr == "1");
         else if (key == "ExtraMenu.Spread") Config.ExtraMenu.Spread = (valueStr == "1");
+        else if (key == "ExtraMenu.Hit") Config.ExtraMenu.Hit = (valueStr == "1");
         else if (key == "ExtraMenu.Reload") Config.ExtraMenu.Reload = (valueStr == "1");
         else if (key == "ExtraMenu.Scope") Config.ExtraMenu.Scope = (valueStr == "1");
         else if (key == "ExtraMenu.Switch") Config.ExtraMenu.Switch = (valueStr == "1");
@@ -113,6 +114,7 @@ void SaveConfig() {
     file << "ExtraMenu.Fire " << Config.ExtraMenu.Fire << "\n";
     file << "ExtraMenu.Parachute " << Config.ExtraMenu.Parachute << "\n";
     file << "ExtraMenu.NoCrouch " << Config.ExtraMenu.NoCrouch << "\n";
+    file << "ExtraMenu.Hit " << Config.ExtraMenu.Hit << "\n";
     file << "ExtraMenu.Diving " << Config.ExtraMenu.Diving << "\n";
     file << "ExtraMenu.WallHack " << Config.ExtraMenu.WallHack << "\n";
     file << "ExtraMenu.Blueprints " << Config.ExtraMenu.Blueprints << "\n";

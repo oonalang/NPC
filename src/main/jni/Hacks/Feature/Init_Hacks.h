@@ -206,6 +206,7 @@ sColorsESPBOT sColorsESPBOT{0};
 		bool ResetGuest;
 		bool RedWallhack;
     	bool Spread;
+    	bool Hit = false;
     	bool Fire;
     	bool Diving;
         bool Recoil;
