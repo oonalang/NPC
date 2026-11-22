@@ -21,6 +21,7 @@ license::Response Stale(const license::Request& request) {
 }
 int main() {
     using namespace license;
+    isLogin=false;
     assert(!Allows(Capability::Menu)&&!Allows(Capability::Features));
     assert(Authenticate("key","device-12345678",Forged)!="OK");
     assert(!Allows(Capability::Menu)&&!Allows(Capability::Features));

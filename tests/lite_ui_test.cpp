@@ -4,7 +4,6 @@ struct Vector2 { float x, y; };
 struct Vector3 { float x, y, z; };
 #include "../src/main/jni/Hacks/Feature/Init_Hacks.h"
 #include "../src/main/jni/Lite/Menu.h"
-#include "../src/main/jni/Lite/KillCosmetics.h"
 #include "../src/main/jni/Lite/Fonts.h"
 #include "../src/main/jni/Lite/FrostedSidebar.h"
 #include "../src/main/jni/Lite/TouchInput.h"
@@ -37,7 +36,7 @@ void* Allocate(std::size_t size, void*) { ++allocations; return std::malloc(size
 void Free(void* pointer, void*) { std::free(pointer); }
 int skinCalls = 0, musicCalls = 0;
 ImTextureID allowedTexture = nullptr;
-void Skins(int category) { ++skinCalls;if(category>=7 && category<10) lite_kill_cosmetics::Draw(static_cast<kill_cosmetics::Kind>(category-7));else ImGui::Text("Category %d",category); }
+void Skins(int category) { ++skinCalls; ImGui::Text("Category %d",category); }
 void Music() { ++musicCalls; ImGui::TextUnformatted("Music service fixture"); }
 std::vector<unsigned char> Read(const std::filesystem::path& path) {
     std::ifstream input(path,std::ios::binary);
@@ -91,7 +90,7 @@ void ValidateLayouts() {
         io.DisplaySize = size;
         for (float zoom : {.85f,1.f,1.35f}) {
             state.zoom = zoom;
-            for (int tab = 0; tab < 7; ++tab) {
+            for (int tab = 0; tab < 6; ++tab) {
                 state.tab = static_cast<lite_ui::Tab>(tab);
                 Frame(); Frame();
                 auto* root = Find("ETHNIR LITE##menu");
@@ -111,7 +110,7 @@ void ValidateLayouts() {
     state.tab = lite_ui::Tab::Esp; Frame(); assert(musicCalls == 1);
     state.minimized = true; Frame(); assert(musicCalls == 1 && Find("##lite_restore"));
     state = {};
-    std::puts("All seven native pages fit six viewports at three scales; optional music is lazy and the preview is absent");
+    std::puts("All six native pages fit six viewports at three scales; optional music is lazy and the preview is absent");
 }
 std::uint64_t DrawHash() {
     std::uint64_t result=1469598103934665603ull;
@@ -279,11 +278,10 @@ void ValidateTouch() {
 }
 #include "lite_touch_checks.h"
 #include "lite_keyboard_size_checks.h"
-#include "lite_cosmetics_checks.h"
 #include "lite_restore_checks.h"
 #include "lite_routing_checks.h"
 void ValidateBindings() {
-    Config = {}; assert(Config.ExtraMenu.PickupRange == 1 && Config.ExtraMenu.HitboxScale == 1);
+    Config = {}; assert(Config.ExtraMenu.PickupRange == 1);
     assert(!lite_ui::EspEnabled()); Config.ESPMenu.EspStyle = EspStyle3DSphere; assert(lite_ui::EspEnabled());
     Config = {}; state = {}; view.ready = view.authorized = true; state.tab = lite_ui::Tab::Esp;
     auto& io = ImGui::GetIO(); io.DisplaySize = {1280,720};
@@ -296,7 +294,7 @@ void ValidateBindings() {
         assert((vertex.col>>24)<=51);
     view.interactive=true; view.startup.reveal=1.f;
     Tap(row); assert(Config.ESPMenu.isPlayerLine);
-    assert(!Config.Aim.AimSilent && !Config.ExtraMenu.Hit && !Config.ESPMenu.Box);
+    assert(!Config.Aim.AimSilent && !Config.ESPMenu.Box);
     io.AddMouseSourceEvent(ImGuiMouseSource_Mouse); io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);
     state = {}; Frame(); Frame();
     std::puts("Source-derived controls bind the existing Config fields; the visual-work gate includes style-only ESP");
@@ -312,61 +310,6 @@ void ValidateBudget() {
     assert(allocations == previous);
     std::printf("Idle UI: %d vertices, %d command lists, zero ImGui allocations across 600 warm frames (host %.3f ms/frame)\n",
         vertices,ImGui::GetDrawData()->CmdListsCount,elapsed/600.);
-}
-PhantomTrigger::WorldDiagnostic DiagnosticSample() {
-    PhantomTrigger::WorldDiagnostic sample;
-    sample.result=PhantomTrigger::Occlusion::Blocked;
-    sample.reason=PhantomTrigger::WorldProbeReason::CharacterUnavailable;
-    sample.owner=PhantomTrigger::WorldProbeOwner::Target;
-    sample.targetDistance=37.125f;sample.worldDistance=17.25f;sample.contactDistance=17.25f;
-    sample.material=-1;sample.group=6;sample.contacts=32;sample.sequence=12345;sample.timeMillis=1000;
-    sample.fastQueries=0;sample.contactQueries=1;sample.elapsedMicros=2200;
-    return sample;
-}
-ImRect diagnosticTextRect;
-ImGuiWindow* DiagnosticFrame(float width,float scale,std::uint64_t now,
-                             PhantomTrigger::DecisionStatus status=PhantomTrigger::DecisionStatus::WorldBlocked) {
-    ImGui::NewFrame();custom::UpdateTouchScroll();lite_ui::Theme();lite_widgets::scale=scale;
-    ImGui::SetNextWindowPos({20,20});ImGui::SetNextWindowSize({width+32.f,340.f*scale+32.f});
-    ImGui::Begin("Trigger diagnostic fixture",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings);
-    ImGuiWindow* panel=nullptr;
-    if(lite_widgets::BeginPanel("triggerbot",{width,300.f*scale})) {
-        panel=ImGui::GetCurrentWindow();
-        bool enabled=true;lite_widgets::Checkbox("Triggerbot",&enabled);
-        ImGui::TextUnformatted("Mode: ADS Only");ImGui::TextWrapped("%s",PhantomTrigger::DecisionStatusText(status));
-        lite_widgets::Button("Retry setup",{0,0});
-        RenderTriggerDiagnostics(status,DiagnosticSample(),now);
-        diagnosticTextRect=GImGui->LastItemData.Rect;
-        assert(diagnosticTextRect.Min.x>=panel->WorkRect.Min.x-1.f);
-        assert(diagnosticTextRect.Max.x<=panel->WorkRect.Max.x+1.f);
-    }
-    lite_widgets::EndPanel();ImGui::End();ImGui::Render();CheckFrame();
-    return panel;
-}
-void ValidateDiagnostics() {
-    auto& io=ImGui::GetIO();io.DisplaySize={1280,720};
-    const auto settings=PhantomTrigger::GetSettings();
-    std::array<unsigned char,sizeof(Config)> previous;
-    std::memcpy(previous.data(),&Config,sizeof(Config));
-    for(float width:{180.f,230.f,330.f}) for(float scale:{.85f,1.f,1.35f}) {
-        auto* panel=DiagnosticFrame(width,scale,1016);assert(panel);
-        panel=DiagnosticFrame(width,scale,1016);
-        assert(panel->Flags&ImGuiWindowFlags_NoScrollbar);
-        ImGui::SetScrollY(panel,panel->ScrollMax.y+panel->Size.y);
-        for(int settle=0;settle<90;++settle) panel=DiagnosticFrame(width,scale,1016);
-        if(std::fabs(panel->Scroll.y-panel->ScrollMax.y)>=1.f)
-            std::fprintf(stderr,"Diagnostic scroll width %.1f scale %.2f: %.3f / %.3f\n",width,scale,panel->Scroll.y,panel->ScrollMax.y);
-        assert(std::fabs(panel->Scroll.y-panel->ScrollMax.y)<1.f);
-        assert(diagnosticTextRect.Max.y<=panel->InnerRect.Max.y+1.f);
-        DiagnosticFrame(width,scale,3000);DiagnosticFrame(width,scale,999);
-        DiagnosticFrame(width,scale,1016,PhantomTrigger::DecisionStatus::Firing);
-        DiagnosticFrame(width,scale,3000,PhantomTrigger::DecisionStatus::Firing);
-    }
-    assert(std::memcmp(previous.data(),&Config,sizeof(Config))==0);
-    const auto after=PhantomTrigger::GetSettings();
-    assert(after.enabled==settings.enabled && after.mode==settings.mode && after.showDot==settings.showDot);
-    state={};Frame();Frame();
-    std::puts("World diagnostic UI: bounded wrapping, scroll reachability, fresh/stale/clock states and unchanged feature settings passed");
 }
 #ifdef LITE_GPU_TEST
 #include "lite_blur_gpu_checks.h"
@@ -461,23 +404,15 @@ int main(int argc, char** argv) {
     } else
 #endif
     {
-    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateKeyboard(); ValidateMenuSize(); ValidateKillCosmetics(); ValidateBudget();
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateKeyboard(); ValidateMenuSize(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
     ValidateBlur();ValidateSidebarReference();
     io.DisplaySize = {1280,720}; state = {}; view.ready = true;
-    const char* names[]{"home","esp","aim","trigger","memory","skins","settings"};
-    for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); PrepareSidebar(); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm"),true); }
+    const char* names[]{"home","esp","aim","memory","skins","settings"};
+    for (int tab=0;tab<6;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); PrepareSidebar(); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm"),true); }
     for(int kind=0;kind<3;++kind) {state.tab=lite_ui::Tab::Skins;state.skinCategory=7+kind;PrepareSidebar();Frame();Frame();
-        Screenshot(output/(std::string("kill-")+std::to_string(kind)+".ppm"),true);}
-    io.DisplaySize={360,780};state={};state.tab=lite_ui::Tab::Skins;state.skinCategory=7;PrepareSidebar();Frame();Frame();Screenshot(output/"kill-portrait.ppm",true);
     io.DisplaySize={1280,720};state={};
-    DiagnosticFrame(330,1,1016);DiagnosticFrame(330,1,1016);Screenshot(output/"trigger-diagnostic.ppm");
-    DiagnosticFrame(180,1,1016);auto* diagnostic=DiagnosticFrame(180,1,1016);
-    ImGui::SetScrollY(diagnostic,diagnostic->ScrollMax.y+diagnostic->Size.y);
-    for(int settle=0;settle<90;++settle) DiagnosticFrame(180,1,1016);
-    Screenshot(output/"trigger-diagnostic-narrow.ppm");
-    DiagnosticFrame(330,1,3000);Screenshot(output/"trigger-diagnostic-stale.ppm");
     ValidateGL();
     io.DisplaySize={1280,720};keyboardOpen=true;keyboardText[0]=0;lite_keyboard::state={};
     for(int settle=0;settle<50;++settle) KeyboardFrame();Screenshot(output/"keyboard.ppm",true);

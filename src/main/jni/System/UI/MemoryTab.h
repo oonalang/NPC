@@ -7,9 +7,7 @@
 #include "../../ImGui/custom_widgets.hpp"
 #include "../../ImGui/TouchScroll.h"
 #include "../../BlueprintTierFilter.h"
-#include "../Hooks/SlideFatigue.h"
 #include "../Hooks/Pickup.h"
-#include "../Hooks/Hitbox.h"
 #include "../Audio/UiSounds.h"
 #include <algorithm>
 
@@ -38,11 +36,6 @@ inline bool CategoryButton(int index,ImVec2 size) {
 }
 inline void Movement() {
     custom::Checkbox("No Crouch",&Config.ExtraMenu.NoCrouch);
-    ImGui::BeginDisabled(!slide_fatigue::available.load());
-    if(custom::Checkbox("No Slide Fatigue",&Config.ExtraMenu.NoSlideFatigue)) slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
-    ImGui::EndDisabled();
-    if(!slide_fatigue::available.load()&&ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("Unavailable for this game build");
-    custom::Checkbox("No Sprint Fire Delay",&Config.ExtraMenu.NoSprintFire);
     custom::Checkbox("No Parachute",&Config.ExtraMenu.Parachute);
     custom::Checkbox("Fast Dive",&Config.ExtraMenu.Diving);
     custom::Checkbox("Unlimited Fly",&Config.ExtraMenu.UnlimitedFly);
@@ -66,14 +59,6 @@ inline void MovementTuning() {
     custom::SliderFloat("High Jump",&jumpHeightMultiplier,.5f,5.f,"%.2fx");
 }
 inline void WeaponControl() {
-    custom::Checkbox("Hitbox",&Config.ExtraMenu.Hit);
-    if(Config.ExtraMenu.Hit) {
-        custom::SliderFloat("Hitbox Size",&Config.ExtraMenu.HitboxScale,hitbox::minimumScale,hitbox::maximumScale,"%.2fx");
-        Config.ExtraMenu.HitboxScale=hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
-        if(!hitbox::available.load()) ImGui::TextDisabled("%s",hitbox::status.load()==hitbox::Status::Waiting?"Waiting for game hit checks":"Hitbox unavailable for this build");
-        else if(!hitbox::sphereAvailable.load()) ImGui::TextDisabled("%s",hitbox::sphereStatus.load()==hitbox::Status::Waiting?"Sphere scaling pending":"Sphere scaling unavailable for this build");
-    }
-    hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     custom::Checkbox("No Recoil",&Config.ExtraMenu.Recoil);
     custom::Checkbox("No Spread",&Config.ExtraMenu.Spread);
     custom::Checkbox("No Shake",&Config.ExtraMenu.Shake);
@@ -148,7 +133,7 @@ inline void Draw(ImVec2 available) {
     ImGui::PopStyleVar();
     const float navHeight=(4/columns)*buttonHeight+(4/columns)*gap;
     const float bodyHeight=ImMax(32.f,available.y-navHeight);
-    const float minimumPanel=ImGui::CalcTextSize("No Sprint Fire Delay").x+68.f*scale+ImGui::GetStyle().WindowPadding.x*2.f;
+    const float minimumPanel=ImGui::CalcTextSize("Unlimited Fly").x+68.f*scale+ImGui::GetStyle().WindowPadding.x*2.f;
     const bool wide=available.x>=minimumPanel*2.f+gap&&selected!=Category::Blueprints;
     const float panelWidth=wide?(available.x-gap)*.5f:available.x;
     const char* first=selected==Category::Movement?"MOVEMENT##memory_movement":selected==Category::Weapons?"WEAPON CONTROL##memory_weapons":selected==Category::Protection?"PROTECTION & VISIBILITY##memory_protection":"BLUEPRINTS##memory_blueprints";

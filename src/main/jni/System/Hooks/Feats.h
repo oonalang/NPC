@@ -4,9 +4,7 @@
 #include "FrameRate.h"
 #include "../../Security/Access.h"
 #define LICENSE_HOOK_LIB(lib, offset, ptr, orig) hook((void*)getAbsoluteAddress(OBFUSCATE(lib),string2Offset(OBFUSCATE(offset))),reinterpret_cast<void*>(&license::Guard<ptr,&orig>::Invoke),reinterpret_cast<void**>(&orig))
-#include "SlideFatigue.h"
 #include "Pickup.h"
-#include "Hitbox.h"
 #include <cstring>
 #include "../../BlueprintTierFilter.h"
 #include <string>
@@ -193,16 +191,6 @@ inline float get_FireInterval(void * instance) {
         }
     }
     return orig_get_FireInterval(instance);
-}
-
-inline float (*orig_get_DelaySprintFire)(void *) = nullptr;
-inline float get_DelaySprintFire(void * instance) {
-    if (instance != NULL) {
-        if (Config.ExtraMenu.NoSprintFire || Config.ExtraMenu.Fire) {
-            return 0.00001f;
-        }
-    }
-    return orig_get_DelaySprintFire(instance);
 }
 
 //-- High Jump
@@ -992,7 +980,6 @@ inline void InitializeAllHooks() {
     //-- Firerate Speed
     LICENSE_HOOK_LIB("libunity.so", "0x54AC7A0", get_FireBoltTime, orig_get_FireBoltTime);
     LICENSE_HOOK_LIB("libunity.so", "0x548DF60", get_FireInterval, orig_get_FireInterval);
-    LICENSE_HOOK_LIB("libunity.so", "0x54C9924", get_DelaySprintFire, orig_get_DelaySprintFire);
 
     //-- High Jump
     LICENSE_HOOK_LIB("libunity.so", "0x53F7E7C", hook_GetMaxJumpHeight, orig_GetMaxJumpHeight);

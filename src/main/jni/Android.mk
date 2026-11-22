@@ -92,12 +92,7 @@ FILE_LIST              += $(LOCAL_PATH)/System/Audio/DriveMusic.cpp
 FILE_LIST              += $(LOCAL_PATH)/Lite/WidgetBindings.cpp
 FILE_LIST              += $(LOCAL_PATH)/Lite/FrostedSidebar.cpp
 FILE_LIST              += $(LOCAL_PATH)/Security/LicenseRuntime.cpp
-FILE_LIST              += $(LOCAL_PATH)/System/Hooks/Hitbox.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerRuntime.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerCompatibility.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeProfile.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeDriver.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeQueries.cpp
 FILE_LIST              := $(filter-out $(LOCAL_PATH)/ImGui/WizModel.cpp $(LOCAL_PATH)/ImGui/WizMotion.cpp $(LOCAL_PATH)/ImGui/AnimeArtwork.cpp $(LOCAL_PATH)/ImGui/custom_widgets.cpp,$(FILE_LIST))
 
 LOCAL_SRC_FILES        := $(FILE_LIST:$(LOCAL_PATH)/%=%) \

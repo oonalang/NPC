@@ -33,9 +33,6 @@
 
 #include "MainFeatureIncludes.h"
 #include "BlueprintEquipment.h"
-#include "Trigger/NativeProfile.h"
-#include "Trigger/TriggerRuntime.h"
-#include "Trigger/TriggerOverlay.h"
 #include "CaptureOverlay/HideRecord.h"
 #include "Lite/Fonts.h"
 #include "Lite/Menu.h"
@@ -45,7 +42,6 @@
 #include "Lite/InputRouting.h"
 #include "System/UI/ReducedMotion.h"
 
-static void RequestTriggerInitialization();
 static void RequestLicensedFeatures();
 void Init_Thread2();
 
@@ -262,15 +258,9 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui::NewFrame();
     custom::UpdateTouchScroll();
-    slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
     pickup::Publish(Config.ExtraMenu.FastPickup,Config.ExtraMenu.PickupRange);
-    hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
     frame_rate::Publish(frame_rate::Configured(Config.Aim.FpsLevel,Config.Aim.FpsLevel1,
         Config.Aim.FpsLevelUltra,Config.Aim.FpsLevelUltra1));
-    static auto lastProbe=now;
-    if(Config.ExtraMenu.Hit&&hitbox::NeedsProbe()&&now-lastProbe>=std::chrono::seconds(1)) {
-        lastProbe=now;Init_Thread2();
-    }
     if(!g_LiteTriedKey&&VM) {
         g_LiteTriedKey=true;
         if(LoadTextFromFile()&&logintext[0]) {
@@ -310,7 +300,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if (ready && features && lite_ui::EspEnabled())
         DrawESP(ImGui::GetBackgroundDrawList(),g_GlWidth,g_GlHeight,get_dpi());
     else { ApplySpeedhack(); ApplyNoGravityRuntime(); }
-    if (ready) PhantomTrigger::DrawTriggerDot(ImGui::GetBackgroundDrawList(),screenWidth,screenHeight);
     if(features&&Config.ExtraMenu.WallHack) Patches.A1.Modify();else Patches.A1.Restore();
     if(features&&Config.ExtraMenu.NoCrouch) Patches.NoCrouch.Modify();else Patches.NoCrouch.Restore();
     static auto sampledAt=now;
@@ -357,7 +346,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
             },g_SubmittedKey).detach();
         }
     }
-    if(actions.retryTrigger) RequestTriggerInitialization();
     if(actions.saveConfig||actions.loadConfig) {
         const std::string name=g_LiteState.configName;
         const bool valid=!name.empty()&&name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_- ")==std::string::npos;
@@ -401,26 +389,11 @@ void Init_Thread2()
         const auto install=[](void* address,void* replacement,void** original){hook(address,replacement,original);};
         for(unsigned attempt=0;attempt<80;++attempt) {
             frame_rate::Install(base,install);
-            slide_fatigue::Install(base,install);
             pickup::Install(base,install);
-            hitbox::Install(base,install);
-            if(frame_rate::available.load()&&slide_fatigue::available.load()&&pickup::available.load()&&hitbox::available.load()) break;
+            if(frame_rate::available.load()&&pickup::available.load()) break;
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
         running=false;
-    }).detach();
-}
-
-static void RequestTriggerInitialization()
-{
-    static std::atomic<bool> running{false};
-    if (!license::Allows(license::Capability::Features) || !m_unity || running.exchange(true, std::memory_order_acq_rel)) return;
-    std::thread([base = static_cast<std::uintptr_t>(m_unity)] {
-        for (unsigned attempt = 0; attempt < 40; ++attempt) {
-            if (PhantomTrigger::InitializeNativeTrigger(base)) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
-        }
-        running.store(false, std::memory_order_release);
     }).detach();
 }
 
@@ -441,8 +414,7 @@ static void RequestLicensedFeatures() {
             reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletProjectile));
         g_LiteSetupProgress.store(2,std::memory_order_release);
         InstallBRClassEspConfigHook();InitializeAllHooks();BlueprintEquipment::Install();
-        kill_cosmetics::native::Install(m_unity);
-        Init_Thread2();RequestTriggerInitialization();
+        Init_Thread2();
         g_LiteSetupProgress.store(3,std::memory_order_release);
     }).detach();
 }

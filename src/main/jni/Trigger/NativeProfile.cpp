@@ -1,5 +1,4 @@
 #include "NativeProfile.h"
-#include "NativeDriver.h"
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -57,11 +56,6 @@ bool NativeProfileDetail::RequiresExactRuntimePrefix(std::uintptr_t rva) noexcep
 namespace {
 using NativeProfileDetail::CodeCheck;
 using NativeProfileDetail::ValidationResult;
-#include "NativeProfileChecks.inc"
-
-struct AddressRange { std::uintptr_t begin, end; };
-std::array<AddressRange, 32> verifiedRanges{};
-std::atomic<std::size_t> verifiedRangeCount{0};
 
 bool Range(const ElfW(Phdr)* segments, std::size_t count, std::uintptr_t rva,
            std::size_t size, unsigned permissions) noexcept {
@@ -76,33 +70,12 @@ bool Range(const ElfW(Phdr)* segments, std::size_t count, std::uintptr_t rva,
 }
 
 #if defined(__ANDROID__) && defined(__aarch64__) && !defined(STUDIO_STANDALONE_PREVIEW)
-bool CacheRanges(std::uintptr_t base, const ElfW(Phdr)* segments,
-                 std::size_t count) noexcept {
-    std::array<AddressRange, 32> ranges{};
-    std::size_t found = 0;
-    for (std::size_t i = 0; i < count; ++i) {
-        const auto& segment = segments[i];
-        if (segment.p_type != PT_LOAD || segment.p_memsz == 0 ||
-            (segment.p_flags & (PF_R | PF_X)) != (PF_R | PF_X)) continue;
-        if (found == ranges.size() ||
-            segment.p_vaddr > std::numeric_limits<std::uintptr_t>::max() - base ||
-            segment.p_memsz > std::numeric_limits<std::uintptr_t>::max() - base - segment.p_vaddr)
-            return false;
-        ranges[found++] = {base + segment.p_vaddr, base + segment.p_vaddr + segment.p_memsz};
-    }
-    if (found == 0) return false;
-    verifiedRanges = ranges;
-    verifiedRangeCount.store(found, std::memory_order_release);
-    return true;
-}
-
 struct Validation {
     std::uintptr_t base;
     const CodeCheck* requested;
     std::size_t count;
     ValidationResult result = ValidationResult::ModuleUnavailable;
     const char* failure = "Waiting for the game library loader";
-    bool cacheRanges = false;
 };
 int Validate(dl_phdr_info* info, std::size_t, void* argument) noexcept {
     auto& state = *static_cast<Validation*>(argument);
@@ -111,50 +84,9 @@ int Validate(dl_phdr_info* info, std::size_t, void* argument) noexcept {
     if (std::strcmp(slash ? slash + 1 : info->dlpi_name, "libunity.so") != 0) return 0;
     state.result = NativeProfileDetail::ValidateModule(state.base, info->dlpi_phdr,
         info->dlpi_phnum, state.requested, state.count, state.failure);
-    if (state.result == ValidationResult::Ready && state.cacheRanges &&
-        !CacheRanges(state.base, info->dlpi_phdr, info->dlpi_phnum)) {
-        state.result = ValidationResult::InvalidProfile;
-        state.failure = "Invalid executable game segment ranges";
-    }
     return 1;
 }
 #endif
-}
-
-bool IsVerifiedExecutableAddress(std::uintptr_t address) noexcept {
-    if (!address || (address & 3u) != 0) return false;
-    const auto count = verifiedRangeCount.load(std::memory_order_acquire);
-    for (std::size_t i = 0; i < count; ++i) {
-        const auto& range = verifiedRanges[i];
-        if (address >= range.begin && address < range.end && range.end - address >= 4)
-            return true;
-    }
-    return false;
-}
-
-bool ReadVerifiedExecutable(std::uintptr_t address, void* output, std::size_t size) noexcept {
-    if (!address || (address & 3u) != 0 || !output || size == 0 || size > 256) return false;
-    const auto count = verifiedRangeCount.load(std::memory_order_acquire);
-    for (std::size_t i = 0; i < count; ++i) {
-        const auto& range = verifiedRanges[i];
-        if (address >= range.begin && address < range.end && size <= range.end - address) {
-            std::memcpy(output, reinterpret_cast<const void*>(address), size);
-            return true;
-        }
-    }
-    return false;
-}
-
-bool NativeGlassQueriesReady(std::uintptr_t base) noexcept {
-    if (!base) return false;
-    for (const auto& check : glassChecks) {
-        std::array<unsigned char, 16> actual{};
-        if (check.rva > std::numeric_limits<std::uintptr_t>::max() - base ||
-            !ReadVerifiedExecutable(base + check.rva, actual.data(), actual.size())) return false;
-        const bool exact = NativeProfileDetail::RequiresExactRuntimePrefix(check.rva);
-        if ((actual == check.expected) != exact) return false;
-    }
-    return true;
 }
 
 NativeProfileDetail::ValidationResult NativeProfileDetail::ValidateModule(
@@ -217,33 +149,6 @@ bool NativeProfileDetail::ValidateEntrypoints(std::uintptr_t base,
 #else
     (void)base; (void)requested; (void)count;
     return false;
-#endif
-}
-
-bool InitializeNativeTrigger(std::uintptr_t base) noexcept {
-#if defined(__ANDROID__) && defined(__aarch64__) && !defined(STUDIO_STANDALONE_PREVIEW)
-    static std::atomic<unsigned> initialization{0};
-    if (!base) return false;
-    unsigned expected = 0;
-    if (!initialization.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
-        return expected == 2;
-    Validation validation{base,checks,sizeof(checks)/sizeof(checks[0])};
-    validation.cacheRanges = true;
-    dl_iterate_phdr(Validate, &validation);
-    if (validation.result == ValidationResult::ModuleUnavailable) {
-        NativeDriverPending();
-        initialization.store(0, std::memory_order_release);
-        return false;
-    }
-    if (validation.result == ValidationResult::InvalidProfile)
-        NativeDriverFailure();
-    else
-        InstallNativeDriver(base);
-    initialization.store(2, std::memory_order_release);
-    return true;
-#else
-    (void)base;
-    return true;
 #endif
 }
 }

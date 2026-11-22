@@ -1,4 +1,3 @@
-#include "../../Trigger/NativeDriver.h"
 #include "../../Security/Access.h"
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCDFAInspection"
@@ -1122,13 +1121,11 @@ void WeaponHandlerByAstral(ThisType thiz, Vector3 startPos, Vector3& dir, Args..
 void WeaponFireComponent_Instant_CreateBulletLine(uintptr_t thiz, Vector3 startPos, Vector3 dir, bool isDualFire) {
     WeaponHandlerByAstral(thiz, startPos, dir, isDualFire);
     oWeaponFireComponent_Instant_CreateBulletLine(thiz, startPos, dir, isDualFire);
-    PhantomTrigger::NotifyNativeShot(thiz);
     SmartReloadMarkShotFired();
 }
 
 void WeaponFireComponent_Instant_CreateBulletProjectile(void* thiz, Vector3 startPos, Vector3 dir, void* weaponImpact, int itemID, int flySmokeAssetID, bool enableVirtualStartPos, Vector3 virtualStartPos) {
     WeaponHandlerByAstral(thiz, startPos, dir, weaponImpact, itemID, flySmokeAssetID, enableVirtualStartPos, virtualStartPos);
     oWeaponFireComponent_Instant_CreateBulletProjectile(thiz, startPos, dir, weaponImpact, itemID, flySmokeAssetID, enableVirtualStartPos, virtualStartPos);
-    PhantomTrigger::NotifyNativeShot(reinterpret_cast<uintptr_t>(thiz));
     SmartReloadMarkShotFired();
 }

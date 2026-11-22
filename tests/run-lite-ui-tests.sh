@@ -20,7 +20,6 @@ fi
     -I"$project_dir/src/main/jni" -I"$project_dir/src/main/jni/System" \
     "$project_dir/tests/lite_ui_test.cpp" \
     "$project_dir/src/main/jni/Lite/WidgetBindings.cpp" \
-    "$project_dir/src/main/jni/Trigger/TriggerRuntime.cpp" \
     "$project_dir/src/main/jni/ImGui/imgui.cpp" "$project_dir/src/main/jni/ImGui/imgui_draw.cpp" \
     "$project_dir/src/main/jni/ImGui/imgui_widgets.cpp" "$project_dir/src/main/jni/ImGui/imgui_tables.cpp" \
     $extra_sources -Wl,--gc-sections -lpthread $extra_libraries -o "$test_binary"

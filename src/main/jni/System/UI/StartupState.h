@@ -8,7 +8,7 @@ inline double Now() {
     return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 inline constexpr const char* loadingTips[]{
-    "triggerbot auto shoots for you when your crosshair is aiming at the enemy.",
+    "Every feature is one tap away in the sidebar.",
     "One of the best mods out there.",
     "My mod aims for meeting user requests."
 };

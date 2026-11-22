@@ -6,15 +6,12 @@
 #include "StartupView.h"
 #include "../System/UI/MemoryTab.h"
 #include "../System/UI/Keyboard.h"
-#include "../System/UI/TriggerDiagnostics.h"
 #include "../System/Hooks/FrameRate.h"
-#include "../Trigger/TriggerRuntime.h"
-#include "../Trigger/TriggerDotStyle.h"
 #include <cstdint>
 
 namespace lite_ui {
 
-enum class Tab { Home, Esp, Aim, Trigger, Memory, Skins, Settings };
+enum class Tab { Home, Esp, Aim, Memory, Skins, Settings };
 struct State {
     Tab tab = Tab::Home;
     bool minimized = false, music = false, hideRecord = false;
@@ -43,7 +40,7 @@ struct View {
 };
 struct Actions {
     bool submit = false, paste = false, loadKey = false;
-    bool saveConfig = false, loadConfig = false, retryTrigger = false;
+    bool saveConfig = false, loadConfig = false;
 };
 struct Layout {
     ImVec2 size;
@@ -154,7 +151,7 @@ inline bool SideTab(const char* label, Tab tab, State& state) {
     auto* draw = ImGui::GetWindowDrawList();
     if (active || ImGui::IsItemHovered()) draw->AddRectFilled(lo+ImVec2(10.f*scale,0),lo+size-ImVec2(12.f*scale,0),
         active ? IM_COL32(36,36,36,200) : IM_COL32(28,28,28,190),5.f*scale);
-    static constexpr const char* icons[]{"\xef\x80\x95","\xef\x94\x80","\xef\x81\x9b","\xef\x83\xa7",
+    static constexpr const char* icons[]{"\xef\x80\x95","\xef\x94\x80","\xef\x81\x9b",
         "\xef\x80\x93","\xef\x87\xbc","\xef\x81\xbb"};
     const auto* icon = icons[static_cast<int>(tab)];
     const auto iconPos = lo + ImVec2(20,5)*scale;
@@ -188,7 +185,6 @@ inline void Sidebar(State& state, const View& view) {
     SideTab("players", Tab::Esp, state);
     group("combat");
     SideTab("aimbot", Tab::Aim, state);
-    SideTab("trigger", Tab::Trigger, state);
     group("misc");
     SideTab("memory", Tab::Memory, state);
     SideTab("skins", Tab::Skins, state);
@@ -409,30 +405,6 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                     lite_widgets::SliderFloat("FOV Size",&Config.Aim.Cross,0,100,"%.0f");
                 });
                 break;
-            case Tab::Trigger:
-                Panel("triggerbot", 300, [&] {
-                    auto settings=PhantomTrigger::GetSettings();
-                    const bool changed=lite_widgets::Checkbox("Triggerbot",&settings.enabled);
-                    static const char* modes[]{"Both","ADS Only"};
-                    int mode=settings.mode==PhantomTrigger::Mode::ADSOnly?1:0;
-                    Combo("Mode",mode,modes,2); settings.mode=mode?PhantomTrigger::Mode::ADSOnly:PhantomTrigger::Mode::Both;
-                    PhantomTrigger::SetSettings(settings);
-                    actions.retryTrigger=changed&&settings.enabled;
-                    ImGui::TextWrapped("%s",PhantomTrigger::DecisionStatusText(PhantomTrigger::GetDecisionStatus()));
-                    if (lite_widgets::Button("Retry setup",{0,0})) actions.retryTrigger=true;
-                    if(settings.enabled) RenderTriggerDiagnostics(PhantomTrigger::GetDecisionStatus());
-                });
-                Panel("crosshair", 300, [&] {
-                    auto settings=PhantomTrigger::GetSettings();
-                    lite_widgets::Checkbox("Dot Crosshair",&settings.showDot); PhantomTrigger::SetSettings(settings);
-                    auto& dot=TriggerDotStyle::appearance;
-                    lite_widgets::SliderFloat("Dot Size",&dot.radius,1,12,"%.1f");
-                    lite_widgets::SliderFloat("Outline Size",&dot.outline,0,5,"%.1f");
-                    lite_widgets::SliderFloat("Dot Opacity",&dot.opacity,.1f,1,"%.2f");
-                    ImGui::ColorEdit3("Dot Color",dot.color,ImGuiColorEditFlags_NoInputs);
-                    TriggerDotStyle::Normalize(dot);
-                });
-                break;
             case Tab::Memory:
                 Panel("movement", 350, [] { memory_tab::Movement(); });
                 Panel("movement tuning", 350, [] { memory_tab::MovementTuning(); });
@@ -442,8 +414,8 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
             case Tab::Skins:
                 Panel("blueprints", 150, [] { memory_tab::Blueprints(); });
                 Panel("category", 150, [&] {
-                    static const char* categories[]{"Character","Watch","Deadbox","Plane","Weapon","Camo","Snowboard","Kill Icon","Kill Board","Kill Broadcast"};
-                    Combo("Skin category",state.skinCategory,categories,10);
+                    static const char* categories[]{"Character","Watch","Deadbox","Plane","Weapon","Camo","Snowboard"};
+                    Combo("Skin category",state.skinCategory,categories,7);
                 });
                 break;
             case Tab::Settings:

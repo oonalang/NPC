@@ -1,11 +1,7 @@
 #pragma once
 
 #include <iomanip>
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-#include "../../KillCosmetics/Config.h"
-#endif
 #include "../Hooks/FrameRate.h"
-#include "../Hooks/SlideFatigue.h"
 #include "../Hooks/Pickup.h"
 #include <sstream>
 #include <ctime>
@@ -13,8 +9,6 @@
 #include "../foxcheats/include/json.hpp"
 #include "../../Hacks/Feature/Init_Hacks.h"
 #include "../../BlueprintTierFilter.h"
-#include "../../Trigger/TriggerDotStyle.h"
-#include "../Hooks/Hitbox.h"
 
 // Externals defined in Main.cpp
 extern float menu[4];
@@ -56,13 +50,9 @@ bool SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Flash"] = Config.ExtraMenu.Flash;
     config["ExtraMenu"]["Diving"] = Config.ExtraMenu.Diving;
     config["ExtraMenu"]["Fire"] = Config.ExtraMenu.Fire;
-    config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
-    config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
-    config["ExtraMenu"]["HitboxScale"] = hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
     config["ExtraMenu"]["Rpd"] = Config.ExtraMenu.Rpd;
     config["ExtraMenu"]["Parachute"] = Config.ExtraMenu.Parachute;
     config["ExtraMenu"]["NoCrouch"] = Config.ExtraMenu.NoCrouch;
-    config["ExtraMenu"]["NoSlideFatigue"] = Config.ExtraMenu.NoSlideFatigue;
     config["ExtraMenu"]["FastPickup"] = Config.ExtraMenu.FastPickup;
     config["ExtraMenu"]["PickupRange"] = pickup::NormalizeRange(Config.ExtraMenu.PickupRange);
     config["ExtraMenu"]["Recoil"] = Config.ExtraMenu.Recoil;
@@ -74,14 +64,6 @@ bool SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["KineticArmor"] = Config.ExtraMenu.Kinetic;
     config["ExtraMenu"]["Blueprints"] = Config.ExtraMenu.Blueprints;
     config["ExtraMenu"]["BlueprintTiers"] = BlueprintTierFilter::GetMask();
-    auto& dotStyle = TriggerDotStyle::appearance;
-    TriggerDotStyle::Normalize(dotStyle);
-    config["TriggerDot"]["Radius"] = dotStyle.radius;
-    config["TriggerDot"]["Outline"] = dotStyle.outline;
-    config["TriggerDot"]["Opacity"] = dotStyle.opacity;
-    config["TriggerDot"]["Red"] = dotStyle.color[0];
-    config["TriggerDot"]["Green"] = dotStyle.color[1];
-    config["TriggerDot"]["Blue"] = dotStyle.color[2];
 
     config["isJumpAdjustmentEnabled"] = isJumpAdjustmentEnabled;
     config["jumpHeightMultiplier"] = jumpHeightMultiplier;
@@ -100,9 +82,6 @@ bool SaveConfiguration(const std::string& filename) {
     std::string filePath = configDir + "/" + filename + ".json";
     std::ofstream file(filePath);
     if (!file.is_open()) return false;
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-    kill_cosmetics::Save(config);
-#endif
     file << std::setw(4) << config;
     file.close();
     return !file.fail();
@@ -145,15 +124,9 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Flash = config["ExtraMenu"]["Flash"].get<bool>();
             Config.ExtraMenu.Diving = config["ExtraMenu"]["Diving"].get<bool>();
             Config.ExtraMenu.Fire = config["ExtraMenu"]["Fire"].get<bool>();
-            Config.ExtraMenu.NoSprintFire = config["ExtraMenu"].value("NoSprintFire", false);
-            Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
-            Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(config["ExtraMenu"].value("HitboxScale",hitbox::defaultScale));
-            hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
             Config.ExtraMenu.Rpd = config["ExtraMenu"]["Rpd"].get<bool>();
             Config.ExtraMenu.Parachute = config["ExtraMenu"]["Parachute"].get<bool>();
             Config.ExtraMenu.NoCrouch = config["ExtraMenu"].value("NoCrouch", false);
-            Config.ExtraMenu.NoSlideFatigue = config["ExtraMenu"].value("NoSlideFatigue", false);
-            slide_fatigue::Publish(Config.ExtraMenu.NoSlideFatigue);
             Config.ExtraMenu.Recoil = config["ExtraMenu"]["Recoil"].get<bool>();
             Config.ExtraMenu.Shake = config["ExtraMenu"]["Shake"].get<bool>();
             Config.ExtraMenu.Spread = config["ExtraMenu"]["Spread"].get<bool>();
@@ -165,24 +138,6 @@ bool LoadConfiguration(const std::string& filename) {
                 Config.ExtraMenu.Blueprints = config["ExtraMenu"]["Blueprints"].get<bool>();
             if (config["ExtraMenu"].contains("BlueprintTiers"))
                 BlueprintTierFilter::SetMask(config["ExtraMenu"]["BlueprintTiers"].get<uint32_t>());
-        }
-
-        if (config.contains("TriggerDot") && config["TriggerDot"].is_object()) {
-            auto& dotStyle = TriggerDotStyle::appearance;
-            const auto& stored = config["TriggerDot"];
-            if (stored.contains("Radius") && stored["Radius"].is_number())
-                dotStyle.radius = stored["Radius"].get<float>();
-            if (stored.contains("Outline") && stored["Outline"].is_number())
-                dotStyle.outline = stored["Outline"].get<float>();
-            if (stored.contains("Opacity") && stored["Opacity"].is_number())
-                dotStyle.opacity = stored["Opacity"].get<float>();
-            if (stored.contains("Red") && stored["Red"].is_number())
-                dotStyle.color[0] = stored["Red"].get<float>();
-            if (stored.contains("Green") && stored["Green"].is_number())
-                dotStyle.color[1] = stored["Green"].get<float>();
-            if (stored.contains("Blue") && stored["Blue"].is_number())
-                dotStyle.color[2] = stored["Blue"].get<float>();
-            TriggerDotStyle::Normalize(dotStyle);
         }
 
         if(config.contains("FrameRate")&&config["FrameRate"].is_object()) {
@@ -223,9 +178,6 @@ bool LoadConfiguration(const std::string& filename) {
         Config.ExtraMenu.FastPickup = fastPickup;
         Config.ExtraMenu.PickupRange = pickupRange;
         pickup::Publish(fastPickup, pickupRange);
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-        kill_cosmetics::Load(config);
-#endif
         return true;
     }
     catch (const std::exception& e) {
