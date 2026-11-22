@@ -22,7 +22,7 @@ with args.library.open('rb') as stream, mmap.mmap(stream.fileno(),0,access=mmap.
     segments=[struct.unpack_from('<IIQQQQQQ',data,phoff+i*size) for i in range(count)]
     source=(root/'src/main/jni/KillCosmetics/Profile.inc').read_text()
     checks=re.findall(r'\{"([^"]+)",(0x[0-9a-fA-F]+),\{([^}]+)\}\}',source)
-    assert len(checks)==19 and len({rva for _,rva,_ in checks})==19
+    assert len(checks)==22 and len({rva for _,rva,_ in checks})==22
     for name,rva_text,literals in checks:
         rva=int(rva_text,16);expected=trigger.byte_literals(literals)
         assert len(expected)==16
@@ -31,4 +31,4 @@ with args.library.open('rb') as stream, mmap.mmap(stream.fileno(),0,access=mmap.
                 assert data[offset+rva-address:offset+rva-address+16]==expected,name
                 break
         else:raise AssertionError(name+' is not mapped executable code')
-print('Kill cosmetics: 19 hook/helper/layout fingerprints match; no native offsets inferred from screenshot IDs')
+print('Kill cosmetics: 22 hook/helper/layout fingerprints match; no native offsets inferred from screenshot IDs')

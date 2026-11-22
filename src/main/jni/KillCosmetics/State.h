@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -9,67 +10,114 @@
 
 namespace kill_cosmetics {
 enum class Kind : unsigned { Icon, Board, Broadcast };
-inline constexpr std::size_t categoryCount=3, maximumRows=512;
+inline constexpr std::size_t categoryCount=3,maximumRows=512,maximumWeapons=64;
 inline constexpr std::uint32_t itemTypes[]{60,61,68};
 inline constexpr const char* labels[]{"Kill Icon","Kill Board","Kill Broadcast"};
-inline std::size_t Index(Kind kind) { return static_cast<std::size_t>(kind); }
+inline std::size_t Index(Kind kind) {return static_cast<std::size_t>(kind);}
 inline bool Valid(Kind kind,std::uint32_t id) {
-    const auto index=Index(kind);
-    return index<categoryCount && id>0 && id/10000000u==itemTypes[index];
+    return Index(kind)<categoryCount && id>0 && id/10000000u==itemTypes[Index(kind)];
 }
-struct Options { std::array<std::uint32_t,categoryCount> ids{}; };
+struct Options {bool automatic=true;};
 inline Options configured;
-inline std::array<std::atomic<std::uint32_t>,categoryCount> requested{};
-inline void Publish(const Options& options) {
-    for(std::size_t i=0;i<categoryCount;++i)
-        requested[i].store(Valid(static_cast<Kind>(i),options.ids[i])?options.ids[i]:0,std::memory_order_release);
-}
-inline std::uint32_t Requested(Kind kind) {
-    return Index(kind)<categoryCount?requested[Index(kind)].load(std::memory_order_acquire):0;
-}
+inline std::atomic<bool> requested{true};
+inline void Publish(Options options) {requested.store(options.automatic,std::memory_order_release);}
+struct Weapon {std::uint32_t id=0,base=0,skin=0;};
+class WeaponCatalog {
+public:
+    void Record(Weapon weapon,unsigned rarity) {
+        if(!weapon.id) return;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(rarity!=5) {if(!rows_.erase(weapon.id))return;}
+        else {
+            const auto found=rows_.find(weapon.id);
+            if(found==rows_.end() && rows_.size()>=maximumRows)return;
+            if(found!=rows_.end() && found->second.base==weapon.base && found->second.skin==weapon.skin)return;
+            rows_[weapon.id]=weapon;
+        }
+
+    }
+    void SetVisual(std::uint32_t item,std::uint32_t blueprint) {
+        if(!item)return;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(visual_.find(item)==visual_.end() && visual_.size()>=maximumRows*2)return;
+        visual_[item]=blueprint;
+    }
+    bool Resolve(std::uint32_t item,std::uint32_t blueprint,std::uint32_t skin,Weapon& result) const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto visual=visual_.find(item);
+        const auto candidate=visual!=visual_.end()?visual->second:blueprint?blueprint:item;
+        auto found=rows_.find(candidate);
+        if(found==rows_.end() && visual==visual_.end() && !blueprint && skin)found=rows_.find(skin);
+        if(found==rows_.end())return false;
+        result=found->second;return true;
+    }
+    std::size_t Count() const {std::lock_guard<std::mutex> lock(mutex_);return rows_.size();}
+private:
+    mutable std::mutex mutex_;
+    std::map<std::uint32_t,Weapon> rows_;
+    std::map<std::uint32_t,std::uint32_t> visual_;
+};
+inline WeaponCatalog weapons;
 struct Row {
     std::uint32_t id=0;
-    int rarity=0,asset=0,effect=0;
+    int asset=0,effect=0;
+    std::uint16_t weaponCount=0;
+    std::array<std::uint32_t,maximumWeapons> weapons{};
     bool operator==(const Row& other) const {
-        return id==other.id && rarity==other.rarity && asset==other.asset && effect==other.effect;
+        return id==other.id && asset==other.asset && effect==other.effect && weaponCount==other.weaponCount && weapons==other.weapons;
     }
 };
 class Catalog {
 public:
     bool Put(Kind kind,Row row) {
-        if(!Valid(kind,row.id) || row.rarity<0 || row.rarity>5 || row.asset<0 || row.effect<0) return false;
+        if(!Valid(kind,row.id) || row.asset<0 || row.effect<0 || row.weaponCount>maximumWeapons)return false;
+        std::sort(row.weapons.begin(),row.weapons.begin()+row.weaponCount);
+        row.weaponCount=static_cast<std::uint16_t>(std::unique(row.weapons.begin(),row.weapons.begin()+row.weaponCount)-row.weapons.begin());
+        if(row.weaponCount && !row.weapons[0])return false;
+        std::fill(row.weapons.begin()+row.weaponCount,row.weapons.end(),0);
         std::lock_guard<std::mutex> lock(mutex_);
-        auto& rows=rows_[Index(kind)];const auto found=rows.find(row.id);
-        if(found==rows.end() && rows.size()>=maximumRows) return false;
-        if(found!=rows.end() && found->second==row) return true;
-        rows[row.id]=row;revision_.fetch_add(1,std::memory_order_release);return true;
+        auto& rows=rows_[Index(kind)];auto& links=links_[Index(kind)];
+        const auto found=rows.find(row.id);
+        if(found==rows.end() && rows.size()>=maximumRows)return false;
+        if(found!=rows.end() && found->second==row)return true;
+        if(found!=rows.end())for(std::size_t i=0;i<found->second.weaponCount;++i) {
+            const auto link=links.find(found->second.weapons[i]);if(link==links.end())continue;
+            auto& ids=link->second;ids.erase(std::remove(ids.begin(),ids.end(),row.id),ids.end());
+            if(ids.empty())links.erase(link);
+        }
+        rows[row.id]=row;
+        for(std::size_t i=0;i<row.weaponCount;++i)links[row.weapons[i]].push_back(row.id);
+        return true;
     }
-    bool Find(Kind kind,std::uint32_t id,Row& row) const {
-        if(!Valid(kind,id)) return false;
+    bool Match(Kind kind,const Weapon& weapon,std::uint32_t preferred,Row& result) const {
+        if(Index(kind)>=categoryCount || !weapon.id)return false;
         std::lock_guard<std::mutex> lock(mutex_);
-        const auto& rows=rows_[Index(kind)];const auto found=rows.find(id);
-        if(found==rows.end()) return false;
-        row=found->second;return true;
+        const auto& rows=rows_[Index(kind)];const auto& links=links_[Index(kind)];
+        const auto native=rows.find(preferred);
+        if(native!=rows.end()) {
+            const auto& row=native->second;
+            if(!row.weaponCount){result=row;return true;}
+            for(std::size_t i=0;i<row.weaponCount;++i)if(row.weapons[i]==weapon.id || row.weapons[i]==weapon.skin || row.weapons[i]==weapon.base){result=row;return true;}
+        }
+        for(const auto key:{weapon.id,weapon.skin,weapon.base})if(key) {
+            const auto match=links.find(key);if(match==links.end())continue;
+            if(match->second.size()!=1)return false;
+            result=rows.at(match->second.front());return true;
+        }
+        return false;
     }
-    std::vector<Row> Rows(Kind kind) const {
-        if(Index(kind)>=categoryCount) return {};
-        std::lock_guard<std::mutex> lock(mutex_);std::vector<Row> result;
-        const auto& rows=rows_[Index(kind)];result.reserve(rows.size());
-        for(const auto& entry:rows) result.push_back(entry.second);
-        return result;
+    std::size_t Count(Kind kind) const {
+        if(Index(kind)>=categoryCount)return 0;
+        std::lock_guard<std::mutex> lock(mutex_);return rows_[Index(kind)].size();
     }
-    std::uint64_t Revision() const { return revision_.load(std::memory_order_acquire); }
 private:
     mutable std::mutex mutex_;
     std::array<std::map<std::uint32_t,Row>,categoryCount> rows_;
-    std::atomic<std::uint64_t> revision_{0};
+    std::array<std::map<std::uint32_t,std::vector<std::uint32_t>>,categoryCount> links_;
 };
 inline Catalog catalog;
-inline std::atomic<bool> available{false};
-inline std::atomic<bool> attempted{false};
-inline bool LocalKill(std::uint32_t local,std::uint32_t killer,bool authorized) {
-    return authorized && local!=0 && local==killer;
-}
+inline std::atomic<bool> available{false},attempted{false};
+inline bool LocalKill(std::uint32_t local,std::uint32_t killer,bool authorized) {return authorized && local && local==killer;}
 class ScopedBroadcast {
 public:
     explicit ScopedBroadcast(void* inventory,std::uint32_t id):inventory_(inventory),applied_(id) {
