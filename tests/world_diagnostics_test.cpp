@@ -20,6 +20,7 @@ int main() {
     sample.owner=WorldProbeOwner::World;
     sample.targetDistance=37.125f;sample.worldDistance=17.25f;sample.contactDistance=17.25f;
     sample.material=6;sample.group=-1;sample.contacts=3;sample.timeMillis=1000;
+    sample.fastQueries=1;sample.contactQueries=1;sample.elapsedMicros=317;
     PublishWorldDiagnostic(sample);
     auto value=GetWorldDiagnostic();
     assert(value.sequence==1 && value.timeMillis==1000 && value.contacts==3);
@@ -27,6 +28,7 @@ int main() {
     assert(std::strstr(text,"Solid collider reported") && std::strstr(text,"Body 37.1250 | world 17.2500"));
     assert(std::strstr(text,"Contact 17.2500 | world/unmapped") && std::strstr(text,"Material 6 | group -1 | hits 3"));
     assert(std::strstr(text,"16 ms old | #1"));
+    assert(std::strstr(text,"World 317 us | rays 1+1"));
     assert(FormatWorldDiagnostic(text,sizeof(text),value,1000+WorldDiagnosticFreshnessMillis));
     assert(std::strstr(text,"Body 37.1250"));
     assert(FormatWorldDiagnostic(text,sizeof(text),value,1001+WorldDiagnosticFreshnessMillis));
@@ -60,6 +62,7 @@ int main() {
             next.targetDistance=static_cast<float>(index);next.worldDistance=next.targetDistance*.5f;
             next.contactDistance=next.worldDistance;next.material=index;next.contacts=static_cast<std::uint32_t>(index);
             next.result=Occlusion::Blocked;next.reason=WorldProbeReason::Solid;next.timeMillis=1000;
+            next.elapsedMicros=static_cast<std::uint32_t>(index);next.fastQueries=static_cast<std::uint8_t>(index%2);
             PublishWorldDiagnostic(next);
         }
         done.store(true,std::memory_order_release);
@@ -74,6 +77,7 @@ int main() {
             assert(current.targetDistance==static_cast<float>(current.material));
             assert(current.worldDistance==current.targetDistance*.5f && current.contactDistance==current.worldDistance);
             assert(current.contacts==static_cast<std::uint32_t>(current.material));
+            assert(current.elapsedMicros==current.contacts && current.fastQueries==current.material%2);
         } while(!done.load(std::memory_order_acquire));
     });
     writer.join();reader.join();

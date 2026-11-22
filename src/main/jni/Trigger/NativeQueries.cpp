@@ -142,6 +142,7 @@ bool TraceContacts(Address base,const ViewRay& ray,float distance,int traceFlag,
     using RaycastNonAlloc = int(*)(Object, Point3, Point3, Object, float, std::int64_t, Method);
     count = Bind<RaycastNonAlloc>(base, 0x531EA00)(
         nullptr, ray.origin, ray.direction, scratch, distance, mask, nullptr);
+    if(count==0 && traceFlag==WorldTraceFlag) return true;
     if (!CompleteContactCount(count, capacity)) return false;
 
     for (int i = 0; i < count; ++i) {
@@ -254,24 +255,32 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     return true;
 }
 
-Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
+Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity& context,
                                          const ViewRay& ray, const BodyHit& hit) noexcept {
     if (!base_ || !std::isfinite(hit.distance) || hit.distance <= 0) return Occlusion::Unavailable;
-    float blockerDistance = 0;
+    const auto probeStart=std::chrono::steady_clock::now();
     using WorldTrace = bool(*)(Object, Point3, Point3, float, float*, int, Method);
-    const bool blocked = Bind<WorldTrace>(base_, 0x66F2708)(
-        nullptr, ray.origin, ray.direction, hit.distance, &blockerDistance, 0, nullptr);
     using IsLiveObject=bool(*)(Object,Object,Object,Method);
     using SharedMaterial=Object(*)(Object,Method);
     const auto lookup=Bind<Object(*)(Object,Object,Method)>(base_,0x78AF19C);
     Object map=nullptr;
     WorldDiagnostic diagnostic;
-    diagnostic.targetDistance=hit.distance;diagnostic.worldDistance=blocked?blockerDistance:-1.f;
-    diagnostic.reason=blocked?WorldProbeReason::InvalidDistance:WorldProbeReason::Clear;
+    diagnostic.targetDistance=hit.distance;
+    diagnostic.reason=WorldProbeReason::InvalidDistance;
     const RayContacts* sampled=nullptr;
     std::size_t classification=0;
-    const auto result=ResolveWorldOcclusion(hit.distance,blocked,blockerDistance,
+    bool fallbackPreference=false;
+    bool& prefer=preference_?preference_->For(context):fallbackPreference;
+    const auto result=QueryFreshWorld(hit.distance,prefer,
+        [&](float& distance) noexcept {
+            ++diagnostic.fastQueries;
+            const bool blocked=Bind<WorldTrace>(base_,0x66F2708)(
+                nullptr,ray.origin,ray.direction,hit.distance,&distance,0,nullptr);
+            diagnostic.worldDistance=blocked?distance:-1.f;
+            return blocked;
+        },
         [&](RayContacts& contacts,std::size_t& size) noexcept {
+            ++diagnostic.contactQueries;
             diagnostic.reason=WorldProbeReason::ContactsUnavailable;
             if(!tracedTarget_ || !tracedCollider_) return false;
             int count=0;
@@ -281,14 +290,16 @@ Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
                 if(count>static_cast<int>(MaxGlassContacts)) diagnostic.reason=WorldProbeReason::ContactLimit;
                 return false;
             }
-            map=Bind<Object(*)(Object,Method)>(base_,0x8011E2C)(nullptr,nullptr);
             size=static_cast<std::size_t>(count);
+            if(!count) return true;
+            map=Bind<Object(*)(Object,Method)>(base_,0x8011E2C)(nullptr,nullptr);
             for(std::size_t index=0;index<size;++index) {
                 const auto distance=contacts[index].distance;
                 if(std::isfinite(distance) && distance>=0.f &&
                     (diagnostic.contactDistance<0.f || distance<diagnostic.contactDistance))
                     diagnostic.contactDistance=distance;
             }
+            if(!diagnostic.fastQueries) diagnostic.worldDistance=diagnostic.contactDistance;
             sampled=&contacts;
             diagnostic.reason=map?WorldProbeReason::ContactMismatch:WorldProbeReason::MapUnavailable;
             return map!=nullptr;
@@ -314,12 +325,19 @@ Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity&,
                 return kind;
             }
             diagnostic.material=PhysicalMaterialType(base_,Bind<SharedMaterial>(base_,0x52D98B8)(collider,nullptr));
+            if(IsBulletIgnoredWorldMaterial(diagnostic.material,actor)) {
+                diagnostic.reason=WorldProbeReason::BulletIgnored;
+                return ContactKind::BulletIgnored;
+            }
             const bool glass=IsPassableGlass(diagnostic.material);
             diagnostic.reason=glass?WorldProbeReason::Glass:WorldProbeReason::Solid;
             return glass?ContactKind::Glass:ContactKind::Solid;
         });
     diagnostic.result=result;
-    if(result==Occlusion::Clear) diagnostic.reason=blocked?WorldProbeReason::Endpoint:WorldProbeReason::Clear;
+    if(result==Occlusion::Clear) diagnostic.reason=diagnostic.worldDistance>=0.f?WorldProbeReason::Endpoint:WorldProbeReason::Clear;
+    const auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-probeStart).count();
+    diagnostic.elapsedMicros=static_cast<std::uint32_t>(std::min<std::uint64_t>(
+        elapsed>0?static_cast<std::uint64_t>(elapsed):0,std::numeric_limits<std::uint32_t>::max()));
     PublishWorldDiagnostic(diagnostic);
     return result;
 }

@@ -259,48 +259,65 @@ the policy and static binding checks; they do not establish which collider was
 hit in the user's recording or prove the behavior on a phone. Device collision
 and FPS verification remain outstanding.
 
+## Bullet-passable world material and query budget
+
+The user's `obstruction-3` capture identifies a fresh rejection: detailed body
+at 27.6363 m, world/contact at 0.6096 m, material 15, world/unmapped owner,
+one contact, age 5 ms and sequence 2203. Material 15 is `PenetrateStone`. The
+previous classifier treated every non-glass world material as solid.
+
+The pinned game's `PhysicsUtil.CanIgnoreForBullet` at `0x66F8D74` classifies the
+material through `GetMaterialType`, checks the unsigned type is below 16 and
+uses mask `0xA800`: types 11, 13 and 15 are ignored by its bullet filter.
+`IsBulletIgnoredWorldMaterial` mirrors that rule for unmapped world geometry.
+Two additional runtime fingerprints verify the type/mask instructions at
+`0x66F8DC4` and the decision at `0x66F8DD4`. They are mandatory for the contact
+fallback to run. No new native call or weapon-property mutation is introduced.
+Mapped actors do not receive this material exemption. Shield/body checks,
+other solid materials, smoke, ADS, native readiness and licensing remain.
+This implements the native bullet-ignore category; it does not add arbitrary
+weapon penetration through other walls.
+
+`WorldQuery.h` removes a repeated world raycast when the path keeps encountering
+contacts. The first nearer world hit still uses the fast check plus its bounded
+contact fallback. Subsequent eligible updates query fresh contacts directly,
+using the same original ray, range, world mask and water filter. Every contact
+is checked before firing. A complete empty query returns to the fast clear-path
+route. Incomplete/unavailable contact queries can use one fresh fast check;
+they cannot trigger another contact retry in the same update. Only a route
+preference is retained, reset on context/weapon changes. Collision results and
+positive firing decisions are never cached across updates.
+
+The stable-contact fixture uses 121 world-physics queries over 120 updates,
+versus the previous 240. That is a query-count result, not a phone FPS measure.
+Body-detail, smoke and actual game simulation costs are not measured by it.
+
 ## Device obstruction diagnostics
 
-The user retested the character-contact correction by rebuilding and injecting
-the native library. The new screenshots still show "Target is behind cover"
-while scoped at a visibly exposed enemy. The specific blocking collider remains
-unconfirmed; this follow-up does not claim another visibility fix.
+The current panel tag is `Trace build: obstruction-4`. World errors show the
+last reason, body/world/contact distances, owner, material, group, contact count,
+sequence and sample age. It also reports world-query duration in microseconds
+and fast/contact query counts as `rays fast+contacts`. A compact last-world-query
+cost remains visible for fresh samples during ordinary enabled operation.
+Samples older than 1,500 ms are explicitly stale. Both clocks are the same
+steady clock, separate from the licensing boot clock.
 
-Lite's enabled Triggerbot panel now identifies the native diagnostic revision as
-`Trace build: obstruction-3`. For a world rejection or unavailable query it
-shows the last world-ray reason, detailed body distance, native world distance,
-classified contact distance, character ownership, material type, body group,
-contact count, sequence number and sample age. A sample older than 1,500 ms is
-explicitly stale. An unavailable/mismatched sample is not presented as a new
-confirmed obstruction. The age uses the same steady clock at publication and
-display, separate from the licensing boot clock.
-
-`Trigger/WorldDiagnostics.h` holds one fixed-size snapshot behind a mutex. The
-native query publishes values already obtained by the existing collision
-checks; it adds no native binding, raycast or per-player scan. The bounded
-fallback also records its nearest copied contact when distance verification
-fails. The panel wraps and scrolls using the existing Lite controls. No raw
-pointers, credentials, files, network uploads or persistent logs are collected.
-Visibility policy, reaction/cadence, ADS readiness, native verification and
-license authorization are unchanged.
-
-After injecting this build, reproduce the rejection, open Triggerbot and
-capture the revision plus every diagnostic line. A changing sequence and small
-sample age indicate active world checks. "No fresh world ray" indicates an old
-sample; "No matching world failure sample" can indicate a failure earlier than
-the world check. Material/owner/distance values are needed before identifying
-a collider or changing collision policy.
+`WorldDiagnostics.h` publishes one coherent 56-byte snapshot behind a mutex.
+The panel wraps and scrolls using the existing Lite controls. No raw pointers,
+credentials, persistent files, network uploads or per-player scan is added.
+If another rejection occurs, capture the revision and all lines while aimed at
+the same target. The timing is the world-query stage, not total frame time.
 
 Validation passes: 4,428 trigger behavior, 46 prepared-input, 1,046 native-profile
-and four permanent-rejection checks; the supplied ELF's 57 fingerprints and
-seven probes still match. The added sanitizer suite checks coherent 48-byte
-snapshots across 20,000 concurrent publications, clock/freshness handling and
-bounded output. Lite UI sanitizer/GLES checks cover wrapped diagnostics,
-scroll reachability and preserved settings; final GLES captures were inspected
-at ordinary and narrow widths and with a stale sample. The ARM64 build,
-hardening inspection and production-root signed-manifest verification pass.
-Logs use the `ethnir-trigger-diagnostics-*` prefix. No phone-side collision or
-FPS result is claimed.
+and four permanent-rejection checks; 4,096 fresh-query equivalence scenarios;
+the reported material/distance case and an intervening real wall; unknown,
+empty and malformed contact transitions; context reset and query-count bounds.
+The supplied ELF matches 59 fingerprints and seven compatibility probes.
+Snapshot sanitizer tests cover 20,000 concurrent publications and bounded
+formatting. Lite UI sanitizer/GLES, final narrow/fresh/stale captures, ARM64
+build/hardening and production-root release verification pass. Logs use
+`lite-trigger-world4-*`. The corrected classification is verified against the
+capture's inputs; installed-phone behavior and FPS still need a retest.
 
 ## Validation
 

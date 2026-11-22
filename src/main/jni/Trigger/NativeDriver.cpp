@@ -72,6 +72,7 @@ struct LocalState {
     Frame lastFrame{};
     bool hasFrame = false;
     NativeCancellation cancellation;
+    WorldQueryPreference worldQueries;
     bool stopAfterUpdate = false;
     bool syntheticInput = false;
     bool releaseSequence = false;
@@ -335,7 +336,7 @@ void DecidePreparedInput(void* owner, void* param) {
     const bool needTarget = NeedsTargetQuery(settings,frame,local.controller);
     const bool rayReady = PrepareViewRay(settings.showDot || needTarget,settings.showDot,ray);
     frame.contextValid = frame.contextValid && (!needTarget || rayReady);
-    NativeTargetQueries queries(library,match,pawn);
+    NativeTargetQueries queries(library,match,pawn,&local.worldQueries);
     TargetResult target = TargetResult::InvalidRay;
     frame.targetValid = false;
     if (needTarget && rayReady) {

@@ -321,10 +321,12 @@ PhantomTrigger::WorldDiagnostic DiagnosticSample() {
     sample.owner=PhantomTrigger::WorldProbeOwner::Target;
     sample.targetDistance=37.125f;sample.worldDistance=17.25f;sample.contactDistance=17.25f;
     sample.material=-1;sample.group=6;sample.contacts=32;sample.sequence=12345;sample.timeMillis=1000;
+    sample.fastQueries=0;sample.contactQueries=1;sample.elapsedMicros=2200;
     return sample;
 }
 ImRect diagnosticTextRect;
-ImGuiWindow* DiagnosticFrame(float width,float scale,std::uint64_t now) {
+ImGuiWindow* DiagnosticFrame(float width,float scale,std::uint64_t now,
+                             PhantomTrigger::DecisionStatus status=PhantomTrigger::DecisionStatus::WorldBlocked) {
     ImGui::NewFrame();custom::UpdateTouchScroll();lite_ui::Theme();lite_widgets::scale=scale;
     ImGui::SetNextWindowPos({20,20});ImGui::SetNextWindowSize({width+32.f,340.f*scale+32.f});
     ImGui::Begin("Trigger diagnostic fixture",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings);
@@ -332,9 +334,9 @@ ImGuiWindow* DiagnosticFrame(float width,float scale,std::uint64_t now) {
     if(lite_widgets::BeginPanel("triggerbot",{width,300.f*scale})) {
         panel=ImGui::GetCurrentWindow();
         bool enabled=true;lite_widgets::Checkbox("Triggerbot",&enabled);
-        ImGui::TextUnformatted("Mode: ADS Only");ImGui::TextWrapped("Target is behind cover");
+        ImGui::TextUnformatted("Mode: ADS Only");ImGui::TextWrapped("%s",PhantomTrigger::DecisionStatusText(status));
         lite_widgets::Button("Retry setup",{0,0});
-        RenderTriggerDiagnostics(PhantomTrigger::DecisionStatus::WorldBlocked,DiagnosticSample(),now);
+        RenderTriggerDiagnostics(status,DiagnosticSample(),now);
         diagnosticTextRect=GImGui->LastItemData.Rect;
         assert(diagnosticTextRect.Min.x>=panel->WorkRect.Min.x-1.f);
         assert(diagnosticTextRect.Max.x<=panel->WorkRect.Max.x+1.f);
@@ -358,6 +360,8 @@ void ValidateDiagnostics() {
         assert(std::fabs(panel->Scroll.y-panel->ScrollMax.y)<1.f);
         assert(diagnosticTextRect.Max.y<=panel->InnerRect.Max.y+1.f);
         DiagnosticFrame(width,scale,3000);DiagnosticFrame(width,scale,999);
+        DiagnosticFrame(width,scale,1016,PhantomTrigger::DecisionStatus::Firing);
+        DiagnosticFrame(width,scale,3000,PhantomTrigger::DecisionStatus::Firing);
     }
     assert(std::memcmp(previous.data(),&Config,sizeof(Config))==0);
     const auto after=PhantomTrigger::GetSettings();

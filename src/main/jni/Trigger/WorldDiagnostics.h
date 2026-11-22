@@ -5,20 +5,22 @@
 #include <mutex>
 
 namespace PhantomTrigger {
-inline constexpr const char* WorldDiagnosticRevision="obstruction-3";
+inline constexpr const char* WorldDiagnosticRevision="obstruction-4";
 inline constexpr std::uint64_t WorldDiagnosticFreshnessMillis=1500;
 enum class WorldProbeReason : std::uint8_t {
     None,Clear,Endpoint,ContactsUnavailable,ContactLimit,ContactMismatch,MapUnavailable,
-    ColliderUnavailable,CharacterUnavailable,Character,Glass,Solid,Shield,InvalidDistance
+    ColliderUnavailable,CharacterUnavailable,Character,Glass,BulletIgnored,Solid,Shield,InvalidDistance
 };
 enum class WorldProbeOwner : std::uint8_t { Unknown,Body,Self,Target,Other,World };
 struct WorldDiagnostic {
     Occlusion result=Occlusion::Unavailable;
     WorldProbeReason reason=WorldProbeReason::None;
     WorldProbeOwner owner=WorldProbeOwner::Unknown;
+    std::uint8_t fastQueries=0,contactQueries=0;
     float targetDistance=0.f,worldDistance=-1.f,contactDistance=-1.f;
     int material=-1,group=-1;
     std::uint32_t contacts=0;
+    std::uint32_t elapsedMicros=0;
     std::uint64_t sequence=0,timeMillis=0;
 };
 inline std::uint64_t WorldDiagnosticClock() noexcept {
@@ -53,6 +55,7 @@ inline const char* WorldProbeReasonText(WorldProbeReason reason) noexcept {
         case WorldProbeReason::CharacterUnavailable:return "Character hit unverified";
         case WorldProbeReason::Character:return "Verified character contact";
         case WorldProbeReason::Glass:return "Passable glass contact";
+        case WorldProbeReason::BulletIgnored:return "Native bullet-passable contact";
         case WorldProbeReason::Solid:return "Solid collider reported";
         case WorldProbeReason::Shield:return "Shield/body group blocks";
         case WorldProbeReason::InvalidDistance:return "Invalid world distance";
@@ -85,9 +88,10 @@ inline bool FormatWorldDiagnostic(char* text,std::size_t capacity,const WorldDia
             static_cast<unsigned long long>(age),static_cast<unsigned long long>(value.sequence));
         return true;
     }
-    std::snprintf(text,capacity,"Last world ray: %s\nBody %.4f | world %.4f\nContact %.4f | %s\nMaterial %d | group %d | hits %u\n%llu ms old | #%llu",
+    std::snprintf(text,capacity,"Last world ray: %s\nBody %.4f | world %.4f\nContact %.4f | %s\nMaterial %d | group %d | hits %u\nWorld %u us | rays %u+%u\n%llu ms old | #%llu",
         WorldProbeReasonText(value.reason),value.targetDistance,value.worldDistance,
         value.contactDistance,WorldProbeOwnerText(value.owner),value.material,value.group,value.contacts,
+        value.elapsedMicros,static_cast<unsigned>(value.fastQueries),static_cast<unsigned>(value.contactQueries),
         static_cast<unsigned long long>(age),
         static_cast<unsigned long long>(value.sequence));
     return true;

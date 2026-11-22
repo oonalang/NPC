@@ -21,6 +21,7 @@ run_test 'Trigger runtime' \
     "$project_dir/src/main/jni/Trigger/TriggerRuntime.cpp"
 run_test 'Trigger dot appearance' "$project_dir/tests/trigger_dot_style_test.cpp"
 run_test 'World obstruction diagnostics' -pthread "$project_dir/tests/world_diagnostics_test.cpp"
+run_test 'Fresh world query budget' "$project_dir/tests/world_query_test.cpp"
 run_test 'Prepared sniper input' "$project_dir/tests/sniper_input_test.cpp"
 
 

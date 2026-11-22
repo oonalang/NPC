@@ -23,7 +23,7 @@ struct GlassPath {
 };
 
 using RayContacts = std::array<RayContact, MaxGlassContacts>;
-enum class ContactKind { Unavailable, Solid, Glass, Character };
+enum class ContactKind { Unavailable, Solid, Glass, Character, BulletIgnored };
 
 inline bool EligibleBodyGroup(int group,bool avatar) noexcept {
     return group!=6 && group!=32 && ((group>=1 && group<=31) || (group==0 && avatar));
@@ -36,6 +36,10 @@ inline ContactKind VerifiedCharacterContact(bool detailed,int group,bool avatar)
 
 inline bool IsPassableGlass(int materialType) noexcept {
     return materialType == 1 || materialType == 12 || materialType == 33;
+}
+
+inline bool IsBulletIgnoredWorldMaterial(int materialType,std::uintptr_t actor=0) noexcept {
+    return !actor && materialType>=0 && materialType<16 && ((0xA800u>>materialType)&1u)!=0;
 }
 
 inline bool CompleteContactCount(int count, std::uint64_t capacity) noexcept {
@@ -90,7 +94,7 @@ Occlusion CheckWorldContacts(RayContacts& contacts,std::size_t count,RayContact 
         const auto kind=classify(contact.collider);
         if(kind==ContactKind::Unavailable) return Occlusion::Unavailable;
         if(kind==ContactKind::Solid) return Occlusion::Blocked;
-        if(kind==ContactKind::Character) continue;
+        if(kind==ContactKind::Character || kind==ContactKind::BulletIgnored) continue;
         if(kind!=ContactKind::Glass || ++panes>MaxGlassPanes) return Occlusion::Unavailable;
     }
     return Occlusion::Clear;
