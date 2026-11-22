@@ -26,6 +26,7 @@
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <mutex>
 
 #include "oxorany/source/oxorany.h"
 #include "oxorany/source/oxorany.cpp"
@@ -121,6 +122,7 @@ namespace font {
 
 static int g_GlWidth, g_GlHeight;
 static bool g_App = false;
+static std::mutex g_LiteRenderMutex;
 
 struct My_Patches
 {
@@ -202,9 +204,15 @@ static void PollLiteTouch(ImGuiIO& io) {
 }
 
 EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
-    eglQuerySurface(dpy,surface,EGL_WIDTH,&g_GlWidth);
-    eglQuerySurface(dpy,surface,EGL_HEIGHT,&g_GlHeight);
-    if(g_GlWidth<=0 || g_GlHeight<=0) return old_eglSwapBuffers(dpy,surface);
+    if(!old_eglSwapBuffers) return EGL_FALSE;
+    if(eglGetCurrentContext()==EGL_NO_CONTEXT || eglGetCurrentDisplay()!=dpy ||
+        eglGetCurrentSurface(EGL_DRAW)!=surface) return old_eglSwapBuffers(dpy,surface);
+    std::unique_lock<std::mutex> renderLock(g_LiteRenderMutex,std::try_to_lock);
+    if(!renderLock.owns_lock()) return old_eglSwapBuffers(dpy,surface);
+    EGLint width=0,height=0;
+    if(!eglQuerySurface(dpy,surface,EGL_WIDTH,&width) || !eglQuerySurface(dpy,surface,EGL_HEIGHT,&height) ||
+        width<=0 || height<=0) return old_eglSwapBuffers(dpy,surface);
+    g_GlWidth=width;g_GlHeight=height;
     if(!g_App) {
         ImGui::CreateContext();
         auto& io=ImGui::GetIO();
@@ -212,7 +220,10 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         io.ConfigFlags|=ImGuiConfigFlags_NoMouseCursorChange;
         io.MouseDragThreshold=7.f;
         lite_touch::Input::Configure(io);
-        ImGui_ImplOpenGL3_Init("#version 300 es");
+        if(!ImGui_ImplOpenGL3_Init("#version 300 es")) {
+            ImGui::DestroyContext();
+            return old_eglSwapBuffers(dpy,surface);
+        }
         const auto fonts=lite_fonts::Load(*io.Fonts,lite_body_start,lite_body_end-lite_body_start,
             lite_title_start,lite_title_end-lite_title_start,lite_icons_start,lite_icons_end-lite_icons_start);
         font::inter_semibold=fonts.body?fonts.body:io.Fonts->AddFontDefault();

@@ -424,6 +424,15 @@ int main(int argc, char** argv) {
     assert(argc >= 2);
     ImGui::SetAllocatorFunctions(Allocate,Free);
 #ifdef LITE_GPU_TEST
+    ImGui::CreateContext();
+    const auto startupAllocations=allocations;
+    for(int attempt=0;attempt<100;++attempt) {
+        assert(!ImGui_ImplOpenGL3_Init("#version 300 es"));
+        assert(ImGui::GetIO().BackendRendererUserData==nullptr);
+    }
+    assert(allocations==startupAllocations);
+    ImGui::DestroyContext();
+    std::puts("Renderer startup: missing-current-context initialization rejected without backend allocation or stale state");
     const auto getDisplay = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(eglGetProcAddress("eglGetPlatformDisplayEXT"));
     assert(getDisplay);
     const auto display = getDisplay(EGL_PLATFORM_SURFACELESS_MESA,EGL_DEFAULT_DISPLAY,nullptr);

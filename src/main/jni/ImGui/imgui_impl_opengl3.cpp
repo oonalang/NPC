@@ -245,6 +245,9 @@ bool    ImGui_ImplOpenGL3_Init(const char* glsl_version)
     }
 #endif
 
+    if (glGetString(GL_VERSION) == NULL)
+        return false;
+
     // Setup backend capabilities flags
     ImGui_ImplOpenGL3_Data* bd = IM_NEW(ImGui_ImplOpenGL3_Data)();
     io.BackendRendererUserData = (void*)bd;
