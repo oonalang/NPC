@@ -51,8 +51,11 @@ int main(){
  tiers.Record({2001,100,5001},5);tiers.Record({3001,100,5001},4);
  assert(tiers.Resolve(100,2001,0,result)&&result.id==2001);
  assert(!tiers.Resolve(100,3001,2001,result));assert(!tiers.Resolve(100,0,5001,result));
- tiers.SetVisual(100,2001);assert(tiers.Resolve(100,3001,0,result)&&result.id==2001);
- tiers.SetVisual(100,3001);assert(!tiers.Resolve(100,2001,0,result));
+ tiers.SetVisual(100,2001);assert(!tiers.Resolve(100,3001,0,result));
+ assert(tiers.Resolve(100,0,0,result)&&result.id==2001);
+ tiers.SetVisual(3001,2001);assert(tiers.Resolve(100,3001,0,result)&&result.id==2001);
+ tiers.SetVisual(100,3001);assert(tiers.Resolve(100,2001,0,result)&&result.id==2001);
+ assert(!tiers.Resolve(100,0,0,result));
  tiers.Record({2001,100,5001},3);assert(!tiers.Resolve(2001,0,0,result));
  Catalog bounded;
  for(unsigned i=0;i<maximumRows+8;++i)bounded.Put(Kind::Board,Linked(610000001+i,2001));
@@ -92,7 +95,8 @@ int main(){
  assert(catalog.Put(Kind::Board,Linked(610000003,2001)));assert(native::Board(nullptr,71,nullptr)==72);
  Put(inventory,0x48,std::uint32_t(610000003));assert(native::Board(nullptr,71,nullptr)==610000003);
  Put(inventory,0x48,std::uint32_t(610000002));assert(native::Board(nullptr,71,nullptr)==72);
- weapons.SetVisual(100,2002);assert(native::Board(nullptr,71,nullptr)==610000002);
+ weapons.SetVisual(100,2002);Put(inventory,0x38,std::uint32_t(3001));assert(native::Board(nullptr,71,nullptr)==72);
+ Put(inventory,0x38,std::uint32_t(0));assert(native::Board(nullptr,71,nullptr)==610000002);
  weapons.SetVisual(100,3001);assert(native::Board(nullptr,71,nullptr)==72);
  configured.automatic=false;Publish(configured);auto calls=localCalls;native::Feed(nullptr,data.data(),nullptr);assert(calls==localCalls);
  const auto count=catalog.Count(Kind::Icon);Put(icon,0x2c,std::uint32_t(600000004));Put(allowed,0x18,std::uintptr_t(maximumWeapons+1));native::IconData(icon.data(),nullptr,nullptr);assert(catalog.Count(Kind::Icon)==count&&roots.size()==2);

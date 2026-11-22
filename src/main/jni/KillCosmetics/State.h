@@ -44,7 +44,7 @@ public:
     }
     bool Resolve(std::uint32_t item,std::uint32_t blueprint,std::uint32_t skin,Weapon& result) const {
         std::lock_guard<std::mutex> lock(mutex_);
-        const auto visual=visual_.find(item);
+        const auto visual=visual_.find(blueprint && blueprint!=item?blueprint:item);
         const auto candidate=visual!=visual_.end()?visual->second:blueprint?blueprint:item;
         auto found=rows_.find(candidate);
         if(found==rows_.end() && visual==visual_.end() && !blueprint && skin)found=rows_.find(skin);
