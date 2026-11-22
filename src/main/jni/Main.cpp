@@ -441,6 +441,7 @@ static void RequestLicensedFeatures() {
             reinterpret_cast<void**>(&oWeaponFireComponent_Instant_CreateBulletProjectile));
         g_LiteSetupProgress.store(2,std::memory_order_release);
         InstallBRClassEspConfigHook();InitializeAllHooks();BlueprintEquipment::Install();
+        kill_cosmetics::native::Install(m_unity);
         Init_Thread2();RequestTriggerInitialization();
         g_LiteSetupProgress.store(3,std::memory_order_release);
     }).detach();

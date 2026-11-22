@@ -1363,7 +1363,7 @@ void Skins_Thread()
     }
 
 #if defined(ETHNIR_LITE) && ETHNIR_LITE
-    kill_cosmetics::native::Install(m_unity);
+    kill_cosmetics::native::InstallCollectors(m_unity);
 #endif
 
     // Install WeaponPartAsset + AttachmentConf collector hooks early

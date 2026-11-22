@@ -1,16 +1,30 @@
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 #include <thread>
+#include <limits>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <dirent.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include "../src/main/jni/foxcheats/include/json.hpp"
 #include "../src/main/jni/KillCosmetics/Config.h"
-struct Tools {static bool ReadAddr(void* p,void* out,std::size_t n){if(!p)return false;std::memcpy(out,p,n);return true;}};
-int DobbyHook(void*,void*,void**){return -1;}
+bool validProfile=false;
+int hookCalls=0,failHook=-1;
+void Trampoline(){}
+int DobbyHook(void*,void*,void** original){
+ const int index=hookCalls++;
+ if(index==failHook)return -1;
+ *original=reinterpret_cast<void*>(Trampoline);return 0;
+}
 #include "../src/main/jni/KillCosmetics/Native.h"
 namespace license {bool authorized=false;bool Allows(Capability) noexcept{return authorized;}}
 namespace PhantomTrigger {namespace NativeProfileDetail {
-bool ValidateEntrypoints(std::uintptr_t,const CodeCheck*,std::size_t,const char*&) noexcept{return false;}
+bool ValidateEntrypoints(std::uintptr_t,const CodeCheck*,std::size_t,const char*&) noexcept{return validProfile;}
 }}
 using namespace kill_cosmetics;
 namespace {
@@ -45,8 +59,50 @@ bool Medal(void*,void*,void*,std::uint64_t,int level,bool,void* back,void* front
 }
 int Deserialize(void*,void**,void*){return 19;}
 Row Linked(std::uint32_t id,std::uint32_t weapon){Row row;row.id=id;row.asset=700;row.weapons[0]=weapon;row.weaponCount=1;return row;}
+std::string Permissions(const void* pointer) {
+ std::ifstream maps("/proc/self/maps");std::string line;
+ while(std::getline(maps,line)) {
+  unsigned long first=0,last=0;char mode[5]{};
+  if(std::sscanf(line.c_str(),"%lx-%lx %4s",&first,&last,mode)==3 && reinterpret_cast<std::uintptr_t>(pointer)>=first && reinterpret_cast<std::uintptr_t>(pointer)<last)return mode;
+ }
+ return {};
+}
+int Descriptors() {
+ auto* dir=opendir("/proc/self/fd");assert(dir);
+ int count=0;while(readdir(dir))++count;closedir(dir);return count;
+}
 }
 int main(){
+ const auto page=static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+ auto* memory=static_cast<unsigned char*>(mmap(nullptr,page*3,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0));
+ assert(memory!=MAP_FAILED);
+ assert(mprotect(memory+page,page,PROT_READ|PROT_WRITE)==0);
+ const std::uint32_t sample=0x13572468;
+ std::memcpy(memory+page,&sample,sizeof(sample));
+ assert(mprotect(memory+page,page,PROT_READ)==0);
+ std::uint32_t read=0;
+ const auto permissions=Permissions(memory+page);
+ assert(permissions=="r--p");
+ assert(native::Read(memory,page,read)&&read==sample);
+ const auto descriptors=Descriptors();
+ for(int i=0;i<1000;++i)assert(native::Read(memory,page,read)&&read==sample);
+ assert(Descriptors()==descriptors && Permissions(memory+page)==permissions);
+ assert(!native::Read(memory,0,read)&&read==sample);
+ assert(!native::Read(memory+page*2-2,0,read)&&read==sample);
+ assert(native::Read(memory,page,read)&&read==sample);
+ assert(Permissions(memory+page)==permissions && Descriptors()==descriptors);
+ std::array<unsigned char,257> oversized{};
+ assert(!kill_cosmetics::memory::Copy(memory+page,oversized.data(),oversized.size()));
+ const native::Snapshot<4> small(memory+page);
+ assert(small.Read(0,read)&&read==sample && !small.Read(1,read));
+ assert(!native::Read(nullptr,0,read));
+ assert(!native::Read(reinterpret_cast<void*>(std::numeric_limits<std::uintptr_t>::max()-1),4,read));
+ assert(!native::Read(reinterpret_cast<void*>(std::numeric_limits<std::uintptr_t>::max()-1),0,read));
+ assert(munmap(memory,page*3)==0);
+ assert(!native::Read(memory,page,read)&&read==sample);
+ std::thread reader([&]{std::uint32_t v=0;for(int i=0;i<1000;++i)assert(native::Read(&sample,0,v)&&v==sample);});
+ for(int i=0;i<1000;++i)assert(native::Read(&sample,0,read)&&read==sample);
+ reader.join();
  WeaponCatalog tiers;Weapon result;
  tiers.Record({2001,100,5001},5);tiers.Record({3001,100,5001},4);
  assert(tiers.Resolve(100,2001,0,result)&&result.id==2001);
@@ -104,6 +160,20 @@ int main(){
  std::thread writer([&]{for(int i=0;i<1000;++i)catalog.Put(Kind::Board,Linked(610000003,2001+i%2));});
  for(int i=0;i<1000;++i){catalog.Match(Kind::Board,{2001,100,5001},0,selected);}
  writer.join();
- available.store(false);assert(!native::Install(0));
- std::puts("Automatic mythic cosmetics: verified weapon tier, native weapon associations, switching and visual overrides, ambiguity/native preference, non-mythic stock behavior, bounds, legacy-ID migration, native adapters, locality/license/disable guards, scoped restoration and rooted lifetime passed");
+ available.store(false);native::bindingsReady.store(false);native::installed=0;native::base=0;
+ assert(!native::InstallCollectors(0)&&hookCalls==0);
+ assert(!native::InstallCollectors(0x10000000)&&hookCalls==0);
+ validProfile=true;failHook=2;
+ assert(!native::InstallCollectors(0x10000000)&&native::installed==2&&!available.load());
+ failHook=-1;
+ assert(native::InstallCollectors(0x10000000)&&native::installed==4&&hookCalls==5);
+ assert(!available.load()&&native::bindingsReady.load());
+ assert(native::InstallCollectors(0x10000000)&&hookCalls==5);
+ assert(!native::InstallCollectors(0x20000000)&&hookCalls==5);
+ license::authorized=false;
+ assert(!native::Install(0x10000000)&&hookCalls==5);
+ license::authorized=true;
+ assert(native::Install(0x10000000)&&native::installed==7&&hookCalls==8&&available.load());
+ assert(native::Install(0x10000000)&&hookCalls==8);
+ std::puts("Automatic mythic cosmetics: protected/partial/stale reads without permission changes, overflow checks, collector-only startup, failed-install retry, post-login presentation, verified weapon tier, associations, switching, native adapters, config, stock handling, restoration and rooted lifetime passed");
 }

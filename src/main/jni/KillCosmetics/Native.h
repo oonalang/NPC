@@ -1,7 +1,9 @@
 #pragma once
 #include "State.h"
+#include "Memory.h"
 #include "../Trigger/NativeProfile.h"
 #include "../Security/Access.h"
+#include <limits>
 
 namespace kill_cosmetics { namespace native {
 using Metadata=void*;
@@ -24,8 +26,24 @@ inline std::uint32_t (*originalBoard)(void*,std::uint32_t,Metadata)=nullptr;
 inline bool (*originalMedal)(void*,void*,void*,std::uint64_t,int,bool,void*,void*,int,int,Metadata)=nullptr;
 inline void (*originalFeed)(void*,void*,Metadata)=nullptr;
 template<class T> inline bool Read(const void* object,std::size_t offset,T& value) {
-    return object && Tools::ReadAddr(reinterpret_cast<void*>(reinterpret_cast<std::uintptr_t>(object)+offset),&value,sizeof(value));
+    const auto address=reinterpret_cast<std::uintptr_t>(object);
+    if(!address || offset>std::numeric_limits<std::uintptr_t>::max()-address) return false;
+    const auto field=address+offset;
+    if(sizeof(value)>std::numeric_limits<std::uintptr_t>::max()-field) return false;
+    T next{};
+    if(!memory::Copy(reinterpret_cast<void*>(field),&next,sizeof(next))) return false;
+    value=next;return true;
 }
+template<std::size_t N> struct Snapshot {
+    std::array<unsigned char,N> bytes{};
+    std::size_t size=0;
+    bool valid=false;
+    explicit Snapshot(const void* object,std::size_t count=N):size(count),valid(count<=N && memory::Copy(object,bytes.data(),count)) {}
+    template<class T> bool Read(std::size_t offset,T& value) const {
+        if(!valid || offset>size || sizeof(value)>size-offset)return false;
+        std::memcpy(&value,bytes.data()+offset,sizeof(value));return true;
+    }
+};
 inline bool String(void* value) {
     int length=0;return value && Read(value,0x10,length) && length>=0 && length<=1024;
 }
@@ -62,20 +80,22 @@ inline void Capture(Kind kind,void* object) {
     if(!bindingsReady.load(std::memory_order_acquire)) return;
     Row row;
     const bool broadcast=kind==Kind::Broadcast;
-    if(!Read(object,broadcast?0x24:kind==Kind::Board?0x28:0x2c,row.id))return;
-    if(broadcast) {if(!Read(object,0x34,row.asset))return;}
-    else if(!Read(object,0x14,row.asset) || !Read(object,kind==Kind::Board?0x38:0x24,row.effect))return;
+    const Snapshot<0x78> fields(object,broadcast?0x68:kind==Kind::Board?0x70:0x78);
+    if(!fields.Read(broadcast?0x24:kind==Kind::Board?0x28:0x2c,row.id))return;
+    if(broadcast) {if(!fields.Read(0x34,row.asset))return;}
+    else if(!fields.Read(0x14,row.asset) || !fields.Read(kind==Kind::Board?0x38:0x24,row.effect))return;
     void* allowed=nullptr;
-    if(!Read(object,broadcast?0x60:kind==Kind::Board?0x68:0x70,allowed))return;
+    if(!fields.Read(broadcast?0x60:kind==Kind::Board?0x68:0x70,allowed))return;
     if(allowed) {
         std::uintptr_t count=0;
         if(!Read(allowed,0x18,count) || count>maximumWeapons)return;
         row.weaponCount=static_cast<std::uint16_t>(count);
-        for(std::size_t i=0;i<count;++i)if(!Read(allowed,0x20+i*4,row.weapons[i]) || !row.weapons[i] || row.weapons[i]>INT32_MAX)return;
+        if(count && !memory::Copy(static_cast<unsigned char*>(allowed)+0x20,row.weapons.data(),count*4))return;
+        for(std::size_t i=0;i<count;++i)if(!row.weapons[i] || row.weapons[i]>INT32_MAX)return;
     }
     if(!catalog.Put(kind,row) || kind!=Kind::Icon) return;
     void* background=nullptr;void* foreground=nullptr;
-    if(!Read(object,0x40,background) || !Read(object,0x68,foreground)) return;
+    if(!fields.Read(0x40,background) || !fields.Read(0x68,foreground)) return;
     const auto next=IconRoots{Root(background),Root(foreground),row.effect};
     auto& store=RootStore();std::lock_guard<std::mutex> lock(store.mutex);
     auto& previous=store.icons[row.id];
@@ -94,7 +114,8 @@ inline int WeaponData(void* object,void** bytes,Metadata method) {
     const int result=originalWeaponData(object,bytes,method);
     if(result>=0 && bindingsReady.load(std::memory_order_acquire)) {
         Weapon weapon;unsigned char rarity=0;
-        if(Read(object,0x40,weapon.id) && Read(object,0x34,weapon.base) && Read(object,0x38,weapon.skin) && Read(object,0x22,rarity))
+        const Snapshot<0x44> fields(object);
+        if(fields.Read(0x40,weapon.id) && fields.Read(0x34,weapon.base) && fields.Read(0x38,weapon.skin) && fields.Read(0x22,rarity))
             weapons.Record(weapon,rarity);
     }
     return result;
@@ -163,11 +184,11 @@ inline void Feed(void* cell,void* data,Metadata method) {
     if(!retained.value) {originalFeed(cell,data,method);return;}
     ScopedBroadcast scoped(inventory,row.id);originalFeed(cell,data,method);
 }
-inline bool Install(std::uintptr_t library) {
+inline bool InstallThrough(std::uintptr_t library,std::size_t count) {
     std::lock_guard<std::mutex> lock(installMutex);
-    if(available.load(std::memory_order_acquire)) return true;
     attempted.store(true,std::memory_order_release);
-    if(!library || (base && base!=library)) return false;
+    if(!library || !count || count>7 || (base && base!=library)) return false;
+    if(installed>=count) return true;
     const char* failure=nullptr;
     if(!PhantomTrigger::NativeProfileDetail::ValidateEntrypoints(library,profile+installed,std::size(profile)-installed,failure)) return false;
     base=library;
@@ -182,11 +203,16 @@ inline bool Install(std::uintptr_t library) {
                   reinterpret_cast<void*>(Board),reinterpret_cast<void*>(Medal),reinterpret_cast<void*>(Feed)};
     void** originals[]{reinterpret_cast<void**>(&originalBoardData),reinterpret_cast<void**>(&originalBroadcastData),reinterpret_cast<void**>(&originalIconData),reinterpret_cast<void**>(&originalWeaponData),
                        reinterpret_cast<void**>(&originalBoard),reinterpret_cast<void**>(&originalMedal),reinterpret_cast<void**>(&originalFeed)};
-    while(installed<std::size(hooks)) {
+    while(installed<count) {
         const auto status=DobbyHook(reinterpret_cast<void*>(base+profile[installed].rva),hooks[installed],originals[installed]);
         if(status!=0 || !*originals[installed]) return false;
         ++installed;
     }
-    available.store(true,std::memory_order_release);return true;
+    if(installed==std::size(hooks)) available.store(true,std::memory_order_release);
+    return true;
+}
+inline bool InstallCollectors(std::uintptr_t library) {return InstallThrough(library,4);}
+inline bool Install(std::uintptr_t library) {
+    return license::Allows(license::Capability::Features) && InstallThrough(library,7);
 }
 }}
