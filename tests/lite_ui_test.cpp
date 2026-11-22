@@ -4,6 +4,7 @@ struct Vector2 { float x, y; };
 struct Vector3 { float x, y, z; };
 #include "../src/main/jni/Hacks/Feature/Init_Hacks.h"
 #include "../src/main/jni/Lite/Menu.h"
+#include "../src/main/jni/Lite/KillCosmetics.h"
 #include "../src/main/jni/Lite/Fonts.h"
 #include "../src/main/jni/Lite/FrostedSidebar.h"
 #include "../src/main/jni/Lite/TouchInput.h"
@@ -36,7 +37,7 @@ void* Allocate(std::size_t size, void*) { ++allocations; return std::malloc(size
 void Free(void* pointer, void*) { std::free(pointer); }
 int skinCalls = 0, musicCalls = 0;
 ImTextureID allowedTexture = nullptr;
-void Skins(int category) { ++skinCalls; ImGui::Text("Category %d",category); }
+void Skins(int category) { ++skinCalls;if(category>=7 && category<10) lite_kill_cosmetics::Draw(static_cast<kill_cosmetics::Kind>(category-7));else ImGui::Text("Category %d",category); }
 void Music() { ++musicCalls; ImGui::TextUnformatted("Music service fixture"); }
 std::vector<unsigned char> Read(const std::filesystem::path& path) {
     std::ifstream input(path,std::ios::binary);
@@ -278,6 +279,7 @@ void ValidateTouch() {
 }
 #include "lite_touch_checks.h"
 #include "lite_keyboard_size_checks.h"
+#include "lite_cosmetics_checks.h"
 #include "lite_restore_checks.h"
 #include "lite_routing_checks.h"
 void ValidateBindings() {
@@ -459,13 +461,17 @@ int main(int argc, char** argv) {
     } else
 #endif
     {
-    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateKeyboard(); ValidateMenuSize(); ValidateBudget();
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateKeyboard(); ValidateMenuSize(); ValidateKillCosmetics(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
     ValidateBlur();ValidateSidebarReference();
     io.DisplaySize = {1280,720}; state = {}; view.ready = true;
     const char* names[]{"home","esp","aim","trigger","memory","skins","settings"};
     for (int tab=0;tab<7;++tab) { state.tab=static_cast<lite_ui::Tab>(tab); PrepareSidebar(); Frame(); Frame(); Screenshot(output/(std::string(names[tab])+".ppm"),true); }
+    for(int kind=0;kind<3;++kind) {state.tab=lite_ui::Tab::Skins;state.skinCategory=7+kind;PrepareSidebar();Frame();Frame();
+        Screenshot(output/(std::string("kill-")+std::to_string(kind)+".ppm"),true);}
+    io.DisplaySize={360,780};state={};state.tab=lite_ui::Tab::Skins;state.skinCategory=7;PrepareSidebar();Frame();Frame();Screenshot(output/"kill-portrait.ppm",true);
+    io.DisplaySize={1280,720};state={};
     DiagnosticFrame(330,1,1016);DiagnosticFrame(330,1,1016);Screenshot(output/"trigger-diagnostic.ppm");
     DiagnosticFrame(180,1,1016);auto* diagnostic=DiagnosticFrame(180,1,1016);
     ImGui::SetScrollY(diagnostic,diagnostic->ScrollMax.y+diagnostic->Size.y);

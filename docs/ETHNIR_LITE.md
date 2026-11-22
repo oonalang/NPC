@@ -38,7 +38,11 @@ Login uses a compact centered matte card, a centered ETHNIR title and spaced LIT
 - Enemy projection/drawing is skipped when all supported visual options are off. Speed/gravity maintenance and existing license revocation restoration still run. Aim/trigger/native feature callbacks are unchanged.
 - The periodic automatic screenshot/upload loop is removed from Lite's render loop. Existing explicit feedback service code is retained.
 
-Measured ARM64 release library size with the same NDK: **3,944,264 bytes** versus main's **7,488,904 bytes**, about **47.3% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
+Measured ARM64 release library size with the same NDK: **3,959,848 bytes** versus main's **7,488,904 bytes**, about **47.1% smaller**. The host Home fixture uses 2,224 vertices and five command lists, with no ImGui allocations over 600 warm frames. Host timings are not phone FPS measurements.
+
+## Kill cosmetics
+
+Skins now includes Kill Icon, Kill Board and Kill Broadcast, with native catalog capture, search, rarity filtering, independent selections and Default to clear. The implementation uses the game's own presentation/resource paths; it does not require the seller's header. See [integration details and limitations](KILL_COSMETICS.md). This first implementation targets the standard client medal/calling-card/MP kill-feed paths. Dedicated BR variants and installed-device appearance remain unverified; downloaded assets and early module loading are required. Configurations retain the selections through an optional `KillCosmetics` section.
 
 ## Files
 
@@ -119,3 +123,5 @@ The keyboard/menu-size follow-up on 2026-11-22 passes the Lite ASan/UBSan and GL
 Capture the actual login/loading/check/reveal sequence using `LITE_GPU_TEST=1 LITE_CAPTURE_STARTUP=1 sh tests/run-lite-ui-tests.sh /tmp/lite-startup`. This emits 180 native frames at 30 FPS. Authentication/setup times and session data are fixtures; the presentation controller and all UI drawing are production code. The striped menu backdrop is a GPU blur test pattern; runtime blur uses the game image.
 
 The GLES harness draws the actual Lite menu and uses fixture callbacks for the Android music service and in-game skin catalog. Screenshots were inspected for clipped headings, over-scaled text, row spacing and narrow-screen layout; padding and inherited font-scale faults were corrected. The retained skin application logic, actual audio playback, Hide Record, game integration and touch coordinate mapping still need a phone run. No installed APK, low-end device FPS, battery, thermal or total game-memory result is claimed. CJK/emoji fallback glyphs are intentionally absent from the small font atlas. The existing skin-catalog processing and native gameplay costs have not been rewritten as part of this UI port.
+
+The kill-cosmetic follow-up passes native-adapter/catalog/GC-lifetime/configuration ASan/UBSan checks, actual SaveConfiguration/LoadConfiguration integration, Lite UI ASan/UBSan and GLES3, 19 new native fingerprints against the supplied ELF, ARM64 release build, hardening and production-root signed release verification. Three category layouts at six viewport sizes, touch selection/clear, search/rarity and 300 warm UI frames pass; the cached rows remain stable with no ImGui allocations. Landscape and portrait fixture captures were inspected. Native size is 3,959,848 bytes, SHA-256 `9d861b6979b98dbe2223c8f084f1231d47d34fa13b4c4a72c15a70166d5856f7`. Logs use `lite-cosmetics-*`. These checks do not establish live-game effects, BR coverage or phone FPS.
