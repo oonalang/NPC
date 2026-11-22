@@ -125,7 +125,7 @@ void ValidateSidebarReference() {
     lite_blur::Release();
     glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,1280,720);
     glClearColor(.12f,.13f,.14f,1);glClear(GL_COLOR_BUFFER_BIT);
-    const auto layout=lite_ui::Fit(io.DisplaySize);
+    const auto layout=lite_ui::MenuLayout(state,io.DisplaySize);
     const auto pos=(io.DisplaySize-layout.size)*.5f;
     const auto texture=lite_blur::Capture({pos.x,pos.y,layout.sidebar,layout.size.y},1280,720,10.);
     assert(texture.id);
@@ -173,7 +173,7 @@ void PrepareSidebar() {
     view.sidebarTexture=allowedTexture=nullptr;
     if (!view.ready || state.minimized) return;
     Backdrop();
-    const auto layout=lite_ui::Fit(ImGui::GetIO().DisplaySize);
+    const auto layout=lite_ui::MenuLayout(state,ImGui::GetIO().DisplaySize);
     const auto pos=state.placement.Position(ImGui::GetIO().DisplaySize,layout.size);
     const auto texture=lite_blur::Capture({pos.x,pos.y,layout.sidebar,layout.size.y},
         int(ImGui::GetIO().DisplaySize.x),int(ImGui::GetIO().DisplaySize.y),ImGui::GetTime());

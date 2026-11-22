@@ -19,6 +19,9 @@ struct State {
     Tab tab = Tab::Home;
     bool minimized = false, music = false, hideRecord = false;
     float zoom = 1.f;
+    float resizeZoom = 1.f;
+    ImVec2 resizeDisplay{};
+    bool sizing = false;
     int skinCategory = 0;
     lite_restore::Swipe restore;
     lite_placement::Placement placement;
@@ -45,21 +48,35 @@ struct Actions {
 struct Layout {
     ImVec2 size;
     float scale = 1.f, sidebar = 180.f;
+    float zoom = 1.f, maximumZoom = 1.35f;
     bool narrow = false;
 };
-inline Layout Fit(ImVec2 display) {
+inline Layout Fit(ImVec2 display,float zoom=1.f) {
     Layout layout;
+    display.x=std::isfinite(display.x)?ImMax(1.f,display.x):1.f;
+    display.y=std::isfinite(display.y)?ImMax(1.f,display.y):1.f;
     layout.narrow = display.x < 620.f;
+    const ImVec2 available(ImMax(1.f,display.x-(layout.narrow?16.f:24.f)),
+        ImMax(1.f,display.y-(layout.narrow?16.f:24.f)));
     if (layout.narrow) {
-        layout.size = {ImMax(160.f, display.x - 16.f), ImMax(160.f, display.y - 16.f)};
+        layout.size = available;
         layout.scale = ImClamp(layout.size.x / 420.f, .85f, 1.f);
         layout.sidebar = 120.f * layout.scale;
     } else {
-        layout.scale = ImClamp(ImMin((display.x - 24.f) / 705.f, (display.y - 24.f) / 500.f), .5f, 1.45f);
+        const float fit=ImMin(available.x/705.f,available.y/500.f);
+        layout.scale = ImMin(fit,ImClamp(fit,.5f,1.45f));
         layout.size = ImVec2(705,500) * layout.scale;
         layout.sidebar = 180.f * layout.scale;
     }
+    layout.maximumZoom=ImMin(1.35f,ImMax(1.f,ImMin(available.x/layout.size.x,available.y/layout.size.y)));
+    layout.zoom=ImClamp(std::isfinite(zoom)?zoom:1.f,.85f,layout.maximumZoom);
+    layout.size=layout.size*layout.zoom;
+    layout.scale*=layout.zoom;
+    layout.sidebar=ImMin(layout.size.x,layout.sidebar*layout.zoom);
     return layout;
+}
+inline Layout MenuLayout(const State& state,ImVec2 display) {
+    return Fit(display,state.sizing?state.resizeZoom:state.zoom);
 }
 inline char* editBuffer = nullptr;
 inline std::size_t editCapacity = 0;
@@ -205,9 +222,14 @@ inline void EspColors(const char* label, float* line, float* box, float* name, f
 
 inline void PreparePlacement(State& state,const View& view) {
     const auto& io=ImGui::GetIO();
-    const auto layout=Fit(io.DisplaySize);
+    const auto limits=Fit(io.DisplaySize);
+    state.zoom=ImClamp(std::isfinite(state.zoom)?state.zoom:1.f,.85f,limits.maximumZoom);
+    if(state.sizing && (!view.ready || !view.interactive || state.minimized || state.tab!=Tab::Settings ||
+        (!io.MouseDown[0] && !io.MouseReleased[0]) ||
+        state.resizeDisplay.x!=io.DisplaySize.x || state.resizeDisplay.y!=io.DisplaySize.y)) state.sizing=false;
+    const auto layout=MenuLayout(state,io.DisplaySize);
     const auto pos=state.placement.Position(io.DisplaySize,layout.size);
-    const ImRect header(pos,pos+ImVec2(layout.sidebar,92.f*layout.scale*state.zoom));
+    const ImRect header(pos,pos+ImVec2(layout.sidebar,92.f*layout.scale));
     state.placement.Update(ImGui::GetFrameCount(),view.ready && view.interactive && !state.minimized && !state.restore.Captures(),
         io.DisplaySize,layout.size,header,io.MousePos,io.MouseClicked[0],io.MouseDown[0],ImMax(7.f,7.f*layout.scale));
     if(state.placement.Tracking()) custom::CancelTouchScroll();
@@ -216,10 +238,10 @@ inline void PreparePlacement(State& state,const View& view) {
 inline Actions Draw(State& state, const View& view, char* key, std::size_t capacity) {
     Actions actions;
     Theme();
-    const auto layout = Fit(ImGui::GetIO().DisplaySize);
-    lite_widgets::scale = layout.scale * state.zoom;
-    c::scale = lite_widgets::scale;
     PreparePlacement(state,view);
+    const auto layout = MenuLayout(state,ImGui::GetIO().DisplaySize);
+    lite_widgets::scale = layout.scale;
+    c::scale = lite_widgets::scale;
     const auto& pointer=ImGui::GetIO();
     const auto restore=lite_restore::Fit(pointer.DisplaySize,layout.scale);
     if(state.restore.Update(view.ready && view.interactive && state.minimized,restore,pointer.MousePos,
@@ -316,7 +338,7 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::BeginChild("##content", {0,layout.size.y}, false,
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding);
         lite_widgets::SetFontScale();
-        const int columns = layout.narrow || state.zoom > 1.1f ? 1 : 2;
+        const int columns = layout.narrow ? 1 : 2;
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(13,4)*layout.scale);
         if (ImGui::BeginTable("##panels", columns, ImGuiTableFlags_SizingStretchSame)) {
         switch (state.tab) {
@@ -433,7 +455,11 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                     if (view.error&&*view.error) ImGui::TextWrapped("%s",view.error);
                 });
                 Panel("menu", 230, [&] {
-                    lite_widgets::SliderFloat("Menu scale",&state.zoom,.85f,1.35f,"%.2fx");
+                    lite_widgets::SliderFloat("Menu size",&state.zoom,.85f,layout.maximumZoom,"%.2fx");
+                    if(ImGui::IsItemActive() && ImGui::GetIO().MouseDown[0] && !state.sizing) {
+                        state.resizeZoom=layout.zoom;state.resizeDisplay=ImGui::GetIO().DisplaySize;state.sizing=true;
+                    }
+                    if(!ImGui::GetIO().MouseDown[0]) state.sizing=false;
                     lite_widgets::Checkbox("Hide Record",&state.hideRecord);
                     lite_widgets::Checkbox("Clear Display",&Config.ExtraMenu.ClearDisplay);
                     lite_widgets::Checkbox("Reset Guest",&Config.ExtraMenu.ResetGuest);

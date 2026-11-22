@@ -266,21 +266,18 @@ void ValidateTouch() {
     ControlTap(choiceRect.GetCenter()); assert(choice==1 && !comboOpen);
     ControlTap(inputRect.GetCenter()); assert(lite_ui::keyboard);
     auto* keyboard = Find("##lite_keyboard"); assert(keyboard);
-    const float height = ImMin(250.f,io.DisplaySize.y*.48f);
-    const float row = (height-20.f-16.f)/5.f;
-    const float width = (io.DisplaySize.x-20.f-36.f)/10.f;
-    const ImVec2 first(10.f+width*.5f,io.DisplaySize.y-height+10.f+row*.5f);
-    ControlTap(first); assert(std::strcmp(text,"1") == 0);
-    const float action = (io.DisplaySize.x-20.f-20.f)/6.f;
-    ControlTap({10.f+(action+4.f)*2.f+action*.5f,first.y+4.f*(row+4.f)});
+    for(int settle=0;settle<45;++settle) ControlsFrame();
+    ControlTap(lite_keyboard::state.keys[lite_keyboard::firstDigit].bounds.GetCenter()); assert(std::strcmp(text,"1") == 0);
+    ControlTap(lite_keyboard::state.keys[lite_keyboard::spaceKey].bounds.GetCenter());
     assert(std::strcmp(text,"1 ") == 0);
-    ControlTap({10.f+(action+4.f)*3.f+action*.5f,first.y+4.f*(row+4.f)});
+    ControlTap(lite_keyboard::state.keys[lite_keyboard::deleteKey].bounds.GetCenter());
     assert(std::strcmp(text,"1") == 0);
     lite_ui::keyboard = false;
     io.AddMouseSourceEvent(ImGuiMouseSource_Mouse); io.AddMousePosEvent(-FLT_MAX,-FLT_MAX); Frame();
     std::puts("Touch taps work; vertical drags pan without changing controls or opening dropdowns; dropdown selection and slider endpoints work; keyboard types, spaces and deletes");
 }
 #include "lite_touch_checks.h"
+#include "lite_keyboard_size_checks.h"
 #include "lite_restore_checks.h"
 #include "lite_routing_checks.h"
 void ValidateBindings() {
@@ -462,7 +459,7 @@ int main(int argc, char** argv) {
     } else
 #endif
     {
-    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateBudget();
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateKeyboard(); ValidateMenuSize(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
     ValidateBlur();ValidateSidebarReference();
@@ -476,6 +473,14 @@ int main(int argc, char** argv) {
     Screenshot(output/"trigger-diagnostic-narrow.ppm");
     DiagnosticFrame(330,1,3000);Screenshot(output/"trigger-diagnostic-stale.ppm");
     ValidateGL();
+    io.DisplaySize={1280,720};keyboardOpen=true;keyboardText[0]=0;lite_keyboard::state={};
+    for(int settle=0;settle<50;++settle) KeyboardFrame();Screenshot(output/"keyboard.ppm",true);
+    io.DisplaySize={360,780};lite_keyboard::state={};
+    for(int settle=0;settle<50;++settle) KeyboardFrame();Screenshot(output/"keyboard-portrait.ppm",true);
+    keyboardOpen=false;KeyboardFrame();
+    io.DisplaySize={1280,720};state={};state.tab=lite_ui::Tab::Settings;state.zoom=.85f;
+    PrepareSidebar();Frame();Frame();Screenshot(output/"menu-size-small.ppm",true);
+    state.zoom=1.f;PrepareSidebar();Frame();Frame();Screenshot(output/"menu-size-full.ppm",true);
     state.minimized=true;PrepareSidebar();Frame();Frame();Screenshot(output/"restore.ppm",true);state.minimized=false;
     state = {}; state.tab = lite_ui::Tab::Memory; io.DisplaySize = {360,780}; PrepareSidebar(); Frame(); Frame(); Screenshot(output/"portrait.ppm",true);
     state = {}; io.DisplaySize = {960,540}; view.ready = view.authorized = false; view.sidebarTexture=allowedTexture=nullptr; Frame(); Frame(); Screenshot(output/"login.ppm");

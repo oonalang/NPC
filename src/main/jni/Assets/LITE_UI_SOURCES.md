@@ -8,6 +8,8 @@ Desktop Win32/D3D11 input, renderer, keybind registry and CS feature implementat
 
 The user's scrolling reference was identified as [`oonalang/ZUCHIZZ-SRC-MOD`](https://github.com/oonalang/ZUCHIZZ-SRC-MOD), main commit `a8adfb1f399d8b591f19327893c3119054a62f54`. Its `Main.cpp` forwards Unity touch state before `NewFrame`; `System/UI/MenuUi.h::XuiTheme::TouchScroll` performs separate directional child-window panning. Those files were inspected read-only. Lite retains its own bounded gesture state, scaled touch coordinates, release-only actions and slider/popup protections; no game, login or protection implementation from that repository is imported.
 
+`Lite/Keyboard.h` adapts that repository's `System/UI/Keyboard.h` at the same commit (Git blob `88e3382ac335d1a8358350fb6acd14af6de2e6d3`). It retains the 1120 × 338 panel proportions, dark key/panel colors, pale accent, centered rows, header/count, slide-in and pressed-key drawing. Lite uses fixed animation storage, its existing release/touch validation and bounded UTF-8 editing. Case/symbol controls and a portrait fit retain NPC text-entry functionality. No additional font, image, audio or rendering dependency is imported.
+
 Fonts are imported from the supplied byte arrays by `tools/export-lite-fonts.py`, retaining original glyph outlines and name/copyright/license records. The text subsets retain U+0020–U+00FF; the icon subset retains seven glyphs. FontTools is an offline import dependency, not an Android build/runtime dependency.
 
 | Supplied file | Source SHA-256 | Imported asset |

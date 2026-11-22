@@ -327,7 +327,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     view.interactive=presentation.interactive;view.startup=presentation;
     lite_ui::PreparePlacement(g_LiteState,view);
     if (ready && !g_LiteState.minimized) {
-        const auto layout=lite_ui::Fit(io.DisplaySize);
+        const auto layout=lite_ui::MenuLayout(g_LiteState,io.DisplaySize);
         const auto position=g_LiteState.placement.Position(io.DisplaySize,layout.size);
         const auto texture=lite_blur::Capture({position.x,position.y,layout.sidebar,layout.size.y},
             g_GlWidth,g_GlHeight,std::chrono::duration<double>(now-appStartTime).count());

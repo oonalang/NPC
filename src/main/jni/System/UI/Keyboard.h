@@ -4,6 +4,12 @@
 #include <cctype>
 #include <cstring>
 
+#if defined(ETHNIR_LITE) && ETHNIR_LITE
+#include "../../Lite/Keyboard.h"
+inline void RenderVirtualKeyboard(const char* id,char* buffer,size_t capacity,bool* open) {
+    lite_keyboard::Render(id,buffer,capacity,open);
+}
+#else
 inline void RenderVirtualKeyboard(const char* id, char* buffer, size_t capacity, bool* open) {
     if (!open || !*open || !buffer || capacity < 2) return;
     static bool uppercase = false;
@@ -64,3 +70,4 @@ inline void RenderVirtualKeyboard(const char* id, char* buffer, size_t capacity,
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(2);
 }
+#endif
