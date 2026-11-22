@@ -65,6 +65,22 @@ Skins includes automatic Kill Icon, Kill Board and Kill Broadcast for confirmed 
 
 The baseline ARM64/API21/GLES3 device requirement is retained.
 
+The branch previously inherited a stale full-NPC `src/main/jniLibs/arm64-v8a/libnets.so` and matching `src/main/obj/` files. That 6,696,032-byte binary contains `NPC EXECUTIVE AUTH` and the full ESP preview. They and the generated AIDE `build/` files are now removed from source control; generated native outputs and build caches are ignored. A fresh checkout contains source and required prebuilt dependencies, with no ready-to-inject `libnets.so`.
+
+Build from the repository root with the NDK on PATH, or set `NDK_BUILD` to its executable:
+
+```sh
+sh tools/build-lite.sh
+```
+
+This uses the Android project's `src/main/jni/Android.mk`, release settings and Lite compile definition. Its output is **`src/main/libs/arm64-v8a/libnets.so`**, matching the Gradle `jniLibs` source directory. The script rejects missing Lite UI, full-NPC UI, the wrong ELF architecture and libraries above the 5 MiB release budget. It prints the exact file, byte count and SHA-256 when available. Verification needs only standard shell utilities, so it can also check AIDE's output without Python:
+
+```sh
+sh tools/verify-lite-library.sh src/main/libs/arm64-v8a/libnets.so
+```
+
+After updating an existing checkout, use AIDE's Clean/Rebuild and select the newly built library. Old files copied elsewhere and an already injected process do not update when Git changes; fully close CODM and inject the new output for a device retest. This build correction does not change feature behavior or authentication.
+
 The application ID is `com.android.support.lite`; Java class package names remain `com.android.support`. Both editions can have separate app-private caches. Native licensing still uses the existing shared license panel/session protocol. No PHP or SQL migration is required for Lite.
 
 The Lite launcher requires these files on the existing HTTPS host:
@@ -125,3 +141,5 @@ Capture the actual login/loading/check/reveal sequence using `LITE_GPU_TEST=1 LI
 The GLES harness draws the actual Lite menu and uses fixture callbacks for the Android music service and in-game skin catalog. Screenshots were inspected for clipped headings, over-scaled text, row spacing and narrow-screen layout; padding and inherited font-scale faults were corrected. The retained skin application logic, actual audio playback, Hide Record, game integration and touch coordinate mapping still need a phone run. No installed APK, low-end device FPS, battery, thermal or total game-memory result is claimed. CJK/emoji fallback glyphs are intentionally absent from the small font atlas. The existing skin-catalog processing and native gameplay costs have not been rewritten as part of this UI port.
 
 The automatic mythic-cosmetic follow-up passes native-adapter/catalog/GC-lifetime/configuration ASan/UBSan checks, actual SaveConfiguration/LoadConfiguration migration, Lite UI ASan/UBSan and GLES3, 22 native fingerprints against the supplied ELF, ARM64 release build and hardening. Three status pages at six viewport sizes, actual touch opt-out/re-enable and 300 warm UI frames pass with no ImGui allocations. Landscape and portrait fixture captures were inspected. Native size is 3,965,368 bytes, SHA-256 `fa877723095aaa5ec80ff292c2a5ac62146e306800ce9dc14ab58c50e6f4ce39`. Logs use `lite-cosmetics-auto-*`. These checks do not establish live-game effects, highest-level variant selection, BR coverage or phone FPS.
+
+The stale-build cleanup on 2026-11-22 removes 286 generated files totaling 49,461,545 bytes. A fresh export of the staged source, containing no object files or `libnets.so`, passed `tools/build-lite.sh` with NDK r22: 144 compilation units, Lite fonts/sidebar/widgets included and full preview modules excluded. The installed `src/main/libs/arm64-v8a/libnets.so` is 3,965,368 bytes and byte-identical to the verified automatic-cosmetics library above. ARM64 release hardening and JNI export checks pass. The new shell verifier rejects the actual old full-NPC binary, wrong-architecture/truncated files, full-UI contamination and an oversized library; missing-library/NDK failures are clear. Ignore rules cover generated outputs without hiding required assets, static dependencies or JARs. Logs use `lite-clean-build-*`. The UI/gameplay suites were not rerun because this correction changes build hygiene and tooling only; the native output is identical. No installed-phone result or hosting update is claimed.

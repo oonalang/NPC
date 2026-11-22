@@ -1,5 +1,17 @@
 /private/
 /release-artifacts/
+/build/
+/.gradle/
+/.cxx/
+/.externalNativeBuild/
+/obj/
+/libs/**/libnets.so
+/src/main/obj/
+/src/main/libs/
+/src/main/jniLibs/**/libnets.so
+__pycache__/
+*.pyc
+*.pyo
 *.keystore
 *.jks
 *private*.pem
