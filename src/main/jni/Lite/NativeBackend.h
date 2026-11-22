@@ -1,14 +1,10 @@
 #pragma once
 #include "Menu.h"
-#include "KillCosmetics.h"
 #include "../System/UI/MusicPlayer.h"
 #include <cstring>
 
 namespace lite_backend {
 inline void Skins(int category) {
-    if(category>=7 && category<10) {
-        lite_kill_cosmetics::Draw(static_cast<kill_cosmetics::Kind>(category-7));return;
-    }
     skinSubTab = category;
     RenderSkinCategoryContent(category, false);
 }

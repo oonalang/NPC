@@ -1,9 +1,6 @@
 #pragma once
 
 #include <iomanip>
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-#include "../../KillCosmetics/Config.h"
-#endif
 #include "../Hooks/FrameRate.h"
 #include "../Hooks/SlideFatigue.h"
 #include "../Hooks/Pickup.h"
@@ -100,9 +97,6 @@ bool SaveConfiguration(const std::string& filename) {
     std::string filePath = configDir + "/" + filename + ".json";
     std::ofstream file(filePath);
     if (!file.is_open()) return false;
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-    kill_cosmetics::Save(config);
-#endif
     file << std::setw(4) << config;
     file.close();
     return !file.fail();
@@ -223,9 +217,6 @@ bool LoadConfiguration(const std::string& filename) {
         Config.ExtraMenu.FastPickup = fastPickup;
         Config.ExtraMenu.PickupRange = pickupRange;
         pickup::Publish(fastPickup, pickupRange);
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-        kill_cosmetics::Load(config);
-#endif
         return true;
     }
     catch (const std::exception& e) {

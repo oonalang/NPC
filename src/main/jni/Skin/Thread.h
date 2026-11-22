@@ -3,9 +3,6 @@
 ///--@Npc00000000000000000000000000000
 ///--date 2026-11-06
 #pragma once
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-#include "../KillCosmetics/Native.h"
-#endif
 std::unordered_map<std::string, bool> sBool;
 std::unordered_map<int, int> activeKillEffects;
 std::unordered_map<int, int> activeBulletTrackEffects;
@@ -1361,10 +1358,6 @@ void Skins_Thread()
     {
         sleep(1);
     }
-
-#if defined(ETHNIR_LITE) && ETHNIR_LITE
-    kill_cosmetics::native::InstallCollectors(m_unity);
-#endif
 
     // Install WeaponPartAsset + AttachmentConf collector hooks early
     // so mythic attachment data is captured before LoadWeaponSkins runs.
