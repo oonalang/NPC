@@ -42,6 +42,10 @@ inline void ApplyWeaponSkin(const itemInfo& getitem) {
                 int skinID = getitem.WeaponConf[2];
                 int itemID = getitem.Item2Inventory[0];
                 int lootID = getitem.Item2Inventory[3];
+#if defined(ETHNIR_LITE) && ETHNIR_LITE
+                if(skinID>0)for(const int alias:{baseID,extraID,skinID,itemID,lootID})if(alias>0)
+                    kill_cosmetics::weapons.SetVisual(static_cast<std::uint32_t>(alias),static_cast<std::uint32_t>(skinID));
+#endif
                 void* selectedName=nullptr;
                 for(auto* conf:weaponConfInstance) {
                     if(!conf) continue;

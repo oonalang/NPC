@@ -442,8 +442,8 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
             case Tab::Skins:
                 Panel("blueprints", 150, [] { memory_tab::Blueprints(); });
                 Panel("category", 150, [&] {
-                    static const char* categories[]{"Character","Watch","Deadbox","Plane","Weapon","Camo","Snowboard"};
-                    Combo("Skin category",state.skinCategory,categories,7);
+                    static const char* categories[]{"Character","Watch","Deadbox","Plane","Weapon","Camo","Snowboard","Kill Icon","Kill Board","Kill Broadcast"};
+                    Combo("Skin category",state.skinCategory,categories,10);
                 });
                 break;
             case Tab::Settings:
