@@ -4,6 +4,7 @@ struct Vector2 { float x, y; };
 struct Vector3 { float x, y, z; };
 #include "../src/main/jni/Hacks/Feature/Init_Hacks.h"
 #include "../src/main/jni/Lite/Menu.h"
+#include "../src/main/jni/System/UI/TriggerDiagnostics.h"
 #include "../src/main/jni/Lite/Fonts.h"
 #include "../src/main/jni/Lite/FrostedSidebar.h"
 #include "../src/main/jni/Lite/TouchInput.h"
