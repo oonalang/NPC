@@ -964,8 +964,8 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 //-- Unlimited Ammo
 namespace UnlimitedAmmoCfg
 {
-    constexpr uintptr_t InfiniteCarriedAmmoRva = 0xC2BAB48; // WeaponFireComponentData.get_infiniteCarriedAmmo()
-    constexpr uintptr_t NoCostAmmoRva = 0x6AE86E0; // GameInfo.IsNoCostAmmo(), checked by Weapon.ConsumeAmmo()
+    constexpr uintptr_t InfiniteCarriedAmmoRva = 0xC2BAB48;
+    constexpr uintptr_t NoCostAmmoRva = 0x6AE86E0;
 }
 
 inline bool (*orig_get_InfiniteCarriedAmmo)(void *instance) = nullptr;
