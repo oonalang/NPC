@@ -79,6 +79,7 @@ inline void WeaponControl() {
     custom::Checkbox("No Shake",&Config.ExtraMenu.Shake);
     custom::Checkbox("No Overheat",&Config.ExtraMenu.Rpd);
     custom::Checkbox("Fire Rate",&Config.ExtraMenu.Fire);
+    custom::Checkbox("Unlimited Ammo",&Config.ExtraMenu.UnliAmmo);
 }
 inline void WeaponHandling() {
     custom::Checkbox("Smart Reload",&Config.ExtraMenu.SmartReload);

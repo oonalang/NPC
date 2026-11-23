@@ -961,6 +961,21 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
         orig_Move(instance, deltaMove, deltaTime);
 }
 
+//-- Unlimited Ammo
+namespace UnlimitedAmmoCfg
+{
+    constexpr uintptr_t InfiniteCarriedAmmoRva = 0xC2BAB48; // get_InfiniteCarriedAmmo()
+}
+
+inline bool (*orig_get_InfiniteCarriedAmmo)(void *instance) = nullptr;
+inline bool get_InfiniteCarriedAmmo(void *instance)
+{
+    if (Config.ExtraMenu.UnliAmmo)
+        return true;
+
+    return orig_get_InfiniteCarriedAmmo != nullptr ? orig_get_InfiniteCarriedAmmo(instance) : false;
+}
+
 inline void InitializeAllHooks() {
 
             //--MP VIEW
@@ -1039,6 +1054,9 @@ inline void InitializeAllHooks() {
 
     //-- Weapon Kinetic
     LICENSE_HOOK_LIB("libunity.so", "0x5385AC8", get_IsKineticArmor, orig_get_IsKineticArmor);
+
+    //-- Unlimited Ammo
+    LICENSE_HOOK_LIB("libunity.so", "0xC2BAB48", get_InfiniteCarriedAmmo, orig_get_InfiniteCarriedAmmo);
 
     //-- Zero Recoil
     LICENSE_HOOK_LIB("libunity.so", "0xD535A6C", GetScaleRecoil, orig_GetScaleRecoil);

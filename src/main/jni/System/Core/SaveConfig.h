@@ -56,6 +56,7 @@ bool SaveConfiguration(const std::string& filename) {
     config["ExtraMenu"]["Flash"] = Config.ExtraMenu.Flash;
     config["ExtraMenu"]["Diving"] = Config.ExtraMenu.Diving;
     config["ExtraMenu"]["Fire"] = Config.ExtraMenu.Fire;
+    config["ExtraMenu"]["UnliAmmo"] = Config.ExtraMenu.UnliAmmo;
     config["ExtraMenu"]["NoSprintFire"] = Config.ExtraMenu.NoSprintFire;
     config["ExtraMenu"]["Hit"] = Config.ExtraMenu.Hit;
     config["ExtraMenu"]["HitboxScale"] = hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale);
@@ -145,6 +146,7 @@ bool LoadConfiguration(const std::string& filename) {
             Config.ExtraMenu.Flash = config["ExtraMenu"]["Flash"].get<bool>();
             Config.ExtraMenu.Diving = config["ExtraMenu"]["Diving"].get<bool>();
             Config.ExtraMenu.Fire = config["ExtraMenu"]["Fire"].get<bool>();
+            Config.ExtraMenu.UnliAmmo = config["ExtraMenu"].value("UnliAmmo", false);
             Config.ExtraMenu.NoSprintFire = config["ExtraMenu"].value("NoSprintFire", false);
             Config.ExtraMenu.Hit = config["ExtraMenu"]["Hit"].get<bool>();
             Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(config["ExtraMenu"].value("HitboxScale",hitbox::defaultScale));
