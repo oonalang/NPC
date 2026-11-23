@@ -19,6 +19,15 @@ license::Response Stale(const license::Request& request) {
     std::unique_lock<std::mutex> lock(mutex);blocked=true;wake.notify_all();wake.wait(lock,[]{return released;});
     return Forged(request);
 }
+license::Response Osn(const license::Request& request) {
+    license::Response response;
+    response.failure=license::Failure::None;
+    response.osn=true;
+    response.osnToken="302637905aaaf3166cbabe99db50bd9d";
+    response.osnIssued=request.wall;
+    response.osnLicenseUntil=request.wall+3600;
+    return response;
+}
 int main() {
     using namespace license;
     isLogin=false;
@@ -34,5 +43,8 @@ int main() {
     assert(Authenticate("new-key","device-12345678",Rejected)!="OK");
     {std::lock_guard<std::mutex> lock(mutex);released=true;}wake.notify_all();worker.join();
     assert(result=="Authentication superseded"&&!Allows(Capability::Menu)&&!Allows(Capability::Features));
-    std::puts("Production license runtime: fake-panel/OK responses, missing transport, transient errors and superseded login worker cannot create authorization");
+    assert(Authenticate("key","device-12345678",Osn)=="OK");
+    assert(Allows(Capability::Menu)&&Allows(Capability::Features)&&Allows(Capability::Premium));
+    assert(LicenseUntil()>0);
+    std::puts("Production license runtime: forged, missing, transient and superseded responses rejected; verified OSN login accepted");
 }

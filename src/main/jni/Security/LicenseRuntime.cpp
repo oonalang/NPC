@@ -43,7 +43,11 @@ struct Service {
             error=response.error.empty()?"License request failed":response.error;return false;
         }
         const auto wall=std::time(nullptr);
-        if(!session.Accept(request,response.payload,response.signature,wall>0?std::uint64_t(wall):0,BootMillis())) {
+        const auto accepted=response.osn
+            ? session.AcceptOsn(request,response.osnToken,response.osnIssued,response.osnLicenseUntil,
+                wall>0?std::uint64_t(wall):0,BootMillis())
+            : session.Accept(request,response.payload,response.signature,wall>0?std::uint64_t(wall):0,BootMillis());
+        if(!accepted) {
             error="License response verification failed";return false;
         }
         error.clear();return true;

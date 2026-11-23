@@ -1,6 +1,7 @@
 #pragma once
 #include "Access.h"
 #include "../Includes/PanelLicense.h"
+#include <openssl/crypto.h>
 #include <array>
 #include <atomic>
 #include <memory>
@@ -64,6 +65,35 @@ inline bool Verify(const Request& request, const std::string& payload, const std
     output = claims;
     return true;
 }
+inline bool VerifyOsn(const Request& request, const std::string& token, std::uint64_t issued,
+                      std::uint64_t licenseUntil, std::uint64_t wall, std::uint64_t tick, Claims& output) {
+    if (!Credentials(request.key,request.serial) || !Hex(request.nonce) || token.size() != 32 ||
+        !request.wall || !request.tick || !request.generation || !wall || !issued || !licenseUntil ||
+        licenseUntil > std::uint64_t(INT64_MAX) || tick < request.tick ||
+        tick-request.tick > requestTimeoutMillis || (issued > wall && issued-wall > clockSkewSeconds) ||
+        (request.wall > issued && request.wall-issued > clockSkewSeconds) || issued > UINT64_MAX-leaseSeconds) return false;
+    const auto leaseEnd = issued+leaseSeconds;
+    const auto until = licenseUntil < leaseEnd ? licenseUntil : leaseEnd;
+    if (until <= issued || until <= wall || tick-request.tick >= (until-issued)*1000) return false;
+    const std::string input = std::string(audience)+"-"+request.key+"-"+request.serial+
+        "-Vm8Lk7Uj2JmsjCPVPVjrLa7zgfx3uz9E";
+    unsigned char digest[EVP_MAX_MD_SIZE]{};
+    unsigned int size = 0;
+    auto* context = EVP_MD_CTX_new();
+    if (!context) return false;
+    const bool hashed = EVP_DigestInit_ex(context,EVP_md5(),nullptr) == 1 &&
+        EVP_DigestUpdate(context,input.data(),input.size()) == 1 &&
+        EVP_DigestFinal_ex(context,digest,&size) == 1;
+    EVP_MD_CTX_free(context);
+    if (!hashed || size != 16) return false;
+    constexpr char hex[] = "0123456789abcdef";
+    char expected[33];
+    for (std::size_t i=0;i<16;++i) {expected[i*2]=hex[digest[i]>>4];expected[i*2+1]=hex[digest[i]&15];}
+    expected[32] = '\0';
+    if (CRYPTO_memcmp(token.data(),expected,32) != 0) return false;
+    output = {issued,until,licenseUntil,allCapabilities};
+    return true;
+}
 
 class Session {
     struct Lease {
@@ -92,6 +122,23 @@ public:
                 std::uint64_t wall, std::uint64_t tick) {
         Claims claims;
         const bool verified = Verify(request,payload,signature,wall,tick,claims,publicKey_.c_str(),keyId_.c_str());
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!request.generation || request.generation != pending_.generation || request.nonce != pending_.nonce ||
+            request.key != pending_.key || request.serial != pending_.serial || request.tick != pending_.tick ||
+            request.wall != pending_.wall) return false;
+        pending_ = {};
+        if (!verified || request.tick > UINT64_MAX-(claims.until-claims.issued)*1000) {
+            std::atomic_store(&lease_,std::shared_ptr<const Lease>{});return false;
+        }
+        std::shared_ptr<const Lease> next = std::make_shared<Lease>(Lease{claims,request.tick,
+            request.tick+(claims.until-claims.issued)*1000});
+        std::atomic_store(&lease_,std::move(next));
+        return true;
+    }
+    bool AcceptOsn(const Request& request, const std::string& token, std::uint64_t issued,
+                   std::uint64_t licenseUntil, std::uint64_t wall, std::uint64_t tick) {
+        Claims claims;
+        const bool verified = VerifyOsn(request,token,issued,licenseUntil,wall,tick,claims);
         std::lock_guard<std::mutex> lock(mutex_);
         if (!request.generation || request.generation != pending_.generation || request.nonce != pending_.nonce ||
             request.key != pending_.key || request.serial != pending_.serial || request.tick != pending_.tick ||

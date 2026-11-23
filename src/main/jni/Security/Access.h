@@ -3,7 +3,7 @@
 #include <type_traits>
 
 namespace license {
-inline bool isLogin = true;
+inline bool isLogin = false;
 enum class Capability : std::uint32_t { Menu = 1, Features = 2, Premium = 4 };
 inline constexpr std::uint32_t allCapabilities = 7;
 bool Allows(Capability capability) noexcept;

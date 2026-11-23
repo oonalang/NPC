@@ -397,7 +397,7 @@ static license::Response FetchLicense(const license::Request& request) {
     const std::string body=std::string("protocol=2&game=CODMGR&build=")+license::build+
         "&user_key="+key+"&serial="+serial+"&nonce="+request.nonce;
     curl_free(key);curl_free(serial);
-    curl_easy_setopt(curl,CURLOPT_URL,"https://ethnir.x10.mx/connect.php");
+    curl_easy_setopt(curl,CURLOPT_URL,"https://zeonpanel.x10.mx/connect");
     curl_easy_setopt(curl,CURLOPT_PROTOCOLS,CURLPROTO_HTTPS);
     curl_easy_setopt(curl,CURLOPT_POST,1L);
     curl_easy_setopt(curl,CURLOPT_POSTFIELDS,body.c_str());
@@ -430,7 +430,18 @@ static license::Response FetchLicense(const license::Request& request) {
             if(data.contains("payload")&&data["payload"].is_string()&&data.contains("sig")&&data["sig"].is_string()) {
                 response.payload=data["payload"].get<std::string>();response.signature=data["sig"].get<std::string>();
                 response.failure=license::Failure::None;
-            } else response.error="Client and license panel must both support session protocol v2";
+            } else if(data.contains("token")&&data["token"].is_string()&&
+                data.contains("rng")&&data["rng"].is_number_unsigned()&&
+                data.contains("EXP")&&data["EXP"].is_string()) {
+                const auto expires=parseExpiryDate(data["EXP"].get<std::string>());
+                if(expires>0) {
+                    response.osn=true;
+                    response.osnToken=data["token"].get<std::string>();
+                    response.osnIssued=data["rng"].get<std::uint64_t>();
+                    response.osnLicenseUntil=static_cast<std::uint64_t>(expires);
+                    response.failure=license::Failure::None;
+                } else response.error="Invalid license expiry";
+            } else response.error="Unsupported license panel response";
         } else response.error="Invalid license response";
     }
     curl_slist_free_all(headers);curl_easy_cleanup(curl);free(chunk.memory);

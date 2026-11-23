@@ -103,6 +103,34 @@ void StaleResponses(const LeaseSigner& signer) {
     assert(!session.Begin("", "device-12345678",std::string(64,'a'),1900000000,100000).generation);
     assert(!session.Allows(Capability::Features,100001));
 }
+void OsnGrants() {
+    Session session;
+    const auto request=Begin(session);
+    const std::string token="f7c6f314a4df02a70d50abd8b5e05a16";
+    Claims claims;
+    assert(VerifyOsn(request,token,request.wall,2100000000,request.wall,100001,claims));
+    assert(claims.issued==request.wall&&claims.until==request.wall+180&&
+        claims.licenseUntil==2100000000&&claims.capabilities==allCapabilities);
+    assert(VerifyOsn(request,token,request.wall,request.wall+60,request.wall,100001,claims)&&
+        claims.until==request.wall+60);
+    auto forged=token;forged[0]=forged[0]=='0'?'1':'0';
+    assert(!VerifyOsn(request,forged,request.wall,2100000000,request.wall,100001,claims));
+    auto wrongDevice=request;wrongDevice.serial="device-87654321";
+    assert(!VerifyOsn(wrongDevice,token,request.wall,2100000000,request.wall,100001,claims));
+    assert(!VerifyOsn(request,token,request.wall-31,2100000000,request.wall,100001,claims));
+    assert(!VerifyOsn(request,token,request.wall+31,2100000000,request.wall,100001,claims));
+    assert(!VerifyOsn(request,token,request.wall,request.wall,request.wall,100001,claims));
+    assert(!VerifyOsn(request,token,request.wall,2100000000,0,100001,claims));
+    assert(!VerifyOsn(request,token,request.wall,2100000000,request.wall,130001,claims));
+    assert(session.AcceptOsn(request,token,request.wall,2100000000,request.wall,100000));
+    assert(session.Allows(Capability::Menu,100001)&&session.Allows(Capability::Features,100001)&&
+        session.Allows(Capability::Premium,100001)&&session.LicenseUntil()==2100000000);
+    assert(!session.AcceptOsn(request,token,request.wall,2100000000,request.wall,100001));
+    assert(session.Allows(Capability::Features,100001));
+    const auto rejected=Begin(session,'b',true);
+    assert(!session.AcceptOsn(rejected,forged,rejected.wall,2100000000,rejected.wall,100001));
+    assert(!session.Allows(Capability::Features,100001));
+}
 void ConcurrentReads(const LeaseSigner& signer) {
     Session session(signer.publicKey.c_str(),signer.keyId.c_str());
     std::atomic<bool> stop{false};std::atomic<unsigned> reads{0};
@@ -117,6 +145,6 @@ void ConcurrentReads(const LeaseSigner& signer) {
 namespace license {bool Allows(Capability capability) noexcept {return active&&active->Allows(capability,tick);}}
 int main() {
     LeaseSigner signer;
-    ClaimsAndSignatures(signer);GateAndRevocation(signer);StaleResponses(signer);ConcurrentReads(signer);
-    std::puts("License sessions: forged/misbound/replayed/legacy grants rejected; menu-flag bypass, expiry, revocation, stale workers and native guard forwarding covered");
+    ClaimsAndSignatures(signer);GateAndRevocation(signer);StaleResponses(signer);OsnGrants();ConcurrentReads(signer);
+    std::puts("License sessions: RSA and OSN validation, replay rejection, expiry, revocation, stale workers and native guard forwarding covered");
 }
