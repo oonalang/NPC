@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../Trigger/NativeProfile.h"
+#include "NativeProfile.h"
 #include <algorithm>
 #include <array>
 #include <atomic>

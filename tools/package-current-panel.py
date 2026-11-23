@@ -87,7 +87,6 @@ with tempfile.TemporaryDirectory(prefix='shai-full-panel-') as folder:
     subprocess.run(['openssl', 'dgst', '-sha256', '-verify', str(public), '-signature', str(temp / 'signature.bin')], input=payload, stdout=subprocess.DEVNULL, check=True)
     files['native/libZANEV1.so'] = binary
     files['native/libZANEV1.manifest'] = manifest.read_bytes()
-    files['native/WIZ_LICENSE.md'] = (root / 'src/main/jni/Assets/WIZ_LICENSE.md').read_bytes()
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open('wb') as target:
         output.chmod(0o600)

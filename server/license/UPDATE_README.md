@@ -26,10 +26,7 @@ The included native build also extends adjustable-hitbox sizing to the supported
 
 Game frame-rate options, including Ultra, are unlocked automatically once authorized on a compatible build. The mod no longer has a master unlock toggle, and an older saved disabled value cannot turn the unlock off. The separate numeric FPS overrides remain optional.
 
-The native ESP preview now includes the parented Wiz rig, constrained hair/garment dynamics, articulated gestures and a playback clock that starts when the model is ready. Its artist attribution and noncommercial license are included in `native/WIZ_LICENSE.md`. Host GLES motion captures and source-rig tests passed; Android appearance and performance still require device testing.
 
-The native trigger also recovers when a sniper's shot callback is missing, using verified clip consumption or a bounded cleanup deadline. Confirmation waits and duplicate updates skip redundant target traces, and periodic input checks avoid loader-list walks. Native aim/cooldown and fresh obstruction checks remain; phone testing is still needed to measure the reported missed shots and frame drops.
 
-The shared trigger paths now skip unused ADS/screen-coordinate work and defer native readiness calls until they can affect input. Confirmed release-fire shots can rearm immediately when ready; confirmed press-fire releases avoid a redundant trace. Initial acquisition has no added reaction timer. Separate button edges, native weapon rules and existing unsupported-handler exclusions remain. Host timing/call-budget tests and the ARM64 build passed; no device FPS or reaction-time measurement is included.
 
 Signed authorization raises the cost of panel swaps and response forgery. Software running on an attacker-controlled device can still be patched or rebuilt; this is not an uncrackable binary.

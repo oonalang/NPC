@@ -7,5 +7,5 @@ trap 'rm -f "$test_binary"; rm -rf "$config_dir"' EXIT HUP INT TERM
 "${CXX:-c++}" -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
     -I"$project_dir/src/main/jni/System" \
     "$project_dir/tests/pickup_test.cpp" \
-    "$project_dir/src/main/jni/Trigger/NativeProfile.cpp" -lpthread -o "$test_binary"
+    "$project_dir/src/main/jni/System/Hooks/NativeProfile.cpp" -lpthread -o "$test_binary"
 ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$test_binary" "$config_dir" "$@"

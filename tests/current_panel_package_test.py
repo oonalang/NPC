@@ -42,7 +42,6 @@ with zipfile.ZipFile(a.source_panel) as source, zipfile.ZipFile(a.package) as pa
         assert stat.S_IMODE(package.getinfo(name).external_attr >> 16) == 0o600
     binary = package.read('native/libZANEV1.so')
     assert binary == a.library.read_bytes()
-    assert package.read('native/WIZ_LICENSE.md') == (root / 'src/main/jni/Assets/WIZ_LICENSE.md').read_bytes()
     payload, signature = package.read('native/libZANEV1.manifest').splitlines()
     fields = payload.decode().split('|')
     expected = re.search(r'kKeyId\[\] = "([a-f0-9]{64})"', (root / 'src/main/jni/Security/LicenseRoot.h').read_text()).group(1)

@@ -19,5 +19,3 @@ Fonts are imported from the supplied byte arrays by `tools/export-lite-fonts.py`
 | `fontawesome_binary.hpp` | `be994d16330f6e25b8f29f833425c45fdf83e885c3a6139cfe51b36489c12289` | `lite-icons.ttf`, 3,152 bytes |
 
 The text fonts identify as SF Pro Text and SF Pro Display, © 2015–2017 Apple Inc. Their retained license record refers to the applicable iOS Software License Agreement. The icon font identifies as Font Awesome 5 Pro Regular, copyright Font Awesome. The supplied archive did not include a project-wide license or a separate font redistribution license. This port does not grant additional rights to those source materials. Preserve these records and obtain any required distribution rights before distributing the supplied fonts.
-
-The original Wiz assets and `WIZ_LICENSE.md` remain in source history; they are excluded from the Lite native library.
