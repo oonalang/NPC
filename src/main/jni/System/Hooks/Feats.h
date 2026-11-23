@@ -964,7 +964,8 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
 //-- Unlimited Ammo
 namespace UnlimitedAmmoCfg
 {
-    constexpr uintptr_t InfiniteCarriedAmmoRva = 0xC2BAB48; // get_InfiniteCarriedAmmo()
+    constexpr uintptr_t InfiniteCarriedAmmoRva = 0xC2BAB48; // WeaponFireComponentData.get_infiniteCarriedAmmo()
+    constexpr uintptr_t NoCostAmmoRva = 0x6AE86E0; // GameInfo.IsNoCostAmmo(), checked by Weapon.ConsumeAmmo()
 }
 
 inline bool (*orig_get_InfiniteCarriedAmmo)(void *instance) = nullptr;
@@ -974,6 +975,15 @@ inline bool get_InfiniteCarriedAmmo(void *instance)
         return true;
 
     return orig_get_InfiniteCarriedAmmo != nullptr ? orig_get_InfiniteCarriedAmmo(instance) : false;
+}
+
+inline bool (*orig_GameInfo_IsNoCostAmmo)(void *instance) = nullptr;
+inline bool hook_GameInfo_IsNoCostAmmo(void *instance)
+{
+    if (Config.ExtraMenu.UnliAmmo)
+        return true;
+
+    return orig_GameInfo_IsNoCostAmmo != nullptr ? orig_GameInfo_IsNoCostAmmo(instance) : false;
 }
 
 inline void InitializeAllHooks() {
@@ -1057,6 +1067,7 @@ inline void InitializeAllHooks() {
 
     //-- Unlimited Ammo
     LICENSE_HOOK_LIB("libunity.so", "0xC2BAB48", get_InfiniteCarriedAmmo, orig_get_InfiniteCarriedAmmo);
+    LICENSE_HOOK_LIB("libunity.so", "0x6AE86E0", hook_GameInfo_IsNoCostAmmo, orig_GameInfo_IsNoCostAmmo);
 
     //-- Zero Recoil
     LICENSE_HOOK_LIB("libunity.so", "0xD535A6C", GetScaleRecoil, orig_GetScaleRecoil);
