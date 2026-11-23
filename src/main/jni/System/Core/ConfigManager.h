@@ -8,8 +8,6 @@
 #include "FileUtils.h"
 #include "Hacks/Hacks.h"
 #include "../../BlueprintTierFilter.h"
-#include "../../Trigger/TriggerDotStyle.h"
-#include "../Hooks/Hitbox.h"
 
 extern JavaVM* VM;
 
@@ -22,7 +20,6 @@ void LoadConfig() {
     }
 
     std::string line;
-    Config.ExtraMenu.HitboxScale = hitbox::defaultScale;
     while (std::getline(file, line)) {
         if (line.empty()) {
             continue;
@@ -59,32 +56,22 @@ void LoadConfig() {
         else if (key == "ExtraMenu.Kinetic") Config.ExtraMenu.Kinetic = (valueStr == "1");
         else if (key == "ExtraMenu.Recoil") Config.ExtraMenu.Recoil = (valueStr == "1");
         else if (key == "ExtraMenu.Spread") Config.ExtraMenu.Spread = (valueStr == "1");
+        else if (key == "ExtraMenu.Hit") Config.ExtraMenu.Hit = (valueStr == "1");
         else if (key == "ExtraMenu.Reload") Config.ExtraMenu.Reload = (valueStr == "1");
         else if (key == "ExtraMenu.Scope") Config.ExtraMenu.Scope = (valueStr == "1");
         else if (key == "ExtraMenu.Switch") Config.ExtraMenu.Switch = (valueStr == "1");
         else if (key == "ExtraMenu.Shake") Config.ExtraMenu.Shake = (valueStr == "1");
         else if (key == "ExtraMenu.Flash") Config.ExtraMenu.Flash = (valueStr == "1");
         else if (key == "ExtraMenu.Rpd") Config.ExtraMenu.Rpd = (valueStr == "1");
-        else if (key == "ExtraMenu.Hit") Config.ExtraMenu.Hit = (valueStr == "1");
-        else if (key == "ExtraMenu.HitboxScale") Config.ExtraMenu.HitboxScale = hitbox::NormalizeScale(std::stof(valueStr));
         else if (key == "ExtraMenu.Fire") Config.ExtraMenu.Fire = (valueStr == "1");
-        else if (key == "ExtraMenu.NoSprintFire") Config.ExtraMenu.NoSprintFire = (valueStr == "1");
         else if (key == "ExtraMenu.Parachute") Config.ExtraMenu.Parachute = (valueStr == "1");
         else if (key == "ExtraMenu.NoCrouch") Config.ExtraMenu.NoCrouch = (valueStr == "1");
         else if (key == "ExtraMenu.Diving") Config.ExtraMenu.Diving = (valueStr == "1");
         else if (key == "ExtraMenu.WallHack") Config.ExtraMenu.WallHack = (valueStr == "1");
         else if (key == "ExtraMenu.Blueprints") Config.ExtraMenu.Blueprints = (valueStr == "1");
         else if (key == "ExtraMenu.BlueprintTiers") BlueprintTierFilter::SetMask(static_cast<uint32_t>(std::stoul(valueStr)));
-        else if (key == "TriggerDot.Radius") TriggerDotStyle::appearance.radius = std::stof(valueStr);
-        else if (key == "TriggerDot.Outline") TriggerDotStyle::appearance.outline = std::stof(valueStr);
-        else if (key == "TriggerDot.Opacity") TriggerDotStyle::appearance.opacity = std::stof(valueStr);
-        else if (key == "TriggerDot.Red") TriggerDotStyle::appearance.color[0] = std::stof(valueStr);
-        else if (key == "TriggerDot.Green") TriggerDotStyle::appearance.color[1] = std::stof(valueStr);
-        else if (key == "TriggerDot.Blue") TriggerDotStyle::appearance.color[2] = std::stof(valueStr);
     }
     file.close();
-    TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
-    hitbox::Publish(Config.ExtraMenu.Hit,Config.ExtraMenu.HitboxScale);
 }
 
 void SaveConfig() {
@@ -124,23 +111,14 @@ void SaveConfig() {
     file << "ExtraMenu.Shake " << Config.ExtraMenu.Shake << "\n";
     file << "ExtraMenu.Flash " << Config.ExtraMenu.Flash << "\n";
     file << "ExtraMenu.Rpd " << Config.ExtraMenu.Rpd << "\n";
-    file << "ExtraMenu.Hit " << Config.ExtraMenu.Hit << "\n";
-    file << "ExtraMenu.HitboxScale " << hitbox::NormalizeScale(Config.ExtraMenu.HitboxScale) << "\n";
     file << "ExtraMenu.Fire " << Config.ExtraMenu.Fire << "\n";
-    file << "ExtraMenu.NoSprintFire " << Config.ExtraMenu.NoSprintFire << "\n";
     file << "ExtraMenu.Parachute " << Config.ExtraMenu.Parachute << "\n";
     file << "ExtraMenu.NoCrouch " << Config.ExtraMenu.NoCrouch << "\n";
+    file << "ExtraMenu.Hit " << Config.ExtraMenu.Hit << "\n";
     file << "ExtraMenu.Diving " << Config.ExtraMenu.Diving << "\n";
     file << "ExtraMenu.WallHack " << Config.ExtraMenu.WallHack << "\n";
     file << "ExtraMenu.Blueprints " << Config.ExtraMenu.Blueprints << "\n";
     file << "ExtraMenu.BlueprintTiers " << BlueprintTierFilter::GetMask() << "\n";
-    TriggerDotStyle::Normalize(TriggerDotStyle::appearance);
-    file << "TriggerDot.Radius " << TriggerDotStyle::appearance.radius << "\n";
-    file << "TriggerDot.Outline " << TriggerDotStyle::appearance.outline << "\n";
-    file << "TriggerDot.Opacity " << TriggerDotStyle::appearance.opacity << "\n";
-    file << "TriggerDot.Red " << TriggerDotStyle::appearance.color[0] << "\n";
-    file << "TriggerDot.Green " << TriggerDotStyle::appearance.color[1] << "\n";
-    file << "TriggerDot.Blue " << TriggerDotStyle::appearance.color[2] << "\n";
     
     file.close();
 }

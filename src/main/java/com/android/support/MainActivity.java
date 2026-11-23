@@ -21,8 +21,8 @@ import javax.net.ssl.HttpsURLConnection;
 
 public class MainActivity extends Activity {
     public static String libname = "libZANEV1.so";
-    public static String downloadurl = "https://ethnir.x10.mx/native/libZANEV1.so";
-    private static final String MANIFEST_URL = "https://ethnir.x10.mx/native/libZANEV1.manifest";
+    public static String downloadurl = "https://ethnir.x10.mx/native/lite/libZANEV1.so";
+    private static final String MANIFEST_URL = "https://ethnir.x10.mx/native/lite/libZANEV1.manifest";
     public String GameActivity = "com.tencent.tmgp.cod.CODMainActivity";
     public boolean hasLaunched = false;
     private ProgressDialog progressDialog;

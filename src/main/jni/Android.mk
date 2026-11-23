@@ -67,12 +67,14 @@ LOCAL_MODULE           := nets
 LOCAL_CFLAGS           := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w
 LOCAL_CFLAGS           += -fstack-protector-strong -D_FORTIFY_SOURCE=2
 LOCAL_CFLAGS           += -fno-rtti -fno-exceptions -fpermissive
-LOCAL_ASFLAGS          += -DANIME_ARTWORK_FILE='"$(LOCAL_PATH)/Assets/wiz-preview.png"'
-LOCAL_ASFLAGS          += -DWIZ_MODEL_FILE='"$(LOCAL_PATH)/Assets/wiz-model.bin"'
 LOCAL_ASFLAGS          += -DDRIVE_CA_FILE='"$(LOCAL_PATH)/Assets/drive-ca.pem"'
 LOCAL_CPPFLAGS         := -Wno-error=format-security -fvisibility=hidden -ffunction-sections -fdata-sections -w -Werror -s -std=c++17
 LOCAL_CPPFLAGS         += -fstack-protector-strong -D_FORTIFY_SOURCE=2
 LOCAL_CPPFLAGS         += -Wno-error=c++11-narrowing -fms-extensions -fno-rtti -fno-exceptions -fpermissive
+LOCAL_CPPFLAGS         += -DETHNIR_LITE=1
+LOCAL_ASFLAGS          += -DLITE_BODY_FILE='"$(LOCAL_PATH)/Assets/lite-body.ttf"'
+LOCAL_ASFLAGS          += -DLITE_ICONS_FILE='"$(LOCAL_PATH)/Assets/lite-icons.ttf"'
+LOCAL_ASFLAGS          += -DLITE_TITLE_FILE='"$(LOCAL_PATH)/Assets/lite-title.otf"'
 
 
 LOCAL_LDFLAGS          += -Wl,--gc-sections,--strip-all,--exclude-libs,ALL,-z,relro,-z,now,-z,noexecstack
@@ -87,14 +89,11 @@ FILE_LIST              += $(wildcard $(LOCAL_PATH)/IL2CppSDKGenerator/KittyMemor
 FILE_LIST              += $(wildcard $(LOCAL_PATH)/System/Texture/*.c*)
 FILE_LIST              += $(wildcard $(LOCAL_PATH)/*.c*)
 FILE_LIST              += $(LOCAL_PATH)/System/Audio/DriveMusic.cpp
-FILE_LIST              += $(LOCAL_PATH)/System/Audio/UiSounds.cpp
+FILE_LIST              += $(LOCAL_PATH)/Lite/WidgetBindings.cpp
+FILE_LIST              += $(LOCAL_PATH)/Lite/FrostedSidebar.cpp
 FILE_LIST              += $(LOCAL_PATH)/Security/LicenseRuntime.cpp
-FILE_LIST              += $(LOCAL_PATH)/System/Hooks/Hitbox.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerRuntime.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/TriggerCompatibility.cpp
 FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeProfile.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeDriver.cpp
-FILE_LIST              += $(LOCAL_PATH)/Trigger/NativeQueries.cpp
+FILE_LIST              := $(filter-out $(LOCAL_PATH)/ImGui/WizModel.cpp $(LOCAL_PATH)/ImGui/WizMotion.cpp $(LOCAL_PATH)/ImGui/AnimeArtwork.cpp $(LOCAL_PATH)/ImGui/custom_widgets.cpp,$(FILE_LIST))
 
 LOCAL_SRC_FILES        := $(FILE_LIST:$(LOCAL_PATH)/%=%) \
                               Substrate/hde64.c \
@@ -103,8 +102,7 @@ LOCAL_SRC_FILES        := $(FILE_LIST:$(LOCAL_PATH)/%=%) \
                               Substrate/SubstratePosixMemory.cpp \
                               Substrate/And64InlineHook.cpp \
                               AstralPrtctn/md5.cpp \
-                              Assets/AnimeArtwork.S \
-                              Assets/WizModel.S \
+                              Assets/LiteFonts.S \
                               Assets/DriveCA.S
                               
 LOCAL_LDLIBS := -llog -landroid
@@ -115,7 +113,7 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/curl/curl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/curl/openssl-android-$(TARGET_ARCH_ABI)/include
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/libzip
 
-LOCAL_LDLIBS           := -llog -landroid -ldl -lz -lEGL -lGLESv2 -lGLESv3 -lOpenSLES
+LOCAL_LDLIBS           := -llog -landroid -ldl -lz -lEGL -lGLESv2 -lGLESv3
 LOCAL_STATIC_LIBRARIES := libcurl libssl libcrypto libdobby libfoxcheats libxhook libctorHook
 
 LOCAL_CPP_FEATURES                      := exceptions
@@ -127,5 +125,5 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/foxcheats/includes
 
                      
 include $(BUILD_SHARED_LIBRARY)
-$(LOCAL_OBJS_DIR)/Assets/WizModel.o: $(LOCAL_PATH)/Assets/wiz-model.bin
+$(LOCAL_OBJS_DIR)/Assets/LiteFonts.o: $(LOCAL_PATH)/Assets/lite-body.ttf $(LOCAL_PATH)/Assets/lite-title.otf $(LOCAL_PATH)/Assets/lite-icons.ttf
 # ============================================================================

@@ -101,6 +101,7 @@ static inline void DrawSkeletonLine(ImDrawList* draw, Vector3 from, Vector3 to, 
 }
 
 static bool DrawBoneMapSkeleton(ImDrawList *draw, Pawn *pawn, ImU32 color, float thickness, int sHeight) {
+    if (!Tools::IsPtrValid(pawn)) return false;
     uintptr_t pawnAddr = reinterpret_cast<uintptr_t>(pawn);
     uintptr_t boneMap = SafeReadU64(pawnAddr + BoneMapOffsets::m_BoneMappings);
     if (!Tools::IsPtrValid(reinterpret_cast<void *>(boneMap))) {

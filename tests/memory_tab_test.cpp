@@ -57,14 +57,12 @@ static ImVec2 FindControl(ImGuiWindow* window,const char* label,ImVec2 size) {
 int main() {
     ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.DeltaTime=1.f/60.f;
     ImFontConfig config;config.SizePixels=20.f;io.Fonts->AddFontDefault(&config);io.Fonts->Build();
-    c::ApplyTheme();slide_fatigue::available=true;pickup::available=true;
+    c::ApplyTheme();pickup::available=true;
     ui_sounds::observer=[](ui_sounds::Cue){++clicks;};
     for(float scale:{.8f,1.f,1.15f}) {
         c::scale=scale;
         for(auto size:{ImVec2(900,360),ImVec2(700,280),ImVec2(400,600),ImVec2(280,360)}) {
             for(int category=0;category<4;++category) {
-                Config.ExtraMenu.Hit=category==1;
-                Config.ExtraMenu.HitboxScale=2.f;
                 memory_tab::selected=static_cast<memory_tab::Category>(category);Pump(size);
                 if(category==0) assert(Find("memory_movement"));
                 if(category==1) assert(Find("memory_weapons"));
@@ -79,7 +77,7 @@ int main() {
     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);io.AddMousePosEvent(start.x,start.y+30);Frame(size);
     io.AddMouseButtonEvent(0,true);Frame(size);io.AddMousePosEvent(start.x+2,start.y-90);Frame(size);
     io.AddMouseButtonEvent(0,false);Frame(size);Frame(size);
-    assert(movement->Scroll.y>60.f&&clicks==before&&!Config.ExtraMenu.NoCrouch&&!Config.ExtraMenu.NoSlideFatigue);
+    assert(movement->Scroll.y>60.f&&clicks==before&&!Config.ExtraMenu.NoCrouch);
     const float width=host->ContentRegionRect.GetWidth(),gap=8.f;
     const float buttonWidth=(width-gap)*.5f,buttonHeight=ImMax(34.f,ImGui::GetFontSize()+12.f);
     const auto category=host->DC.CursorStartPos+ImVec2(buttonWidth+gap+buttonWidth*.5f,buttonHeight*.5f);

@@ -1,4 +1,3 @@
-#include "../../Trigger/NativeDriver.h"
 #include "../../Security/Access.h"
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCDFAInspection"
@@ -126,12 +125,14 @@ uintptr_t GetClosestTarget() {
                 MyPos = local_m_Mesh->get_position();
             }
             auto EnemyPawns = *(List<uintptr_t> **) (get_MatchGame + Class_BaseGame_EnemyPawns);
-            if (EnemyPawns) {
+            if (Tools::IsPtrValid(EnemyPawns)) {
                 auto Items = EnemyPawns->getItems();
-                if (Items) {
-                    for (int i = 0; i < EnemyPawns->getSize(); i++) {
+                if (Tools::IsPtrValid(Items)) {
+                    int enemyCount = EnemyPawns->getSize();
+                    if (enemyCount <= 0 || enemyCount > 4096) return result;
+                    for (int i = 0; i < enemyCount; i++) {
                         auto Pawn = Items[i];
-                        if (Pawn) {
+                        if (Tools::IsPtrValid((void *)Pawn)) {
                             if (!*(bool *) (Pawn + Class_Pawn_m_IsAlive))
                                 continue;
                             auto m_Mesh = *(Transform **) (Pawn + Class_Pawn_m_Mesh);
@@ -176,19 +177,24 @@ uintptr_t GetInsideFOVTarget() {
                 MyPos = local_m_Mesh->get_position();
             }
             auto EnemyPawns = *(List<uintptr_t> **) (get_MatchGame + Class_BaseGame_EnemyPawns);
-            if (EnemyPawns) {
+            if (Tools::IsPtrValid(EnemyPawns)) {
                 auto Items = EnemyPawns->getItems();
-                if (Items) {
-                    for (int i = 0; i < EnemyPawns->getSize(); i++) {
+                if (Tools::IsPtrValid(Items)) {
+                    int enemyCount = EnemyPawns->getSize();
+                    if (enemyCount <= 0 || enemyCount > 4096) return result;
+                    for (int i = 0; i < enemyCount; i++) {
                         auto Pawn = Items[i];
-                        if (Pawn) {
+                        if (Tools::IsPtrValid((void *)Pawn)) {
                             auto isAlive = *(bool*) ((uintptr_t)Pawn + Class_Pawn_m_IsAlive);
                             if (!isAlive)
                                 continue;
                             auto m_HeadBone = *(Transform **) (Pawn + Class_Pawn_m_HeadBone);
                             if (!m_HeadBone)
                                 continue;
-                            auto HeadSc = Camera::get_main()->WorldToScreenPoint(m_HeadBone->get_position());
+                            auto mainCamera = Camera::get_main();
+                            if (!mainCamera)
+                                continue;
+                            auto HeadSc = mainCamera->WorldToScreenPoint(m_HeadBone->get_position());
                             Vector2 v2Middle = Vector2((float) (get_width() / 2), (float) (get_height() / 2));
                             Vector2 v2Loc = Vector2(HeadSc.x, HeadSc.y);
                             if (isInsideFOV((int) HeadSc.x, (int) HeadSc.y)) {
@@ -227,7 +233,9 @@ void DrawAimLine(ImDrawList* draw, int sWidth, int sHeight) {
             targetPos = m_HeadBone->get_position();
             targetPos.y -= 0.4f;
         }
-        auto HeadSc = Camera::get_main()->WorldToScreenPoint(targetPos);
+        auto mainCamera = Camera::get_main();
+        if (!mainCamera) return;
+        auto HeadSc = mainCamera->WorldToScreenPoint(targetPos);
         if (HeadSc.z > 0) {
             ImVec2 center(sWidth / 2, sHeight / 2);
             draw->AddLine(center, ImVec2(HeadSc.x, sHeight - HeadSc.y), ToColor(Config.sColorsESPPLAYER.LinePLAYER), Config.sESPMenuLineScale.lineSize);
@@ -544,13 +552,16 @@ static inline void TeleportToEnemy() {
     Vector3 localPos = get_LocalPawn->get_LastPawnPos();
     
     List<Pawn *> *EnemyPawns = get_MatchGame->EnemyPawns();
-    if (!Tools::IsPtrValid(EnemyPawns) || !EnemyPawns->getSize()) return;
+    if (!Tools::IsPtrValid(EnemyPawns)) return;
+    int enemyCount = EnemyPawns->getSize();
+    if (enemyCount <= 0 || enemyCount > 4096) return;
     
     Pawn *closestEnemy = nullptr;
     float minDistance = 100.0f;
     
     Pawn **pawns = (Pawn **)EnemyPawns->getItems();
-    for (int i = 0; i < EnemyPawns->getSize(); i++) {
+    if (!Tools::IsPtrValid(pawns)) return;
+    for (int i = 0; i < enemyCount; i++) {
         Pawn *pawn = pawns[i];
         if (!Tools::IsPtrValid(pawn)) continue;
         
@@ -601,12 +612,14 @@ static inline void DrawVehicleESP(ImDrawList *draw, int sWidth, int sHeight) {
     if (!Tools::IsPtrValid(m_AllVehicles_ptr)) return;
     
     List<PhysicsVehicle *> *m_AllVehicles = *m_AllVehicles_ptr;
-    if (!Tools::IsPtrValid(m_AllVehicles) || !m_AllVehicles->getSize()) return;
+    if (!Tools::IsPtrValid(m_AllVehicles)) return;
+    int vehicleCount = m_AllVehicles->getSize();
+    if (vehicleCount <= 0 || vehicleCount > 4096) return;
     
     PhysicsVehicle **vehicles = (PhysicsVehicle **)m_AllVehicles->getItems();
     if (!Tools::IsPtrValid(vehicles)) return;
     
-    for (int i = 0; i < m_AllVehicles->getSize(); i++) {
+    for (int i = 0; i < vehicleCount; i++) {
         PhysicsVehicle *vehicle = vehicles[i];
         if (!Tools::IsPtrValid(vehicle)) continue;
         
@@ -703,24 +716,22 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
     BaseGame *get_MatchGame = GamePlay::get_MatchGame();
     if (!Tools::IsPtrValid(get_MatchGame)) return;
 
-	
-    bool MatchGame = Tools::IsPtrValid((void *)get_MatchGame);
-    if (!MatchGame) return;
-
-    Vector3 pLocalPawn_rootPos = Vector3::zero();
     Pawn *get_LocalPawn = GamePlay::get_LocalPawn();
-    if (Tools::IsPtrValid(get_LocalPawn)) {
-        pLocalPawn_rootPos = get_LocalPawn->get_LastPawnPos();
-    }
+    if (!Tools::IsPtrValid(get_LocalPawn) || !get_LocalPawn->m_IsAlive()) return;
+
+    Vector3 pLocalPawn_rootPos = get_LocalPawn->get_LastPawnPos();
     
     DrawThrowableAlert(draw, sWidth, sHeight, pLocalPawn_rootPos);
 
     totalBots = 0, totalEnemies = 0;
     List<Pawn *> *EnemyPawns = get_MatchGame->EnemyPawns();
-    if (!Tools::IsPtrValid(EnemyPawns) || !EnemyPawns->getSize()) return;
+    if (!Tools::IsPtrValid(EnemyPawns)) return;
+    int enemyCount = EnemyPawns->getSize();
+    if (enemyCount <= 0 || enemyCount > 4096) return;
 
     Pawn **pawns = (Pawn **)EnemyPawns->getItems();
-    for (int i = 0; i < EnemyPawns->getSize(); i++) {
+    if (!Tools::IsPtrValid(pawns)) return;
+    for (int i = 0; i < enemyCount; i++) {
         Pawn *pawn = pawns[i];
         if (!Tools::IsPtrValid(pawn)) continue;
 
@@ -728,12 +739,13 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         if (!Tools::IsPtrValid((void *)m_PlayerInfo)) continue;
 
         auto m_AttackableInfo = *(uintptr_t *)(pawn + Class_AttackableTarget_m_AttackableInfo);
+        if (!Tools::IsPtrValid((void *)m_AttackableInfo)) continue;
         int CurHP = (int)*(float *)(m_AttackableInfo + Class_AttackableTarget_m_Health);
         int MaxHP = (int)*(float *)(m_AttackableInfo + Class_AttackableTarget_m_MaxHealth);
 
         auto m_HeadBone = *(Transform **)(pawn + Class_Pawn_m_HeadBone);
         auto m_Mesh = *(Transform **)(pawn + Class_Pawn_m_Mesh);
-        if (!Tools::IsPtrValid(m_HeadBone) || !m_Mesh || !*(bool *)(pawn + Class_Pawn_m_IsAlive)) continue;
+        if (!Tools::IsPtrValid(m_HeadBone) || !Tools::IsPtrValid(m_Mesh) || !*(bool *)(pawn + Class_Pawn_m_IsAlive)) continue;
 
         bool isBot = *(bool *)((uintptr_t)pawn + Class_Pawn_m_IsBot);
         bool isAlive = *(bool *)((uintptr_t)pawn + Class_Pawn_m_IsAlive);
@@ -764,8 +776,10 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
         Vector3 pEnemyPawn_headPos = pawn->get_HeadPosition();
         Vector3 pEnemyPawn_rootPos = pawn->get_LastPawnPos();
 
-        Vector3 HeadSc = Camera::get_main()->WorldToScreenPoint(pEnemyPawn_headPos);
-        Vector3 RootSc = Camera::get_main()->WorldToScreenPoint(pEnemyPawn_rootPos);
+        Camera *mainCamera = Camera::get_main();
+        if (!Tools::IsPtrValid(mainCamera)) continue;
+        Vector3 HeadSc = mainCamera->WorldToScreenPoint(pEnemyPawn_headPos);
+        Vector3 RootSc = mainCamera->WorldToScreenPoint(pEnemyPawn_rootPos);
 
         float distanceToMe = Vector3::Distance(pLocalPawn_rootPos, pEnemyPawn_rootPos);
         float actualHeight = Vector3::Distance(pEnemyPawn_headPos, pEnemyPawn_rootPos);
@@ -907,7 +921,7 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
                     draw->AddRectFilled(ImVec2(infoContainerX, infoCurrentY), ImVec2(infoContainerX + infoContainerWidth, infoCurrentY + infoTotalHeight), IM_COL32(0, 0, 0, 120));
                     
                     if (Config.ESPMenu.Name) {
-                        std::string displayText = pawn->m_IsBot() ? "BOT" : pawn->get_PlayerName()->CString();
+                        std::string displayText = pawn->m_IsBot() ? "BOT" : (Tools::IsPtrValid(pawn->get_PlayerName()) ? pawn->get_PlayerName()->CString() : "");
                         ImVec2 infoTextSize = ImGui::CalcTextSize(displayText.c_str());
                         infoTextSize.x *= (fontSize / ImGui::GetFontSize());
                         float infoTextX = infoContainerX + (infoContainerWidth - infoTextSize.x) / 2;
@@ -1122,13 +1136,11 @@ void WeaponHandlerByAstral(ThisType thiz, Vector3 startPos, Vector3& dir, Args..
 void WeaponFireComponent_Instant_CreateBulletLine(uintptr_t thiz, Vector3 startPos, Vector3 dir, bool isDualFire) {
     WeaponHandlerByAstral(thiz, startPos, dir, isDualFire);
     oWeaponFireComponent_Instant_CreateBulletLine(thiz, startPos, dir, isDualFire);
-    PhantomTrigger::NotifyNativeShot(thiz);
     SmartReloadMarkShotFired();
 }
 
 void WeaponFireComponent_Instant_CreateBulletProjectile(void* thiz, Vector3 startPos, Vector3 dir, void* weaponImpact, int itemID, int flySmokeAssetID, bool enableVirtualStartPos, Vector3 virtualStartPos) {
     WeaponHandlerByAstral(thiz, startPos, dir, weaponImpact, itemID, flySmokeAssetID, enableVirtualStartPos, virtualStartPos);
     oWeaponFireComponent_Instant_CreateBulletProjectile(thiz, startPos, dir, weaponImpact, itemID, flySmokeAssetID, enableVirtualStartPos, virtualStartPos);
-    PhantomTrigger::NotifyNativeShot(reinterpret_cast<uintptr_t>(thiz));
     SmartReloadMarkShotFired();
 }

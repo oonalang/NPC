@@ -30,7 +30,7 @@ public final class VerifiedLibraryTest {
         String[] parts=lines[0].split("\\|",-1);
         for(int field:new int[]{0,1,2,3,4,5,6}) {
             String[] changed=parts.clone();
-            changed[field]=field==4?"999999999":field==5?"invalid":"other";
+            changed[field]=field==1?"SHAI_ETHNIR":field==4?"999999999":field==5?"invalid":"other";
             rejected(signed(String.join("|",changed)));
         }
         rejected((lines[0]+"\n"+lines[1]+"\nextra\n").getBytes(StandardCharsets.US_ASCII));
