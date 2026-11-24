@@ -159,7 +159,7 @@ public:
         }
 
         if (phase_ == Phase::Primed && (!frame.readinessSampled || !frame.shotReady)) {
-            if (modeChanged || !StateEligible(settings, frame)) return ReleaseOwned();
+            if (modeChanged || !HoldEligible(settings, frame)) return ReleaseOwned();
             return {true, false, false, false};
         }
 
@@ -243,6 +243,14 @@ private:
     static bool IsSupported(FireMode mode) noexcept {
         return IsAutomatic(mode) || mode == FireMode::Single ||
                mode == FireMode::BurstSingle || mode == FireMode::SingleRelease;
+    }
+
+    static bool HoldEligible(const Settings& settings, const Frame& frame) noexcept {
+        const bool validMode = settings.mode == Mode::Both ||
+                               settings.mode == Mode::ADSOnly;
+        return settings.enabled && validMode && frame.contextValid &&
+               frame.bindingsReady && frame.ammoAvailable &&
+               IsSupported(frame.fireMode);
     }
 
     static bool StateEligible(const Settings& settings, const Frame& frame) noexcept {

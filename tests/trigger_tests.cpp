@@ -505,6 +505,54 @@ void ScopedFollowupCadence() {
     }
 }
 
+void ScopedFollowupAimFlicker() {
+    for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
+        const Settings settings{true, mode, false};
+        Controller controller;
+        Queries queries;
+        auto frame = ReleaseReady();
+        frame.clipAmmo = 5;
+        frame.nowMillis = 5000;
+        EvaluateInput(settings, frame, centerRay, queries, controller);
+        ++frame.updateId;
+        frame.nowMillis += 10;
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).commitRelease,
+                "aim-flicker sequence submits its first scoped shot");
+        ++frame.updateId;
+        frame.nowMillis += 10;
+        --frame.clipAmmo;
+        frame.shotReady = false;
+        Require(EvaluateInput(settings, frame, centerRay, queries, controller).down,
+                "acknowledged shot prepares the next scoped press during cooldown");
+        ++frame.updateId;
+        frame.nowMillis += 10;
+        frame.fullyAimed = false;
+        frame.readinessSampled = false;
+        auto intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.held && !intent.up && !intent.commitRelease && controller.HasOwnedInput(),
+                "a transient aim or fire-gate loss during cooldown keeps the prepared press");
+        ++frame.updateId;
+        frame.nowMillis += 10;
+        frame.aiming = false;
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.held && controller.HasOwnedInput(),
+                "leaving scope during the bolt cycle does not discard the prepared press");
+        ++frame.updateId;
+        frame.nowMillis += 10;
+        frame.aiming = frame.fullyAimed = true;
+        frame.readinessSampled = true;
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.held && !intent.up,
+                "re-entering scope while the weapon still cools down keeps the press");
+        ++frame.updateId;
+        frame.nowMillis += 10;
+        frame.shotReady = true;
+        intent = EvaluateInput(settings, frame, centerRay, queries, controller);
+        Require(intent.up && intent.commitRelease && !intent.down,
+                "the follow-up fires on the first ready fully aimed update without another press cycle");
+    }
+}
+
 void PendingReleaseReadinessRecovery() {
     for (const auto mode : {Mode::Both, Mode::ADSOnly}) {
         for (const auto clip : {-1, 5}) {
@@ -611,6 +659,12 @@ void ScopedFollowupCancellation() {
         }
         intent = EvaluateInput(settings, frame, centerRay, queries, controller);
         const auto decision = cancellation.Resolve(frame.identity, frame.manualActive, true, intent, true);
+        if (failure == 2 || failure == 3) {
+            Require(decision.input.held && !decision.input.up && !decision.input.commitRelease &&
+                    controller.HasOwnedInput(),
+                    "aim or fire-gate flicker during cooldown keeps the prepared press queued");
+            continue;
+        }
         Require(!decision.input.down && !decision.input.up && !decision.input.commitRelease &&
                 !controller.HasOwnedInput(),
                 "invalidated follow-up cancels without leaking a firing release");
@@ -933,7 +987,9 @@ void GlassPaths() {
     constexpr std::uintptr_t wall = 6, solidGlass = 31, enemy = 100;
     const auto classify = [](std::uintptr_t collider) {
         if (collider == 999) return ContactKind::Unavailable;
-        return IsPassableGlass(static_cast<int>(collider)) ? ContactKind::Glass : ContactKind::Solid;
+        if (IsPassableGlass(static_cast<int>(collider))) return ContactKind::Glass;
+        if (IsBulletIgnoredWorldMaterial(static_cast<int>(collider))) return ContactKind::BulletIgnored;
+        return ContactKind::Solid;
     };
     Require(IsPassableGlass(glass) && IsPassableGlass(breakable) && IsPassableGlass(penetrable) &&
             !IsPassableGlass(0) && !IsPassableGlass(solidGlass) && !IsPassableGlass(wall),
@@ -956,6 +1012,15 @@ void GlassPaths() {
     path = CheckGlassPath(contacts, 3, {0, 10.f}, 20.f, classify);
     Require(path.verified && path.firstSolid.collider == solidGlass && path.firstSolid.distance == 10.f,
             "impenetrable glass blocks even when another pane touches it");
+
+    contacts = {{{enemy, 20.f}, {13, 9.f}}};
+    path = CheckGlassPath(contacts, 2, {0, 9.f}, 20.f, classify);
+    Require(path.verified && path.firstSolid.collider == enemy && path.lastPaneDistance == 9.f,
+            "a bullet-ignored world screen can be advanced like a passable pane");
+    contacts = {{{enemy, 20.f}, {wall, 12.f}, {13, 9.f}}};
+    path = CheckGlassPath(contacts, 3, {0, 9.f}, 20.f, classify);
+    Require(path.verified && path.firstSolid.collider == wall && path.firstSolid.distance == 12.f,
+            "a solid wall behind a bullet-ignored screen still blocks");
 
     contacts = {{{breakable, 12.f}, {glass, 10.f}}};
     path = CheckGlassPath(contacts, 2, {0, 10.f}, 20.f, classify);
@@ -1252,6 +1317,7 @@ int main() {
     AmmoAcknowledgementAndQueryBudget();
     SniperReactionCadence();
     ScopedFollowupCadence();
+    ScopedFollowupAimFlicker();
     PendingReleaseReadinessRecovery();
     ScopedFollowupCancellation();
     DecisionFeedback();

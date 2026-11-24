@@ -122,10 +122,6 @@ int PhysicalMaterialType(Address base,Object material) noexcept {
     return Bind<MaterialType>(base,0x66F1E00)(nullptr,material,nullptr);
 }
 
-bool IsGlassMaterial(Address base, Object material) noexcept {
-    return IsPassableGlass(PhysicalMaterialType(base,material));
-}
-
 bool TraceContacts(Address base,const ViewRay& ray,float distance,int traceFlag,
                     RayContacts& contacts,int& count) noexcept {
     count=0;
@@ -164,8 +160,11 @@ GlassPath TraceGlassPath(Address base, const ViewRay& ray, float distance, RayCo
             auto collider = reinterpret_cast<Object>(address);
             if (!Bind<IsLiveObject>(base, 0x52B7CE4)(nullptr, collider, nullptr, nullptr))
                 return ContactKind::Unavailable;
-            return IsGlassMaterial(base, Bind<SharedMaterial>(base, 0x52D98B8)(collider, nullptr))
-                ? ContactKind::Glass : ContactKind::Solid;
+            const int material = PhysicalMaterialType(base,
+                Bind<SharedMaterial>(base, 0x52D98B8)(collider, nullptr));
+            if (IsPassableGlass(material)) return ContactKind::Glass;
+            if (IsBulletIgnoredWorldMaterial(material)) return ContactKind::BulletIgnored;
+            return ContactKind::Solid;
         });
 }
 }
@@ -202,7 +201,8 @@ bool NativeTargetQueries::TraceBody(const ContextIdentity& context,
     ViewRay detailRay = ray;
     float advance = 0.f;
     if (!EnemyMember(match_, targetAddress)) {
-        if (!IsGlassMaterial(base_, Read<Object>(impactAddress, 0x78))) return true;
+        const int material = PhysicalMaterialType(base_, Read<Object>(impactAddress, 0x78));
+        if (!IsPassableGlass(material) && !IsBulletIgnoredWorldMaterial(material)) return true;
         const RayContact surface{collider, Read<float>(impactAddress, 0x5C)};
         const auto path = TraceGlassPath(base_, ray, ray.maxDistance, surface, LocalBulletTrace);
         if (!AdvancePastGlass(ray, path, detailRay, advance)) return true;
@@ -325,7 +325,7 @@ Occlusion NativeTargetQueries::CheckWorld(const ContextIdentity& context,
                 return kind;
             }
             diagnostic.material=PhysicalMaterialType(base_,Bind<SharedMaterial>(base_,0x52D98B8)(collider,nullptr));
-            if(IsBulletIgnoredWorldMaterial(diagnostic.material,actor)) {
+            if(IsBulletIgnoredWorldMaterial(diagnostic.material)) {
                 diagnostic.reason=WorldProbeReason::BulletIgnored;
                 return ContactKind::BulletIgnored;
             }

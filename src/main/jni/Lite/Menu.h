@@ -367,6 +367,7 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                     lite_widgets::Checkbox("ESP Distance",&Config.ESPMenu.Distance);
                     lite_widgets::Checkbox("ESP Count",&Config.ESPMenu.Count);
                     lite_widgets::Checkbox("360 Alert",&Config.ESPMenu.Alert);
+                    lite_widgets::Checkbox("Throwable Alert",&Config.ESPMenu.GrenadeWarn);
                     lite_widgets::Checkbox("BRClass",&Config.ESPMenu.BRClass);
                     lite_widgets::Checkbox("Show AimLine",&Config.ESPMenu.Aimline);
                     lite_widgets::Checkbox("Yellow Wallhack",&Config.ExtraMenu.WallHack);

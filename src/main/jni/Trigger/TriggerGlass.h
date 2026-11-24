@@ -128,6 +128,10 @@ GlassPath CheckGlassPath(RayContacts& contacts, std::size_t count, RayContact ne
             path.firstSolid = *at;
             return path;
         }
+        if (kind == ContactKind::BulletIgnored) {
+            path.lastPaneDistance = at->distance;
+            continue;
+        }
         if (kind!=ContactKind::Glass || ++panes > MaxGlassPanes) return {};
         path.lastPaneDistance = at->distance;
     }
