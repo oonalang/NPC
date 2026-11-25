@@ -85,6 +85,12 @@ inline void ApplyWeaponSkin(const itemInfo& getitem) {
                         }
                     }
                 }
+                for (int weaponId : {baseID, extraID, skinID, itemID, lootID})
+                {
+                    if (weaponId > 0)
+                        kill_icon::Remember(static_cast<std::uint32_t>(weaponId),
+                                            static_cast<std::uint32_t>(getitem.killIcon));
+                }
                 if (getitem.WeaponExtra[4] > 0)
                 {
                     activeKillEffects[baseID] = getitem.WeaponExtra[4];

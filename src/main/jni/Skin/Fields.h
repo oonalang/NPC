@@ -83,6 +83,7 @@ struct itemInfo
     std::array<int, 3> ItemResInt;
     std::array<int, 4> ItemRes;
     std::array<int, 31> mythicAttach{};
+    int killIcon = 0;
 };
 extern std::vector<itemInfo> itemData;
 
