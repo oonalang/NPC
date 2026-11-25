@@ -370,6 +370,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     if (musicWasEnabled && !g_LiteState.music) music_player::Stop();
     musicWasEnabled = g_LiteState.music;
     BlueprintEquipment::ApplyPending();
+    kill_icon::native::SyncLocal();
     UpdateCamoOverride();
     ApplyWorldVisualsRuntime();
     InstallBRClassEspConfigHook();

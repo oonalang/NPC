@@ -3,6 +3,7 @@
 ///--@Npc00000000000000000000000000000
 ///--date 2026-11-06
 #pragma once
+#include "KillIcon.h"
 std::unordered_map<std::string, bool> sBool;
 std::unordered_map<int, int> activeKillEffects;
 std::unordered_map<int, int> activeBulletTrackEffects;
@@ -1132,6 +1133,8 @@ void LoadWeaponSkins() {
                 const std::array<int, 31> mythicAttachData =
                     BuildMythicAttach(confID, itemIDbase, isMythicSkin);
 
+                const int killIconId = kill_icon::Captured(conf);
+
                 itemData.push_back({displayName,
                     {itemBase, itemIDskin2, itemIDskin3, itemBaseModified},
                     {confBaseSkin, confColor, confID, confBrocastID, confBluePrintID},
@@ -1139,7 +1142,8 @@ void LoadWeaponSkins() {
                     {assetIds, fireIds, fireIds2},
                     {xItem1, xItem2, xItem3},
                     {spr1, spr2, spr3, spr4},
-                    mythicAttachData});
+                    mythicAttachData,
+                    killIconId});
             }
         }
     }
@@ -1419,6 +1423,8 @@ void Skins_Thread()
     if (skisApplySkinAddr != 0 && Tools::IsPtrValid((void*)skisApplySkinAddr))
         VehicleSkis_ApplySkin = reinterpret_cast<void (*)(void*)>(skisApplySkinAddr);
     
+    kill_icon::native::Install(m_unity);
+
     while (true)
     {
         LoadCharacterSkins();
