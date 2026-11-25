@@ -16,7 +16,7 @@ namespace lite_ui {
 enum class Tab { Home, Esp, Aim, Trigger, Memory, Skins, Settings };
 struct State {
     Tab tab = Tab::Home;
-    bool minimized = false, music = false, hideRecord = false;
+    bool minimized = false, music = false, hideRecord = false, handcam = false;
     float zoom = 1.f;
     float resizeZoom = 1.f;
     ImVec2 resizeDisplay{};
@@ -80,6 +80,13 @@ inline Layout MenuLayout(const State& state,ImVec2 display) {
 inline char* editBuffer = nullptr;
 inline std::size_t editCapacity = 0;
 inline bool keyboard = false;
+
+inline void EnableHandcam(State& state) {
+    state.handcam = true;
+    state.hideRecord = true;
+    state.minimized = true;
+    keyboard = false;
+}
 
 inline void Input(const char* label, char* buffer, std::size_t capacity, ImGuiInputTextFlags flags = 0) {
     ImGui::TextUnformatted(label, ImGui::FindRenderedTextEnd(label));
@@ -254,9 +261,11 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::Begin("##lite_restore", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
         ImGui::SetWindowFontScale(1.f);
-        const unsigned alpha=static_cast<unsigned>(160.f+95.f*state.restore.Progress());
-        ImGui::GetWindowDrawList()->AddRectFilled(restore.line.Min,restore.line.Max,
-            IM_COL32(255,255,255,alpha),restore.line.GetHeight()*.5f);
+        if (!state.handcam) {
+            const unsigned alpha=static_cast<unsigned>(160.f+95.f*state.restore.Progress());
+            ImGui::GetWindowDrawList()->AddRectFilled(restore.line.Min,restore.line.Max,
+                IM_COL32(255,255,255,alpha),restore.line.GetHeight()*.5f);
+        }
         ImGui::End();
         ImGui::PopStyleVar();
         return actions;
@@ -456,6 +465,8 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                         state.resizeZoom=layout.zoom;state.resizeDisplay=ImGui::GetIO().DisplaySize;state.sizing=true;
                     }
                     if(!ImGui::GetIO().MouseDown[0]) state.sizing=false;
+                    if (lite_widgets::Checkbox("Handcam Mode",&state.handcam) && state.handcam)
+                        EnableHandcam(state);
                     lite_widgets::Checkbox("Hide Record",&state.hideRecord);
                     lite_widgets::Checkbox("Clear Display",&Config.ExtraMenu.ClearDisplay);
                     lite_widgets::Checkbox("Reset Guest",&Config.ExtraMenu.ResetGuest);

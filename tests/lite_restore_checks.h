@@ -64,8 +64,24 @@ void ValidateRestore() {
     Tap(row);assert(Config.ESPMenu.isPlayerLine);
     state.minimized=true;view.ready=view.authorized=false;Frame();
     assert(Find("ETHNIR LITE##login") && !Find("##lite_restore"));
+    state={};view.ready=view.authorized=true;view.interactive=true;view.startup={};
+    lite_ui::EnableHandcam(state);
+    assert(state.handcam && state.hideRecord && state.minimized);
+    Frame();Frame();
+    auto* blank=Find("##lite_restore");assert(blank && !Find("ETHNIR LITE##menu"));
+    assert(blank->DrawList->VtxBuffer.Size==0);
+    const auto handcam=lite_restore::Fit(io.DisplaySize,lite_ui::Fit(io.DisplaySize).scale);
+    const auto handcamPoint=handcam.line.GetCenter();
+    assert(handcam.hit.Contains(handcamPoint));
+    io.AddMousePosEvent(handcamPoint.x,handcamPoint.y);io.AddMouseButtonEvent(0,true);Frame();
+    assert(state.minimized && state.restore.Captures());
+    io.AddMousePosEvent(handcamPoint.x,handcamPoint.y-handcam.travel-1);Frame();
+    assert(!state.minimized && Find("ETHNIR LITE##menu") && state.handcam && state.hideRecord);
+    io.AddMouseButtonEvent(0,false);Frame();Frame();
+    state.handcam=false;state.minimized=true;Frame();
+    auto* shown=Find("##lite_restore");assert(shown && shown->DrawList->VtxBuffer.Size>0);
     state={};view.ready=view.authorized=true;
     io.ConfigInputTrickleEventQueue=trickle;io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
     io.AddMousePosEvent(-FLT_MAX,-FLT_MAX);Frame();
-    std::puts("Restore gesture: bottom-center swipe across six viewports; tap/wrong-direction/outside/cancel/resize rejection; one reveal and capture until release; no accidental toggle or hidden login");
+    std::puts("Restore gesture: bottom-center swipe across six viewports; tap/wrong-direction/outside/cancel/resize rejection; one reveal and capture until release; no accidental toggle or hidden login; Handcam Mode closes the menu, enables Hide Record, hides the bar while its swipe still opens the menu, and restores the bar when off");
 }
