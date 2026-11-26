@@ -120,11 +120,20 @@ public class MainActivity extends Activity {
                     reply = new String(readAll(input, 4096), StandardCharsets.US_ASCII);
                 }
             }
-            if (code == 401 || code == 403) throw new TicketRejected();
+            if (code == 401 || code == 403) {
+                String why = reason(reply);
+                if (why.isEmpty()) throw new IOException("Release server unavailable");
+                throw new TicketRejected(why.equals("Clock skew"));
+            }
             if (code == 404) throw new NoBuild();
             if (code != 200) throw new IOException("Release server unavailable");
             return reply;
         } finally { connection.disconnect(); }
+    }
+
+    private static String reason(String reply) {
+        try { return new JSONObject(reply).optString("reason", ""); }
+        catch (JSONException malformed) { return ""; }
     }
 
     private static byte[] readAll(InputStream input, long limit) throws IOException {
@@ -183,7 +192,12 @@ public class MainActivity extends Activity {
     }
 
     private static final class TicketRejected extends IOException {
-        TicketRejected() { super("Ticket rejected"); }
+        final boolean clock;
+
+        TicketRejected(boolean clock) {
+            super(clock ? "Clock skew" : "Ticket rejected");
+            this.clock = clock;
+        }
     }
 
     private static final class NoBuild extends IOException {
@@ -225,7 +239,7 @@ public class MainActivity extends Activity {
         String signature = sign("v1|latest|" + CHANNEL + "|" + stamp + "|" + nonceHex);
         String body = "file=latest&channel=" + CHANNEL + "&ts=" + stamp + "&nonce=" + nonceHex + "&sig=" + signature;
         JSONObject reply = new JSONObject(post(TICKET_PATH, body));
-        if (!reply.optBoolean("status", false)) throw new TicketRejected();
+        if (!reply.optBoolean("status", false)) throw new TicketRejected(false);
 
         String file = reply.getString("file");
         String path = reply.getString("path");
@@ -292,7 +306,9 @@ public class MainActivity extends Activity {
             } catch (VerifiedLibrary.KeyMismatch failure) {
                 error = "The build is signed with a key this launcher does not trust. Rebuild it with the signing key shown on the panel.";
             } catch (TicketRejected failure) {
-                error = "The panel rejected this launcher's download key. Check the phone's date and time and rebuild with the key shown on the panel.";
+                error = failure.clock
+                    ? "The phone's clock is more than two minutes away from the release server's clock. Turn on automatic date and time and try again."
+                    : "The panel rejected this launcher's download key. Rebuild with the key shown on the panel.";
             } catch (NoBuild failure) {
                 error = "The panel has no published build for this channel. Upload a library in the panel and try again.";
             } catch (UnknownHostException failure) {

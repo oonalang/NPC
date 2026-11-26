@@ -50,7 +50,7 @@ try {
 }
 
 if (abs(time() - (int)$timestamp) > LIB_CLOCK_SKEW) {
-    libtok_fail(403, 'Rejected');
+    libtok_fail(403, 'Clock skew');
 }
 
 try {

@@ -255,6 +255,18 @@ if ($ready) {
     [$code] = http($base . '/libtok.php', 'file=latest&channel=lite');
     check('refuses a bare ticket request', $code === 403);
 
+    $stale = time() - 400;
+    $staleNonce = bin2hex(random_bytes(16));
+    [$code, $body] = http($base . '/libtok.php', http_build_query([
+        'file' => 'latest',
+        'channel' => 'lite',
+        'ts' => (string)$stale,
+        'nonce' => $staleNonce,
+        'sig' => lib_request_token('latest', 'lite', $stale, $staleNonce),
+    ]));
+    check('names a stale clock separately', $code === 403 &&
+        (json_decode($body, true)['reason'] ?? '') === 'Clock skew');
+
     $headers = $root . '/headers.txt';
     $panelSession = '';
     $page = panel(escapeshellarg($base . '/admin.php'), $panelSession, $headers);

@@ -43,7 +43,7 @@ Ticket request fields: `file` (`latest` or a name), `channel`, `ts` (unix second
 HMAC-SHA256(key, "v1|" . file . "|" . channel . "|" . ts . "|" . nonce)
 ```
 
-with a ±120 second clock window. The reply carries `file`, `length`, `sha256`, `path`, `e`, `s`, `manifest_path`, `manifest_e`, `manifest_s`. Download tokens are HMAC-SHA256 over `v1|<name>|<expires>` and live five minutes.
+with a ±120 second clock window. A `ts` outside that window answers `403` with `reason: Clock skew`; a signature that does not match answers `403` with `reason: Rejected`. The reply carries `file`, `length`, `sha256`, `path`, `e`, `s`, `manifest_path`, `manifest_e`, `manifest_s`. Download tokens are HMAC-SHA256 over `v1|<name>|<expires>` and live five minutes.
 
 ## Launcher side
 
@@ -60,17 +60,18 @@ The download task keeps the failures apart instead of collapsing them into one l
 | Dialog | Meaning | Fix |
 | --- | --- | --- |
 | This launcher has no download key. Rebuild it with the key from the panel. | `SECRET` is empty or not 64 characters | Copy the key and rebuild |
-| The panel rejected this launcher's download key. Check the phone's date and time and rebuild with the key shown on the panel. | Ticket POST answered `401`/`403`, or the reply carried `status: false` | Match `SECRET` to the panel and keep the phone clock within two minutes of the host |
+| The panel rejected this launcher's download key. Rebuild with the key shown on the panel. | Ticket POST answered `401`/`403` with the panel's JSON and a `reason` other than `Clock skew`, or the reply carried `status: false` | Match `SECRET` to the value under "Launcher download key" and rebuild |
+| The phone's clock is more than two minutes away from the release server's clock. Turn on automatic date and time and try again. | Ticket POST answered `403` with `reason: Clock skew`, which means the signature matched but `ts` fell outside the ±120 second window | Turn on automatic date and time on the phone, then retry; no rebuild is needed |
 | The panel has no published build for this channel. Upload a library in the panel and try again. | Ticket POST answered `404` | Upload a signed build on the launcher's channel (`lite` by default) |
 | The build is signed with a key this launcher does not trust. Rebuild it with the signing key shown on the panel. | Manifest `key_id` or RSA signature does not match `LicenseRoot` | Copy `KEY_ID` and `PUBLIC_KEY` from the panel's "Launcher signing key" section |
 | Could not find the release server's address. Check the phone's internet connection and try again. | DNS lookup failed | Retry on a working connection |
 | The release server did not answer in time. Try again on a working connection. | Connect or read timeout | Retry on a working connection |
 | The phone refused the release server's certificate (`SSLHandshakeException: <reason>`). | TLS handshake rejected (`SSLException`) — the dialog carries the exception name and its reason, such as a trust-anchor or hostname failure | Serve the panel behind a certificate chain the phone's Android version trusts, or fix the hostname |
 | The connection to the release server was closed. Try again. | Socket closed mid-connection | Retry |
-| The release server did not answer with a build. Try again later. | Any other HTTP status or a reply that is not ticket JSON | Check the host, the rewrite rules and the PHP error log |
+| The release server did not answer with a build. Try again later. | Any other HTTP status, a `401`/`403` whose body is not the panel's JSON (a host or network filter page), or a reply that is not ticket JSON | Check the host, the rewrite rules and the PHP error log |
 | Build signature or contents could not be verified. | Manifest framing, claims or SHA-256 mismatch | Re-upload the library, or rebuild when the signing key pair changed |
 
-A ticket rejection and an unreachable host are therefore separate answers: the first points at `SECRET` or the clock, the second at the network. The network answer is itself split by cause, so a DNS failure, a timeout, a refused certificate and a dropped socket do not share one dialog. A wrong signing key is reported on its own, without downloading the whole library again.
+A ticket rejection and an unreachable host are therefore separate answers: the key and the clock each have their own dialog, and the network has several. Only a `403` that carries the panel's own JSON is treated as the panel rejecting the request; a `403` without that body is reported as a server that did not answer with a build, because a host filter or ISP block page produces the same status. The network answer is itself split by cause, so a DNS failure, a timeout, a refused certificate and a dropped socket do not share one dialog. A wrong signing key is reported on its own, without downloading the whole library again.
 
 `VerifiedLibrary.read(bytes, fileName)` takes the expected name, which is the stored file name. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
 
