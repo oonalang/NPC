@@ -51,7 +51,23 @@ with a ±120 second clock window. The reply carries `file`, `length`, `sha256`, 
 
 The launcher holds the download key in `SECRET`. Copy the value from the panel into that constant, rebuild the APK, and the same APK keeps working across library uploads because it always asks for `latest` on its channel. Rotating the key invalidates every installed launcher until it is rebuilt.
 
-The key is used exactly as the panel prints it: 64 ASCII hex characters fed to `Mac` as bytes. Hex-decoding it into 32 raw bytes produces a different HMAC, so every ticket request comes back `403 Rejected` and the launcher can only report "Could not retrieve the official build."
+The key is used exactly as the panel prints it: 64 ASCII hex characters fed to `Mac` as bytes. Hex-decoding it into 32 raw bytes produces a different HMAC, so every ticket request comes back `403 Rejected`.
+
+### What the dialog says
+
+The download task keeps the failures apart instead of collapsing them into one line. Each case has its own dialog text:
+
+| Dialog | Meaning | Fix |
+| --- | --- | --- |
+| This launcher has no download key. Rebuild it with the key from the panel. | `SECRET` is empty or not 64 characters | Copy the key and rebuild |
+| The panel rejected this launcher's download key. Check the phone's date and time and rebuild with the key shown on the panel. | Ticket POST answered `401`/`403`, or the reply carried `status: false` | Match `SECRET` to the panel and keep the phone clock within two minutes of the host |
+| The panel has no published build for this channel. Upload a library in the panel and try again. | Ticket POST answered `404` | Upload a signed build on the launcher's channel (`lite` by default) |
+| The build is signed with a key this launcher does not trust. Rebuild it with the signing key shown on the panel. | Manifest `key_id` or RSA signature does not match `LicenseRoot` | Copy `KEY_ID` and `PUBLIC_KEY` from the panel's "Launcher signing key" section |
+| Could not reach the release server. Check your connection and try again. | DNS, connect, read timeout or TLS failure | Retry on a working connection |
+| The release server did not answer with a build. Try again later. | Any other HTTP status or a reply that is not ticket JSON | Check the host, the rewrite rules and the PHP error log |
+| Build signature or contents could not be verified. | Manifest framing, claims or SHA-256 mismatch | Re-upload the library, or rebuild when the signing key pair changed |
+
+A ticket rejection and an unreachable host are therefore separate answers: the first points at `SECRET` or the clock, the second at the network. A wrong signing key is reported on its own, without downloading the whole library again.
 
 `VerifiedLibrary.read(bytes, fileName)` takes the expected name, which is the stored file name. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
 

@@ -100,7 +100,9 @@ function giveaway_verify_hash(string $hash, string $token): bool
         ]);
         $body = curl_exec($curl);
         $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
+        if (PHP_VERSION_ID < 80000) {
+            curl_close($curl);
+        }
     } else {
         $ctx = stream_context_create([
             'http' => [
@@ -110,6 +112,9 @@ function giveaway_verify_hash(string $hash, string $token): bool
             'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
         $body = @file_get_contents($url, false, $ctx);
+        if (function_exists('http_get_last_response_headers')) {
+            $http_response_header = http_get_last_response_headers();
+        }
         if (isset($http_response_header[0]) && preg_match('/^HTTP\/\S+ (\d{3})/', $http_response_header[0], $matches)) {
             $status = (int)$matches[1];
         }

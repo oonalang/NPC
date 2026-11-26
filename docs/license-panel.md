@@ -51,6 +51,15 @@ The launcher wraps resource-managed reads in ordinary outer `try/finally` blocks
 
 Public giveaway keys still require three verified Linkvertise callbacks, last exactly 36,000 seconds from issuance and allow one device. Callback proofs must be distinct; fingerprints of claimed proofs are retained with the issued record to prevent reuse. Unfinished flows retain their 30-minute timeout, while completed claims remain visible until key expiry in the same browser session. The real provider verifier is preserved; test mocks never enter the deployment ZIP.
 
+## PHP 8.5
+
+PHP 8.5 deprecates the locally scoped `$http_response_header` variable and `curl_close()`. Both produce display-only notices, but the panel's pages print diagnostics before `session_start()` and before their `header()` calls, so one notice is enough to drop the session cookie, the login redirect or the giveaway redirect and leave the panel looking broken. `giveaway_lib.php` now avoids both:
+
+- when `http_get_last_response_headers()` exists (PHP 8.4 and newer) it calls that function and assigns the result to `$http_response_header`, which is the cross-version pattern from the deprecation RFC; only hosts older than 8.4 read the predefined variable, and on those the notice does not exist;
+- `curl_close()` is called only below PHP 8.0, where it still does something (it has been a no-op since 8.0).
+
+`tests/library_panel_test.php` reads response headers the same way. The panel still supports PHP 7.4 and newer. Run the suite on the build you deploy, for example `PHP=/path/to/php-8.5 sh tests/run-library-panel-tests.sh`, and keep the host's `display_errors` setting as it is; the panel no longer depends on notices being hidden.
+
 No private key is stored in git. Public trust roots are in `Security/LicenseRoot.h` and `LicenseRoot.java`. The current generated key is outside the checkout at `/workspace/license-hardening/keys/licence_private.pem`, and deployment archives are under `/workspace/license-hardening/artifacts/`. Back up the complete private archive securely; losing the private key requires another coordinated rotation.
 
 For later rotations, generate a new private key outside the checkout with `python3 tools/license-keys.py --private-out /secure/new-signing-key.pem`, rebuild both native library and launcher, and redeploy the matching panel key. Do not run that command again for the already prepared binary.

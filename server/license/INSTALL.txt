@@ -48,6 +48,9 @@ MANUAL CONFIG
 
 REQUIREMENTS
   PHP 7.4 or newer (8.0+ recommended) with openssl, session and json.
+  PHP 8.5 is supported: the panel no longer reads the deprecated
+  $http_response_header variable and no longer calls curl_close() there, so a
+  deprecation notice cannot print before session_start() or a redirect.
   upload_max_filesize and post_max_size should be at least twice the largest
   build you publish; a 4 MiB library needs 8 MiB of post_max_size.
 

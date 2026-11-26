@@ -19,13 +19,17 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.IOException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLException;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -108,10 +112,18 @@ public class MainActivity extends Activity {
             try (OutputStream output = connection.getOutputStream()) {
                 output.write(payload);
             }
-            if (connection.getResponseCode() != 200) throw new IOException("Release server unavailable");
-            try (InputStream input = connection.getInputStream()) {
-                return new String(readAll(input, 4096), StandardCharsets.US_ASCII);
+            int code = connection.getResponseCode();
+            InputStream stream = code == 200 ? connection.getInputStream() : connection.getErrorStream();
+            String reply = "";
+            if (stream != null) {
+                try (InputStream input = stream) {
+                    reply = new String(readAll(input, 4096), StandardCharsets.US_ASCII);
+                }
             }
+            if (code == 401 || code == 403) throw new TicketRejected();
+            if (code == 404) throw new NoBuild();
+            if (code != 200) throw new IOException("Release server unavailable");
+            return reply;
         } finally { connection.disconnect(); }
     }
 
@@ -170,6 +182,14 @@ public class MainActivity extends Activity {
         return hex(mac.doFinal(message.getBytes(StandardCharsets.US_ASCII)));
     }
 
+    private static final class TicketRejected extends IOException {
+        TicketRejected() { super("Ticket rejected"); }
+    }
+
+    private static final class NoBuild extends IOException {
+        NoBuild() { super("No build published"); }
+    }
+
     private static final class Ticket {
         final String file;
         final String path;
@@ -205,7 +225,7 @@ public class MainActivity extends Activity {
         String signature = sign("v1|latest|" + CHANNEL + "|" + stamp + "|" + nonceHex);
         String body = "file=latest&channel=" + CHANNEL + "&ts=" + stamp + "&nonce=" + nonceHex + "&sig=" + signature;
         JSONObject reply = new JSONObject(post(TICKET_PATH, body));
-        if (!reply.optBoolean("status", false)) throw new IOException("Ticket refused");
+        if (!reply.optBoolean("status", false)) throw new TicketRejected();
 
         String file = reply.getString("file");
         String path = reply.getString("path");
@@ -269,10 +289,18 @@ public class MainActivity extends Activity {
                 if (!manifest.matches(pending)) throw new GeneralSecurityException("Library digest rejected");
                 if (!pending.renameTo(library)) throw new IOException("Cannot install verified library");
                 return true;
+            } catch (VerifiedLibrary.KeyMismatch failure) {
+                error = "The build is signed with a key this launcher does not trust. Rebuild it with the signing key shown on the panel.";
+            } catch (TicketRejected failure) {
+                error = "The panel rejected this launcher's download key. Check the phone's date and time and rebuild with the key shown on the panel.";
+            } catch (NoBuild failure) {
+                error = "The panel has no published build for this channel. Upload a library in the panel and try again.";
+            } catch (UnknownHostException | SocketTimeoutException | SocketException | SSLException failure) {
+                error = "Could not reach the release server. Check your connection and try again.";
             } catch (GeneralSecurityException failure) {
                 error = "Build signature or contents could not be verified.";
             } catch (IOException | JSONException | RuntimeException failure) {
-                error = "Could not retrieve the official build. Check your connection and try again.";
+                error = "The release server did not answer with a build. Try again later.";
             } finally { if (pending != null && pending.exists()) pending.delete(); }
             return false;
         }

@@ -58,7 +58,9 @@ function http(string $url, ?string $post = null): array
     }
     $body = @file_get_contents($url, false, stream_context_create($options));
     $code = 0;
-    $headers = $http_response_header ?? [];
+    $headers = function_exists('http_get_last_response_headers')
+        ? (http_get_last_response_headers() ?? [])
+        : ($http_response_header ?? []);
     if (isset($headers[0]) && preg_match('/\s(\d{3})\s/', $headers[0], $match)) {
         $code = (int)$match[1];
     }
