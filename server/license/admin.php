@@ -476,8 +476,6 @@ foreach ($keys as $lic) {
     }
     html.loading .progress { width: 82%; opacity: 1 }
 
-    /* Login */
-
     .login {
         min-height: 100dvh;
         display: grid;
@@ -589,8 +587,6 @@ foreach ($keys as $lic) {
     .alert.good { background: var(--mint); color: var(--mint-ink); box-shadow: var(--sunk) }
 
     .fine { margin: 16px 0 0; color: var(--muted); font-size: 12.5px; text-align: center }
-
-    /* App */
 
     .topbar {
         display: flex;
@@ -736,8 +732,6 @@ foreach ($keys as $lic) {
 
     .cell-actions { text-align: right; white-space: nowrap }
 
-    /* Details row */
-
     tr.detail-row > td {
         padding: 0 0 8px;
     }
@@ -822,8 +816,6 @@ foreach ($keys as $lic) {
     .diag td.ok  { color: var(--mint-ink) }
     .diag td.bad { color: var(--rose-ink); font-weight: 700 }
 
-    /* Skeleton */
-
     .skeleton {
         display: none;
         position: absolute;
@@ -861,8 +853,6 @@ foreach ($keys as $lic) {
     .sk.c { width: 15% }
     .sk.d { width: 13% }
     .sk.e { width: 8%; margin-left: auto }
-
-    /* Modal */
 
     dialog.sheet {
         width: 100%;
@@ -931,8 +921,6 @@ foreach ($keys as $lic) {
     .hint { margin: 0 0 18px; color: var(--muted); font-size: 12.5px }
 
     .sheet-foot { display: flex; justify-content: flex-end; gap: 9px }
-
-    /* Toast */
 
     .toast {
         position: fixed;
