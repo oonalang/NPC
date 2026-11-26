@@ -30,7 +30,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
-    public static String libname = "libZANEV1.so";
     private static final String[] GAME_ACTIVITIES = {
         "com.garena.game.codm.MainActivity",
         "com.garena.game.codm.CODMainActivity",
@@ -41,9 +40,23 @@ public class MainActivity extends Activity {
     public boolean hasLaunched = false;
     private ProgressDialog progressDialog;
 
-    private static final String BASE = "https://ethnir.x10.mx";
-    private static final String HOST = "ethnir.x10.mx";
-    private static final String TICKET_PATH = "/lib/token";
+    private static final int[] MIX = {0x5a, 0x17, 0xc3, 0x2e, 0x91, 0x6b, 0x4d, 0xf0, 0x38, 0xa7, 0x0c, 0x73, 0xe5, 0x24, 0xb9, 0x46};
+    private static final int[] LINK = {0x32, 0x63, 0xb7, 0x5e, 0xe2, 0x51, 0x62, 0xdf, 0x5d, 0xd3, 0x64, 0x1d,
+        0x8c, 0x56, 0x97, 0x3e, 0x6b, 0x27, 0xed, 0x43, 0xe9};
+    private static final int[] TICKET = {0xdf, 0x54, 0xce, 0x6e, 0x5c, 0x91, 0x4b, 0xd2, 0x23, 0x34};
+    private static final int[] PREFIX = {0x0b, 0xd5, 0x2f, 0x38, 0x38, 0xb3, 0x5c, 0xfe, 0x1f, 0x28, 0x93, 0x4c,
+        0xc2, 0x68, 0x5c};
+
+    private static String unfold(int[] data, int shift) {
+        char[] out = new char[data.length];
+        for (int i = 0; i < data.length; ++i) out[i] = (char)(data[i] ^ MIX[(i + shift) % MIX.length]);
+        return new String(out);
+    }
+
+    private static final String BASE = unfold(LINK, 0);
+    private static final String HOST = BASE.substring(BASE.indexOf("//") + 2);
+    private static final String TICKET_PATH = unfold(TICKET, 7);
+    private static final String PROTECTED = unfold(PREFIX, 13);
     private static final String CHANNEL = "lite";
     private static final String SECRET = "";
 
@@ -206,7 +219,7 @@ public class MainActivity extends Activity {
         long length = reply.getLong("length");
 
         if (!file.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,79}\\.so")) throw new GeneralSecurityException("Ticket claims");
-        if (!path.equals("/lib/protected/" + file) || !manifestPath.equals(path + ".manifest")) throw new GeneralSecurityException("Ticket claims");
+        if (!path.equals(PROTECTED + file) || !manifestPath.equals(path + ".manifest")) throw new GeneralSecurityException("Ticket claims");
         if (!ticketSignature.matches("[0-9a-f]{64}") || !manifestSignature.matches("[0-9a-f]{64}")) throw new GeneralSecurityException("Ticket claims");
         long now = System.currentTimeMillis() / 1000L;
         if (expires < now || expires > now + 1800 || manifestExpires < now || manifestExpires > now + 1800) throw new GeneralSecurityException("Ticket claims");
@@ -217,18 +230,20 @@ public class MainActivity extends Activity {
     private final class FileDownloadTask extends AsyncTask<Void,Integer,Boolean> {
         private VerifiedLibrary manifest;
         private String error = "Official build verification failed.";
-        private final File library = new File(getFilesDir(), libname);
+        private File library;
 
         @Override protected void onPreExecute() { progressDialog.show(); }
 
         @Override protected Boolean doInBackground(Void... unused) {
-            File pending = new File(getFilesDir(), libname + ".new");
+            File pending = null;
             try {
                 if (SECRET.length() != 64) {
                     error = "This launcher has no download key. Rebuild it with the key from the panel.";
                     return false;
                 }
                 Ticket ticket = ticket();
+                library = new File(getFilesDir(), ticket.file);
+                pending = new File(getFilesDir(), ticket.file + ".new");
                 HttpsURLConnection metadata = open(ticket.manifestUrl());
                 byte[] manifestBytes;
                 try { manifestBytes = readAll(metadata.getInputStream(), VerifiedLibrary.MAX_MANIFEST); }
@@ -260,7 +275,7 @@ public class MainActivity extends Activity {
                 error = "Build signature or contents could not be verified.";
             } catch (IOException | JSONException | RuntimeException failure) {
                 error = "Could not retrieve the official build. Check your connection and try again.";
-            } finally { if (pending.exists()) pending.delete(); }
+            } finally { if (pending != null && pending.exists()) pending.delete(); }
             return false;
         }
 

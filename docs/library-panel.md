@@ -51,7 +51,7 @@ with a ±120 second clock window. The reply carries `file`, `length`, `sha256`, 
 
 The launcher holds the download key in `SECRET`. Copy the value from the panel into that constant, rebuild the APK, and the same APK keeps working across library uploads because it always asks for `latest` on its channel. Rotating the key invalidates every installed launcher until it is rebuilt.
 
-`VerifiedLibrary.read(bytes, fileName)` now takes the expected name, because the published build carries a tag. Keep the launcher's local file name (`libZANEV1.so`) — only the remote name changes.
+`VerifiedLibrary.read(bytes, fileName)` takes the expected name, because the published build carries a tag. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
 
 ## Deploy
 

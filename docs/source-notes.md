@@ -69,4 +69,28 @@ The BR performance work is easier to review with the intent written down:
 - `Tools::IsPtrValid` caches which mappings are readable instead of probing with a per-call write.
 - Pickup runs its fast path before the general interaction logic so a full lobby of loot does not stall the render loop.
 
+- Pickup runs its fast path before the general interaction logic so a full lobby of loot does not stall the render loop.
+
+## Panel address in the launcher (`MainActivity.java`)
+
+The launcher used to carry the panel address as plain literals: `BASE`, `HOST`, `TICKET_PATH` and the `/lib/protected/` prefix a ticket is checked against. Decompiling the DEX, or running `strings` over it, printed `https://ethnir.x10.mx` and `/lib/token` straight away, which is how the panel is found before anyone needs to break the key.
+
+Those strings are no longer stored as text. Each one is a list of scrambled bytes (`LINK`, `TICKET`, `PREFIX`); `unfold(list, shift)` XORs them back through `MIX` and the result is assigned to the same constants the rest of the class already used, so nothing else had to change. `HOST` is cut out of `BASE` instead of being written down twice. The library name is gone from the source as well: the cache file is named after the ticket's `file` field, so a `libnets.so` upload is saved and loaded as `libnets.so` with no local name to keep in sync.
+
+| List | Shift into `MIX` | Becomes |
+| --- | --- | --- |
+| `LINK` | 0 | `BASE` |
+| `TICKET` | 7 | `TICKET_PATH` |
+| `PREFIX` | 13 | `PROTECTED` |
+
+What this buys and what it does not:
+
+- A DEX text search, `strings` or a decompiler's find-text now shows only numbers for the host, the ticket path and the protected prefix.
+- It is not cryptography. Anyone who reads `unfold` can copy it and recover the strings; an address the app has to call cannot be hidden more strongly than that.
+- The real gate stays the HMAC key in `SECRET` and the RSA-signed manifest. A recovered address still gets a 403 without a valid ticket, and a ticket lives five minutes.
+- `SECRET` is a 64-hex literal in the DEX and can be extracted the same way. Treat it as rotatable: rotate it on the panel and rebuild the launcher if it leaks.
+- The domain also appears inside the native library (`AntiChangePanel.h` and `Jni_Stuff.h` both build `connect.php` from it), so `strings libnets.so` still shows it. Hiding only the Java side does not hide the domain from someone who inspects the library.
+
+Changing the panel address later means new `LINK`/`TICKET`/`PREFIX` lists, not a string edit.
+
 These change cost, not behaviour: the same information is drawn with fewer reads and fewer failed probes.
