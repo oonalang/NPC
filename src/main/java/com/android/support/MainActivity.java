@@ -5,6 +5,9 @@ import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.DialogInterface;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -28,7 +31,13 @@ import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     public static String libname = "libZANEV1.so";
-    public String GameActivity = "com.tencent.tmgp.cod.CODMainActivity";
+    private static final String[] GAME_ACTIVITIES = {
+        "com.garena.game.codm.MainActivity",
+        "com.garena.game.codm.CODMainActivity",
+        "com.tencent.tmgp.cod.CODMainActivity",
+        "com.activision.callofduty.shooter.MainActivity",
+        "com.activision.callofduty.shooter.CODMainActivity"
+    };
     public boolean hasLaunched = false;
     private ProgressDialog progressDialog;
 
@@ -102,6 +111,32 @@ public class MainActivity extends Activity {
                 output.write(chunk, 0, read);
             }
             return output.toByteArray();
+        }
+    }
+
+    private String gameActivity() {
+        for (String candidate : GAME_ACTIVITIES) {
+            if (resolves(candidate)) return candidate;
+        }
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_ACTIVITIES);
+            if (info.activities == null) return null;
+            for (ActivityInfo activity : info.activities) {
+                String name = activity.name;
+                if (name == null || name.equals(MainActivity.class.getName()) || !name.endsWith("MainActivity")) continue;
+                if (resolves(name)) return name;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static boolean resolves(String className) {
+        try {
+            Class.forName(className);
+            return true;
+        } catch (Throwable missing) {
+            return false;
         }
     }
 
@@ -240,7 +275,12 @@ public class MainActivity extends Activity {
             try {
                 if (!result || manifest == null || !manifest.matches(library)) throw new GeneralSecurityException("Unverified library");
                 System.load(library.getAbsolutePath());
-                startActivity(new Intent(MainActivity.this,Class.forName(GameActivity)));
+                String game = gameActivity();
+                if (game == null) {
+                    error = "This launcher does not match the installed game build.";
+                    throw new ClassNotFoundException("Game activity");
+                }
+                startActivity(new Intent(MainActivity.this,Class.forName(game)));
                 return;
             } catch (GeneralSecurityException | IOException | ClassNotFoundException | LinkageError | RuntimeException failure) {
                 new AlertDialog.Builder(MainActivity.this).setMessage(error).setPositiveButton("Close",new DialogInterface.OnClickListener() {

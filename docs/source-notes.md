@@ -39,6 +39,25 @@ The red outline is the game's EM3 eye effect, so the mod does not paint it: it m
 
 The range used to be a fixed `50.0f`. It is now `Config.ExtraMenu.RedWallhackRange`, clamped to 5–200 m and falling back to 50 for a non-finite value. A shorter range is less obvious because pawns only light up when they are genuinely close; longer ranges reach further at the cost of being easier to notice. Both the Lite panel and the runtime preview menu show the slider only while Red Wallhack is enabled, and the value is saved as `ExtraMenu.RedWallhackRange` next to the toggle.
 
+## Game launcher activity (`MainActivity.java`)
+
+The launcher used to hold one hardcoded class, `com.tencent.tmgp.cod.CODMainActivity`. That class exists only in the Tencent build. A Garena install (`com.garena.game.codm`) does not contain it, so `Class.forName` failed, the launcher reported "Official build verification failed" and the game never started. Every other target in the project was already Garena: `SaveConfig.h`, `MusicPlayer.h`, `FeedbackService.cpp` and `GuestAccount.h` all use `com.garena.game.codm`.
+
+The class is now resolved at runtime instead of trusted from one string. In order:
+
+| Step | Class |
+| --- | --- |
+| 1 | `com.garena.game.codm.MainActivity` |
+| 2 | `com.garena.game.codm.CODMainActivity` |
+| 3 | `com.tencent.tmgp.cod.CODMainActivity` |
+| 4 | `com.activision.callofduty.shooter.MainActivity` |
+| 5 | `com.activision.callofduty.shooter.CODMainActivity` |
+| 6 | any activity declared in the merged manifest whose class name ends in `MainActivity` |
+
+Steps 1, 2, 4 and 5 are attempts, not facts: a name is used only when `Class.forName` can load it. Step 6 covers the case where Garena renames the activity, because the merged APK keeps the game's own activity declarations, so the real class is discovered from the manifest rather than guessed. When nothing resolves, the launcher says the build does not match the installed game instead of blaming release verification.
+
+Because `startActivity` needs the class inside the same APK, this resolution only works when the mod is merged into the game APK. Do not copy an activity name from another project: read it from the Garena APK's `AndroidManifest.xml` if a build ever needs the string written down.
+
 ## ESP and pickup cost notes
 
 The BR performance work is easier to review with the intent written down:
