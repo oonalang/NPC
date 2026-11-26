@@ -165,10 +165,8 @@ public class MainActivity extends Activity {
 
     private static String sign(String message) throws GeneralSecurityException {
         if (SECRET.length() != 64) throw new GeneralSecurityException("Launcher not configured");
-        byte[] key = new byte[32];
-        for (int i = 0; i < key.length; ++i) key[i] = (byte)Integer.parseInt(SECRET.substring(i * 2, i * 2 + 2), 16);
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(key, "HmacSHA256"));
+        mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.US_ASCII), "HmacSHA256"));
         return hex(mac.doFinal(message.getBytes(StandardCharsets.US_ASCII)));
     }
 

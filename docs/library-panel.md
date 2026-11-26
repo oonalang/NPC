@@ -51,6 +51,8 @@ with a ±120 second clock window. The reply carries `file`, `length`, `sha256`, 
 
 The launcher holds the download key in `SECRET`. Copy the value from the panel into that constant, rebuild the APK, and the same APK keeps working across library uploads because it always asks for `latest` on its channel. Rotating the key invalidates every installed launcher until it is rebuilt.
 
+The key is used exactly as the panel prints it: 64 ASCII hex characters fed to `Mac` as bytes. Hex-decoding it into 32 raw bytes produces a different HMAC, so every ticket request comes back `403 Rejected` and the launcher can only report "Could not retrieve the official build."
+
 `VerifiedLibrary.read(bytes, fileName)` takes the expected name, because the published build carries a tag. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
 
 ## Deploy
@@ -69,6 +71,17 @@ RewriteRule ^lib/token/?$ libtok.php [L]
 3. `private/libs/` is created on first upload with its own deny rule; `private/lib_secret` (0600) is created the first time the page needs it. Both stay out of the web root on hosts that allow it.
 4. Raise `upload_max_filesize` and `post_max_size` if a build is rejected; a 4 MiB library needs at least 8 MiB of `post_max_size`.
 5. Copy the key into `MainActivity.SECRET`, rebuild the launcher, and test one upload end to end before publishing the APK.
+
+## Key rotation
+
+Two values are pinned in the APK:
+
+- `MainActivity.SECRET`, the download key from `private/lib_secret`;
+- `LicenseRoot.PUBLIC_KEY` and `LicenseRoot.KEY_ID`, the RSA key that signs manifests.
+
+Replacing the panel folder with a fresh copy instead of uploading over the existing one deletes `private/` and `data/`. The next page load then creates a new `private/lib_secret`, and a new signing key is created whenever `private/licence_private.pem` is missing. Both pinned values stop matching at once: the ticket POST answers `403`, and once the ticket is right, manifest verification fails.
+
+The panel prints the current values under "Launcher download key" and "Launcher signing key". Copy both into the source and rebuild. Uploading the panel files over the existing install keeps `private/` and `data/` intact and needs no rebuild.
 
 ## Limits
 

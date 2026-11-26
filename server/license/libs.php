@@ -97,6 +97,21 @@ try {
     $error = $error !== '' ? $error : 'The download key is unavailable. Check permissions on private/.';
 }
 
+$signingId = '';
+$signingPublic = '';
+try {
+    $signingKey = is_readable($keyPath) ? openssl_pkey_get_private((string)file_get_contents($keyPath)) : false;
+    $signingDetails = $signingKey === false ? [] : openssl_pkey_get_details($signingKey);
+    if (is_array($signingDetails) && !empty($signingDetails['key'])) {
+        $signingDer = lib_pem_to_der((string)$signingDetails['key']);
+        $signingId = hash('sha256', $signingDer);
+        $signingPublic = base64_encode($signingDer);
+    }
+} catch (Throwable $failure) {
+    $signingId = '';
+    $signingPublic = '';
+}
+
 $libraries = [];
 try {
     $libraries = lib_list();
@@ -261,6 +276,20 @@ $postLimit = (string)ini_get('post_max_size');
             <input type="hidden" name="action" value="rotate">
             <button class="btn danger" type="submit">Regenerate key</button>
         </form>
+    </section>
+
+    <section class="card">
+        <h2>Launcher signing key</h2>
+        <p class="hint">Paste both values into <span class="mono">LicenseRoot.java</span>. The launcher rejects a
+            manifest signed by any other key, even when the download key is correct.</p>
+        <?php if ($signingPublic !== ''): ?>
+            <p class="hint">Key ID</p>
+            <p class="mono" style="user-select:all;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px"><?= h($signingId) ?></p>
+            <p class="hint">Public key</p>
+            <p class="mono" style="user-select:all;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px"><?= h($signingPublic) ?></p>
+        <?php else: ?>
+            <p class="alert bad">The signing key could not be read. Check private/licence_private.pem.</p>
+        <?php endif; ?>
     </section>
 
     <section class="card">
