@@ -295,8 +295,15 @@ public class MainActivity extends Activity {
                 error = "The panel rejected this launcher's download key. Check the phone's date and time and rebuild with the key shown on the panel.";
             } catch (NoBuild failure) {
                 error = "The panel has no published build for this channel. Upload a library in the panel and try again.";
-            } catch (UnknownHostException | SocketTimeoutException | SocketException | SSLException failure) {
-                error = "Could not reach the release server. Check your connection and try again.";
+            } catch (UnknownHostException failure) {
+                error = "Could not find the release server's address. Check the phone's internet connection and try again.";
+            } catch (SocketTimeoutException failure) {
+                error = "The release server did not answer in time. Try again on a working connection.";
+            } catch (SSLException failure) {
+                error = "The phone refused the release server's certificate (" + failure.getClass().getSimpleName() +
+                    (failure.getMessage() == null ? "" : ": " + failure.getMessage()) + ").";
+            } catch (SocketException failure) {
+                error = "The connection to the release server was closed. Try again.";
             } catch (GeneralSecurityException failure) {
                 error = "Build signature or contents could not be verified.";
             } catch (IOException | JSONException | RuntimeException failure) {

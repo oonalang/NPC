@@ -63,11 +63,14 @@ The download task keeps the failures apart instead of collapsing them into one l
 | The panel rejected this launcher's download key. Check the phone's date and time and rebuild with the key shown on the panel. | Ticket POST answered `401`/`403`, or the reply carried `status: false` | Match `SECRET` to the panel and keep the phone clock within two minutes of the host |
 | The panel has no published build for this channel. Upload a library in the panel and try again. | Ticket POST answered `404` | Upload a signed build on the launcher's channel (`lite` by default) |
 | The build is signed with a key this launcher does not trust. Rebuild it with the signing key shown on the panel. | Manifest `key_id` or RSA signature does not match `LicenseRoot` | Copy `KEY_ID` and `PUBLIC_KEY` from the panel's "Launcher signing key" section |
-| Could not reach the release server. Check your connection and try again. | DNS, connect, read timeout or TLS failure | Retry on a working connection |
+| Could not find the release server's address. Check the phone's internet connection and try again. | DNS lookup failed | Retry on a working connection |
+| The release server did not answer in time. Try again on a working connection. | Connect or read timeout | Retry on a working connection |
+| The phone refused the release server's certificate (`SSLHandshakeException: <reason>`). | TLS handshake rejected (`SSLException`) — the dialog carries the exception name and its reason, such as a trust-anchor or hostname failure | Serve the panel behind a certificate chain the phone's Android version trusts, or fix the hostname |
+| The connection to the release server was closed. Try again. | Socket closed mid-connection | Retry |
 | The release server did not answer with a build. Try again later. | Any other HTTP status or a reply that is not ticket JSON | Check the host, the rewrite rules and the PHP error log |
 | Build signature or contents could not be verified. | Manifest framing, claims or SHA-256 mismatch | Re-upload the library, or rebuild when the signing key pair changed |
 
-A ticket rejection and an unreachable host are therefore separate answers: the first points at `SECRET` or the clock, the second at the network. A wrong signing key is reported on its own, without downloading the whole library again.
+A ticket rejection and an unreachable host are therefore separate answers: the first points at `SECRET` or the clock, the second at the network. The network answer is itself split by cause, so a DNS failure, a timeout, a refused certificate and a dropped socket do not share one dialog. A wrong signing key is reported on its own, without downloading the whole library again.
 
 `VerifiedLibrary.read(bytes, fileName)` takes the expected name, which is the stored file name. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
 
