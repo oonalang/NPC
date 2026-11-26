@@ -87,8 +87,8 @@ static inline void DrawSkeletonLine(ImDrawList* draw, Vector3 from, Vector3 to, 
     auto mainCamera = Camera::get_main();
     if (!mainCamera) return;
 
-    Vector3 fromScreen = mainCamera->WorldToScreenPoint(from);
-    Vector3 toScreen = mainCamera->WorldToScreenPoint(to);
+    Vector3 fromScreen = Camera::WorldToScreenPoint(mainCamera, from);
+    Vector3 toScreen = Camera::WorldToScreenPoint(mainCamera, to);
 
     if (fromScreen.z > 0 && toScreen.z > 0) {
         draw->AddLine(
@@ -138,7 +138,7 @@ static bool DrawBoneMapSkeleton(ImDrawList *draw, Pawn *pawn, ImU32 color, float
     bool visible[16];
     int visibleCount = 0;
     for (int i = 0; i < 16; ++i) {
-        screenBones[i] = mainCamera->WorldToScreenPoint(bones[i]);
+        screenBones[i] = Camera::WorldToScreenPoint(mainCamera, bones[i]);
         visible[i] = (screenBones[i].z > 0.0f);
         if (visible[i]) {
             visibleCount++;

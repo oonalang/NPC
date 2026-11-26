@@ -34,7 +34,9 @@ inline void Publish(bool fast, float range) noexcept {
     range = NormalizeRange(range);
     std::uint32_t bits = 0;
     std::memcpy(&bits, &range, sizeof(bits));
-    requested.store(bits | (static_cast<std::uint64_t>(fast) << 32), std::memory_order_release);
+    const auto packed = bits | (static_cast<std::uint64_t>(fast) << 32);
+    if (requested.load(std::memory_order_relaxed) != packed)
+        requested.store(packed, std::memory_order_release);
 }
 
 inline Options Read() noexcept {
@@ -64,14 +66,15 @@ inline float PickupInterval(float original, bool fast) noexcept {
 
 class ScopedFloat {
 public:
-    ScopedFloat(void* object, std::size_t offset, float value) noexcept
-        : address_(static_cast<unsigned char*>(object) + offset) {
+    ScopedFloat(void* object, std::size_t offset, float value, bool enabled = true) noexcept
+        : address_(enabled ? static_cast<unsigned char*>(object) + offset : nullptr) {
+        if (!address_) return;
         std::memcpy(&original_, address_, sizeof(original_));
         std::memcpy(&applied_, &value, sizeof(applied_));
         std::memcpy(address_, &applied_, sizeof(applied_));
     }
     ~ScopedFloat() {
-        if (std::memcmp(address_, &applied_, sizeof(applied_)) == 0)
+        if (address_ && std::memcmp(address_, &applied_, sizeof(applied_)) == 0)
             std::memcpy(address_, &original_, sizeof(original_));
     }
     ScopedFloat(const ScopedFloat&) = delete;
@@ -103,9 +106,12 @@ inline void Invoke(void* manager, Options options, Original original) {
     const float vertical = Field<float>(manager, verticalRangeOffset);
     const float interval = Field<float>(manager, scanIntervalOffset);
     const float range = NormalizeRange(options.range);
-    ScopedFloat horizontalOverride(manager, horizontalRangeOffset, ScaleLimit(horizontal, range * range));
-    ScopedFloat verticalOverride(manager, verticalRangeOffset, ScaleLimit(vertical, range));
-    ScopedFloat intervalOverride(manager, scanIntervalOffset, PickupInterval(interval, options.fast));
+    ScopedFloat horizontalOverride(manager, horizontalRangeOffset,
+        ScaleLimit(horizontal, range * range), range > defaultRange);
+    ScopedFloat verticalOverride(manager, verticalRangeOffset,
+        ScaleLimit(vertical, range), range > defaultRange);
+    ScopedFloat intervalOverride(manager, scanIntervalOffset,
+        PickupInterval(interval, options.fast), options.fast);
     original();
 }
 
@@ -140,10 +146,9 @@ inline std::mutex installMutex;
 inline std::size_t installedHooks = 0;
 
 inline Options Current(void* manager) noexcept {
-    if (!manager || !available.load(std::memory_order_acquire) ||
-        !license::Allows(license::Capability::Features)) return {};
     const auto options = Read();
-    if (!options.Active()) return options;
+    if (!options.Active() || !manager || !available.load(std::memory_order_acquire) ||
+        !license::Allows(license::Capability::Features)) return {};
     const auto match = reinterpret_cast<Getter>(library + 0x801191C)(nullptr, nullptr);
     const auto pawn = reinterpret_cast<Getter>(library + 0x8016060)(nullptr, nullptr);
     if (!match || !pawn || Field<void*>(manager, 0x38) != match ||
@@ -163,6 +168,7 @@ inline void Refresh(void* manager, bool* items, bool* arsenal, Metadata metadata
 
 inline float Interval(void* module, Metadata metadata) {
     const float original = originalInterval ? originalInterval(module, metadata) : 0.f;
+    if (!Read().fast) return original;
     return PickupInterval(original, Current(Field<void*>(module, 0x10)).fast);
 }
 

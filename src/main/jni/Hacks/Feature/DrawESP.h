@@ -337,8 +337,8 @@ void HandleEnemyInfo(ImDrawList *draw) {
                     
                     auto mainCamera = Camera::get_main();
                     if (mainCamera) {
-                        Vector3 HeadSc = mainCamera->WorldToScreenPoint(pEnemyPawn_headPos);
-                        Vector3 RootSc = mainCamera->WorldToScreenPoint(pEnemyPawn_rootPos);
+                        Vector3 HeadSc = Camera::WorldToScreenPoint(mainCamera, pEnemyPawn_headPos);
+                        Vector3 RootSc = Camera::WorldToScreenPoint(mainCamera, pEnemyPawn_rootPos);
                         
                         AttackableTargetInfo *m_AttackableInfo = pawn->m_AttackableInfo();
                         if (m_AttackableInfo != nullptr) {
@@ -443,7 +443,7 @@ static inline void DrawEsp3DBox(ImDrawList *draw, Vector3 rootPos, int glHeight,
 
     Vector3 screenCorners[8];
     for (int i = 0; i < 8; ++i) {
-        screenCorners[i] = mainCamera->WorldToScreenPoint(corners[i]);
+        screenCorners[i] = Camera::WorldToScreenPoint(mainCamera, corners[i]);
         if (screenCorners[i].z <= 0.0f) return;
         screenCorners[i].y = glHeight - screenCorners[i].y;
     }
@@ -469,7 +469,7 @@ static inline void DrawEspCylinder(ImDrawList* draw, Vector3 rootPos, int glHeig
     const int segments = 40;
 
     auto Project = [&](Vector3 world) -> ImVec2 {
-        Vector3 screen = mainCamera->WorldToScreenPoint(world);
+        Vector3 screen = Camera::WorldToScreenPoint(mainCamera, world);
         if (screen.z <= 0.01f) return ImVec2(-9999.0f, -9999.0f);
         return ImVec2(screen.x, glHeight - screen.y);
     };
@@ -513,7 +513,7 @@ static inline void DrawEspSignal(ImDrawList* draw, Vector3 rootPos, int glHeight
         for (int i = 0; i < segments; ++i) {
             float angle = (2.0f * IM_PI * i) / segments;
             Vector3 world(rootPos.x + cosf(angle) * radius, groundY, rootPos.z + sinf(angle) * radius);
-            Vector3 screen = mainCamera->WorldToScreenPoint(world);
+            Vector3 screen = Camera::WorldToScreenPoint(mainCamera, world);
             if (screen.z <= 0.01f) return false;
             out.emplace_back(screen.x, glHeight - screen.y);
         }
@@ -618,7 +618,7 @@ static inline void DrawVehicleESP(ImDrawList *draw, int sWidth, int sHeight) {
         auto mainCamera = Camera::get_main();
         if (!mainCamera) continue;
         
-        Vector3 screenPos = mainCamera->WorldToScreenPoint(vehiclePos);
+        Vector3 screenPos = Camera::WorldToScreenPoint(mainCamera, vehiclePos);
         if (screenPos.z <= 0) continue;
         
         EVehicleType vType = vehicle->vehicleType();
@@ -765,74 +765,70 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
     totalBots = 0, totalEnemies = 0;
     if (!pawnOverlay) return;
     List<Pawn *> *EnemyPawns = get_MatchGame->EnemyPawns();
-    if (!Tools::IsPtrValid(EnemyPawns) || !EnemyPawns->getSize()) return;
+    if (!Tools::IsPtrValid(EnemyPawns)) return;
+    const int pawnCount = EnemyPawns->getSize();
+    if (pawnCount <= 0 || pawnCount > 512 || !Tools::IsPtrValid(EnemyPawns->items)) return;
+    const int pawnCapacity = EnemyPawns->items->getLength();
+    if (pawnCapacity < pawnCount || pawnCapacity > 512) return;
     Camera *mainCamera = Camera::get_main();
     if (!mainCamera) return;
 
     Pawn **pawns = (Pawn **)EnemyPawns->getItems();
-    for (int i = 0; i < EnemyPawns->getSize(); i++) {
+    if (!Tools::IsPtrValid(pawns)) return;
+    for (int i = 0; i < pawnCount; i++) {
         Pawn *pawn = pawns[i];
         if (!Tools::IsPtrValid(pawn)) continue;
 
         auto m_PlayerInfo = *(uintptr_t *)(pawn + Class_Pawn_m_PlayerInfo);
         if (!Tools::IsPtrValid((void *)m_PlayerInfo)) continue;
 
-        auto m_AttackableInfo = *(uintptr_t *)(pawn + Class_AttackableTarget_m_AttackableInfo);
-        int CurHP = (int)*(float *)(m_AttackableInfo + Class_AttackableTarget_m_Health);
-        int MaxHP = (int)*(float *)(m_AttackableInfo + Class_AttackableTarget_m_MaxHealth);
-
+        if (!pawn->m_IsAlive()) continue;
         auto m_HeadBone = *(Transform **)(pawn + Class_Pawn_m_HeadBone);
         auto m_Mesh = *(Transform **)(pawn + Class_Pawn_m_Mesh);
-        if (!Tools::IsPtrValid(m_HeadBone) || !m_Mesh || !*(bool *)(pawn + Class_Pawn_m_IsAlive)) continue;
+        if (!Tools::IsPtrValid(m_HeadBone) || !Tools::IsPtrValid(m_Mesh)) continue;
+
+        int CurHP = 0;
+        int MaxHP = 0;
+        if (Config.ESPMenu.Health) {
+            const auto m_AttackableInfo = *(uintptr_t *)(pawn + Class_AttackableTarget_m_AttackableInfo);
+            if (Tools::IsPtrValid((void *)m_AttackableInfo)) {
+                CurHP = (int)*(float *)(m_AttackableInfo + Class_AttackableTarget_m_Health);
+                MaxHP = (int)*(float *)(m_AttackableInfo + Class_AttackableTarget_m_MaxHealth);
+            }
+        }
 
         bool isBot = *(bool *)((uintptr_t)pawn + Class_Pawn_m_IsBot);
         
         if (isBot) totalBots++; else totalEnemies++;
 
-        ImU32 lineColor, boxColor, nameColor, distanceColor, healthColor, skeletonColor;
-        float lineThickness, boxThickness, skeletonThickness;
+        ImU32 lineColor, boxColor;
+        float lineThickness, boxThickness;
 
         if (isBot) {
             lineColor = boxColor = ToColor(Config.sColorsESPBOT.LineBOT);
-            nameColor = ToColor(Config.sColorsESPBOT.NameBOT);
-            distanceColor = ToColor(Config.sColorsESPBOT.DistanceBOT);
-            healthColor = ToColor(Config.sColorsESPBOT.HealthBOT);
-            skeletonColor = ToColor(Config.sColorsESPBOT.SkeletonBOT);
             lineThickness = boxThickness = Config.Bline;
-            skeletonThickness = Config.BskelLine;
         } else {
             lineColor = boxColor = ToColor(Config.sColorsESPPLAYER.LinePLAYER);
-            nameColor = ToColor(Config.sColorsESPPLAYER.NamePLAYER);
-            distanceColor = ToColor(Config.sColorsESPPLAYER.DistancePLAYER);
-            healthColor = ToColor(Config.sColorsESPPLAYER.HealthPLAYER);
-            skeletonColor = ToColor(Config.sColorsESPPLAYER.SkeletonPLAYER);
             lineThickness = boxThickness = Config.Pline;
-            skeletonThickness = Config.PskelLine;
         }
 
         Vector3 pEnemyPawn_headPos = pawn->get_HeadPosition();
         Vector3 pEnemyPawn_rootPos = pawn->get_LastPawnPos();
 
-        Vector3 HeadSc = mainCamera->WorldToScreenPoint(pEnemyPawn_headPos);
-        Vector3 RootSc = mainCamera->WorldToScreenPoint(pEnemyPawn_rootPos);
+        Vector3 HeadSc = Camera::WorldToScreenPoint(mainCamera, pEnemyPawn_headPos);
+        Vector3 RootSc = Camera::WorldToScreenPoint(mainCamera, pEnemyPawn_rootPos);
 
         float distanceToMe = Vector3::Distance(pLocalPawn_rootPos, pEnemyPawn_rootPos);
-        float actualHeight = Vector3::Distance(pEnemyPawn_headPos, pEnemyPawn_rootPos);
-        
-        if (HeadSc.z > 0 && pawn->m_IsAlive()) {
-            
-            Vector2 screen(sWidth, sHeight);
-            Vector2 location(RootSc.x, HeadSc.y);
-            float magic_number = distanceToMe;
+        if (!std::isfinite(HeadSc.x) || !std::isfinite(HeadSc.y) || !std::isfinite(HeadSc.z) ||
+            !std::isfinite(RootSc.x) || !std::isfinite(RootSc.y) || !std::isfinite(RootSc.z) ||
+            !std::isfinite(distanceToMe)) continue;
+
+        if (HeadSc.z > 0) {
             float boxHeight = std::abs(HeadSc.y - RootSc.y);
             float boxWidth = boxHeight * 0.65f;
 
             if (boxHeight < 5.0f || boxHeight > sHeight * 0.85f) continue;
             if (boxWidth < 2.0f) continue;
-
-            float mx = (glWidth / 6) / magic_number;
-            float healthLength = glWidth / 20;
-            if (healthLength < mx) healthLength = mx;
 
             Rect PlayerRect(HeadSc.x - (boxWidth / 2), sHeight - HeadSc.y, boxWidth, boxHeight);
 
@@ -892,8 +888,6 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
                     float infoContainerWidth = boxWidth * 1.6f * scaleFactor;
                     float infoContainerX = HeadSc.x - (infoContainerWidth / 2);
                     float infoCurrentY = sHeight - HeadSc.y - (50.0f * scaleFactor);
-                    float centerX = ImGui::GetIO().DisplaySize.x / 2.0f;
-                    float headY = HeadSc.y; 
                     float fontSize = 18.0f * scaleFactor;
                     float infoTotalHeight = 0.0f;
                     if (Config.ESPMenu.Name) infoTotalHeight += 24.0f * scaleFactor;
@@ -902,7 +896,13 @@ void DrawESP(ImDrawList *draw, int sWidth, int sHeight, float density) {
                     draw->AddRectFilled(ImVec2(infoContainerX, infoCurrentY), ImVec2(infoContainerX + infoContainerWidth, infoCurrentY + infoTotalHeight), IM_COL32(0, 0, 0, 120));
                     
                     if (Config.ESPMenu.Name) {
-                        std::string displayText = pawn->m_IsBot() ? "BOT" : pawn->get_PlayerName()->CString();
+                        std::string displayText;
+                        if (isBot) {
+                            displayText = "BOT";
+                        } else {
+                            String *playerName = pawn->get_PlayerName();
+                            if (Tools::IsPtrValid(playerName)) displayText = playerName->CString();
+                        }
                         ImVec2 infoTextSize = ImGui::CalcTextSize(displayText.c_str());
                         infoTextSize.x *= (fontSize / ImGui::GetFontSize());
                         float infoTextX = infoContainerX + (infoContainerWidth - infoTextSize.x) / 2;

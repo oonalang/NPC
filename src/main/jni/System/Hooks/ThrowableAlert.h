@@ -80,7 +80,7 @@ inline void TrackThrowable(void* proj)
 
 inline bool ThrowToScreen(Camera* cam, const Vector3& world, int height, ImVec2& out)
 {
-    Vector3 screen = cam->WorldToScreenPoint(world);
+    Vector3 screen = Camera::WorldToScreenPoint(cam, world);
     if (screen.z <= 0.01f)
         return false;
     out = ImVec2(screen.x, height - screen.y);

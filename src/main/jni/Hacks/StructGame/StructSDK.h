@@ -41,13 +41,16 @@ public:
         return _Camera__get_main();
     }
 
-    Vector3 WorldToScreenPoint(Vector3 position) {
-        auto main = Camera::get_main();
+    static Vector3 WorldToScreenPoint(Camera *main, Vector3 position) {
         if (main) {
             auto _Camera__WorldToScreenPoint = (Vector3 (*)(Camera *, Vector3)) (Class_Camera_WorldToScreenPoint);
             return _Camera__WorldToScreenPoint(main, position);
         }
         return {0, 0, 0};
+    }
+
+    Vector3 WorldToScreenPoint(Vector3 position) {
+        return WorldToScreenPoint(Camera::get_main(), position);
     }
 };
 
