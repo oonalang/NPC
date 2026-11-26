@@ -22,14 +22,14 @@ final class VerifiedLibrary {
         this.hash = hash;
     }
 
-    static VerifiedLibrary read(byte[] bytes) throws GeneralSecurityException {
+    static VerifiedLibrary read(byte[] bytes, String expectedName) throws GeneralSecurityException {
         if (bytes.length == 0 || bytes.length > MAX_MANIFEST) throw new GeneralSecurityException("Manifest size");
         for (byte b : bytes) if (b < 0 || (b < 32 && b != 10)) throw new GeneralSecurityException("Manifest encoding");
         String[] lines = new String(bytes, StandardCharsets.US_ASCII).split("\n", -1);
         if (lines.length != 3 || !lines[2].isEmpty()) throw new GeneralSecurityException("Manifest framing");
         String[] parts = lines[0].split("\\|", -1);
         if (parts.length != 7 || !parts[0].equals("v1") || !parts[1].equals("ETHNIR_LITE") ||
-            !parts[2].equals("1") || !parts[3].equals("libZANEV1.so") ||
+            !parts[2].equals("1") || !parts[3].equals(expectedName) ||
             !parts[4].matches("[1-9][0-9]{0,8}") || !parts[5].matches("[0-9a-f]{64}") ||
             !parts[6].equals(LicenseRoot.KEY_ID)) throw new GeneralSecurityException("Manifest claims");
         long size = Long.parseLong(parts[4]);

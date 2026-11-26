@@ -17,14 +17,14 @@ public final class VerifiedLibraryTest {
         return (payload+"\n"+Base64.encodeToString(signer.sign(),Base64.NO_WRAP)+"\n").getBytes(StandardCharsets.US_ASCII);
     }
     private static void rejected(byte[] bytes) throws Exception {
-        try {VerifiedLibrary.read(bytes);throw new AssertionError("Untrusted manifest accepted");}
+        try {VerifiedLibrary.read(bytes,"libZANEV1.so");throw new AssertionError("Untrusted manifest accepted");}
         catch(java.security.GeneralSecurityException expected) {}
     }
     public static void main(String[] args) throws Exception {
         byte[] bytes=Files.readAllBytes(Paths.get(args[0]));
         File library=new File(args[1]);
         key=KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Files.readAllBytes(Paths.get(args[2]))));
-        VerifiedLibrary manifest=VerifiedLibrary.read(bytes);
+        VerifiedLibrary manifest=VerifiedLibrary.read(bytes,"libZANEV1.so");
         if(!manifest.matches(library)) throw new AssertionError("Valid release rejected");
         String[] lines=new String(bytes,StandardCharsets.US_ASCII).split("\n");
         String[] parts=lines[0].split("\\|",-1);

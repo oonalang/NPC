@@ -1021,6 +1021,7 @@ foreach ($keys as $lic) {
                 </div>
             </div>
             <div class="topbar-actions">
+                <a class="btn quiet" href="libs.php">Libraries</a>
                 <button class="btn quiet" type="button" data-open-sheet data-preset="free">Free giveaway</button>
                 <button class="btn primary" type="button" data-open-sheet data-preset="premium">New key</button>
                 <form method="post">
