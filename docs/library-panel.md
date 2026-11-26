@@ -11,13 +11,13 @@ The panel can publish a new `arm64-v8a` build without touching the APK. Upload a
 - The launcher download key, shown once and copyable, with a **Regenerate** button.
 - Delete per build, which also removes its manifest and metadata.
 
-Each upload is stored as `<original-name>.<8-hex-tag>.so`, so a link looks like:
+Each upload is stored under its own name, so a `libnets.so` upload becomes `libnets.so` and a link looks like:
 
 ```
-https://ethnir.x10.mx/lib/protected/libZANEV1.4f9c2a71.so?e=1790000000&s=<64 hex>
+https://ethnir.x10.mx/lib/protected/libnets.so?e=1790000000&s=<64 hex>
 ```
 
-The tag keeps two uploads of the same build from overwriting each other; the file name is what the launcher pins the manifest to.
+Uploading the same name again replaces that build and its signed manifest, so the published link keeps working. A file name that still carries an old tag (for example `libnets.0a656191.so`) is cleaned back to `libnets.so` on upload. The stored name is what the launcher pins the manifest to.
 
 ## Upload checks
 
@@ -53,7 +53,7 @@ The launcher holds the download key in `SECRET`. Copy the value from the panel i
 
 The key is used exactly as the panel prints it: 64 ASCII hex characters fed to `Mac` as bytes. Hex-decoding it into 32 raw bytes produces a different HMAC, so every ticket request comes back `403 Rejected` and the launcher can only report "Could not retrieve the official build."
 
-`VerifiedLibrary.read(bytes, fileName)` takes the expected name, because the published build carries a tag. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
+`VerifiedLibrary.read(bytes, fileName)` takes the expected name, which is the stored file name. The launcher also names its cache file after the ticket's `file` field, so whatever name is uploaded on the panel (`libnets.so`, for example) is the name that is downloaded, verified and loaded; there is no local name to keep in sync.
 
 ## Deploy
 

@@ -221,16 +221,15 @@ function lib_install(string $tmp, string $original, string $channel, string $not
     if (substr($base, -3) === '.so') {
         $base = substr($base, 0, -3);
     }
+    $base = preg_replace('/\.[0-9a-f]{8}$/i', '', $base) ?? $base;
     $base = substr(trim($base, '._-'), 0, 48);
     if ($base === '') {
         $base = 'library';
     }
 
     $root = lib_root();
-    do {
-        $name = $base . '.' . bin2hex(random_bytes(4)) . '.so';
-        $target = $root . '/' . $name;
-    } while (file_exists($target));
+    $name = $base . '.so';
+    $target = $root . '/' . $name;
 
     if (!@rename($tmp, $target) && !@move_uploaded_file($tmp, $target)) {
         throw new RuntimeException('Library could not be stored');

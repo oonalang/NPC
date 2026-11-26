@@ -106,7 +106,7 @@ $source = $root . '/private/source.so';
 file_put_contents($source, elf(0xB7));
 
 $entry = lib_install($source, 'libZANEV1.so', 'lite', 'first build', $pem, 'ETHNIR_LITE', '1');
-check('stores a tagged arm64 library', (bool)preg_match('/^libZANEV1\.[0-9a-f]{8}\.so$/', $entry['name']));
+check('stores the arm64 library under its own name', ($entry['name'] ?? '') === 'libZANEV1.so');
 check('records the digest', ($entry['sha256'] ?? '') === hash_file('sha256', lib_root() . '/' . $entry['name']));
 check('marks the build signed', $entry['signed'] === true);
 
@@ -120,6 +120,16 @@ check('manifest records size and digest', ($parts[4] ?? '') === (string)filesize
     ($parts[5] ?? '') === hash_file('sha256', lib_root() . '/' . $entry['name']));
 check('manifest signature verifies', openssl_verify($lines[0] ?? '', base64_decode($lines[1] ?? '', true),
     $details['key'], OPENSSL_ALGO_SHA256) === 1);
+
+file_put_contents($root . '/private/tag1.so', elf(0xB7, 2, 2048));
+$tagged = lib_install($root . '/private/tag1.so', 'libnets.0a656191.so', 'lite', '', $pem, 'ETHNIR_LITE', '1');
+check('drops a stale panel tag from the name', ($tagged['name'] ?? '') === 'libnets.so');
+
+file_put_contents($root . '/private/tag2.so', elf(0xB7, 2, 4096));
+$retagged = lib_install($root . '/private/tag2.so', 'libnets.so', 'lite', '', $pem, 'ETHNIR_LITE', '1');
+check('a re-upload replaces the same name', ($retagged['sha256'] ?? '') === hash_file('sha256', lib_root() . '/libnets.so') &&
+    count(lib_list()) === 2);
+check('removes the replaced build', lib_remove('libnets.so') && count(lib_list()) === 1);
 
 rejects(static function () use ($root, $pem): void {
     $path = $root . '/private/text.so';
