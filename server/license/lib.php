@@ -14,13 +14,13 @@ if (!is_file($licenceConfigPath)) {
         exit;
     }
     header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
-    echo '<title>Panel not configured</title>';
-    echo '<div style="max-width:44rem;margin:0 auto;padding:2.5rem 1.25rem;font:16px/1.65 system-ui,sans-serif;background:#101216;color:#e7e9ee">';
-    echo '<h1 style="font-size:1.5rem">Panel not configured</h1>';
-    echo '<p style="margin:.8rem 0"><code>config.php</code> is missing from the panel folder, so every page here stops at this step.</p>';
-    echo '<p style="margin:.8rem 0">Open <a style="color:#8fa8ff" href="setup.php">setup.php</a> once to create it together with your administrator login. If you already have a <code>config.php</code> from another host, upload it next to <code>admin.php</code> instead.</p>';
-    echo '</div>';
+    require_once __DIR__ . '/theme.php';
+    echo '<!doctype html><html lang="en"><head>' . ui_head('Panel not configured') . '</head><body>';
+    echo '<main class="centered"><section class="clay panel" style="max-width:520px">';
+    echo '<h1 style="font-size:24px">Panel not configured</h1>';
+    echo '<p><code>config.php</code> is missing from the panel folder, so every page here stops at this step.</p>';
+    echo '<p>Open <a href="setup.php">setup.php</a> once to create it together with your administrator login. If you already have a <code>config.php</code> from another host, upload it next to <code>admin.php</code> instead.</p>';
+    echo '</section></main></body></html>';
     exit;
 }
 

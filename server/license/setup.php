@@ -13,26 +13,16 @@ function s_h(string $value): string
 
 function s_page(string $title, string $body): void
 {
-    echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
-    echo '<title>' . s_h($title) . '</title>';
-    echo '<style>body{margin:0;background:#101216;color:#e7e9ee;font:16px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}'
-        . 'main{max-width:44rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}'
-        . 'h1{font-size:1.6rem;margin:0 0 .35rem}h2{font-size:1.05rem;margin:2rem 0 .6rem}'
-        . 'p{margin:.6rem 0}code{background:#1b1f27;padding:.1em .35em;border-radius:4px}'
-        . 'table{width:100%;border-collapse:collapse;margin:.6rem 0}'
-        . 'td{padding:.4rem .5rem;border-top:1px solid #232833;vertical-align:top}'
-        . 'td:first-child{width:45%;color:#aeb4c2}'
-        . '.ok{color:#5cd08a}.bad{color:#f2746b}.warn{color:#e3b341}'
-        . 'label{display:block;margin:1rem 0 .3rem;color:#aeb4c2;font-size:.9rem}'
-        . 'input{width:100%;box-sizing:border-box;padding:.6rem .7rem;border-radius:8px;border:1px solid #2b3140;'
-        . 'background:#161a21;color:#e7e9ee;font:inherit}'
-        . 'button{margin-top:1.4rem;padding:.7rem 1.2rem;border:0;border-radius:8px;background:#6b8afd;color:#08101f;'
-        . 'font:600 1rem system-ui,sans-serif;cursor:pointer}'
-        . 'textarea{width:100%;box-sizing:border-box;height:9rem;padding:.6rem;border-radius:8px;background:#161a21;'
-        . 'border:1px solid #2b3140;color:#cfd4df;font:13px/1.5 ui-monospace,monospace}'
-        . '.note{border-left:3px solid #e3b341;padding:.2rem 0 .2rem .9rem;margin:1.2rem 0;color:#d9cba6}'
-        . 'a{color:#8fa8ff}</style>';
-    echo '<main>' . $body . '</main>';
+    require_once __DIR__ . '/theme.php';
+    echo '<!doctype html><html lang="en"><head>' . ui_head($title) . '</head><body>';
+    echo '<main class="wrap narrow"><div class="clay panel setup">' . $body . '</div></main>';
+    echo '<style>.setup h1{margin:0 0 8px}.setup h2{font-size:15px;margin:24px 0 10px}.setup label{display:block;margin:16px 0 7px 4px;font-size:12.5px;font-weight:600;color:var(--muted)}'
+        . '.setup table{margin:0 0 8px}.setup td:first-child{width:45%;color:var(--muted)}'
+        . '.setup .ok{color:var(--mint-ink);font-weight:700}.setup .bad{color:var(--rose-ink);font-weight:700}'
+        . '.setup p.bad{background:var(--rose);box-shadow:var(--sunk);padding:13px 15px;border-radius:var(--r-md)}'
+        . '.setup .note{background:#fff1cf;color:#6b4a00;box-shadow:var(--sunk);padding:13px 15px;border-radius:var(--r-md);margin:16px 0}'
+        . '.setup button{margin-top:22px;width:100%;min-height:46px;border:0;border-radius:var(--r-md);cursor:pointer;color:#fff;font:700 13.5px "Manrope",system-ui,sans-serif;background:linear-gradient(148deg,#8b5cf6,#6d28d9);box-shadow:10px 10px 22px rgba(109,40,217,.26),-6px -6px 16px rgba(255,255,255,.65),inset 1px 1px 2px rgba(255,255,255,.4)}'
+        . '</style></body></html>';
 }
 
 $checks = [];

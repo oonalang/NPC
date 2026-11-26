@@ -400,7 +400,7 @@ foreach ($keys as $lic) {
 
     * { box-sizing: border-box }
 
-    html, body { min-height: 100% }
+    html, body { min-height: 100%; max-width: 100%; overflow-x: hidden }
 
     body {
         margin: 0;
@@ -427,7 +427,8 @@ foreach ($keys as $lic) {
 
     .dim { color: var(--muted) }
 
-    .wrap { max-width: 1020px; margin: 0 auto; padding: 26px 18px 72px }
+    .wrap { max-width: 1020px; width: 100%; margin: 0 auto; padding: 26px 18px 72px }
+    .wrap > * { min-width: 0 }
 
     .clay {
         background: var(--surface);
@@ -539,6 +540,7 @@ foreach ($keys as $lic) {
         border: 0;
         border-radius: var(--r-md);
         cursor: pointer;
+        text-decoration: none;
         box-shadow: var(--clay-sm);
         transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
     }
@@ -618,7 +620,7 @@ foreach ($keys as $lic) {
     .brand h1 { margin: 0; font-size: 17px }
     .brand p { margin: 1px 0 0; color: var(--muted); font-size: 12.5px }
 
-    .topbar-actions { display: flex; align-items: center; gap: 10px }
+    .topbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0 }
     .topbar-actions form { display: contents }
 
     .panel {
@@ -631,6 +633,7 @@ foreach ($keys as $lic) {
     .panel + .panel { animation-delay: .1s }
 
     .panel-head {
+        flex-wrap: wrap;
         display: flex;
         align-items: baseline;
         justify-content: space-between;
@@ -951,7 +954,7 @@ foreach ($keys as $lic) {
         .fields { grid-template-columns: 1fr }
         .login-card { padding: 28px 22px 22px }
         .topbar-actions { width: 100% }
-        .topbar-actions .btn { flex: 1 }
+        .topbar-actions .btn { flex: 1 1 auto }
     }
 
     @media (prefers-reduced-motion: reduce) {

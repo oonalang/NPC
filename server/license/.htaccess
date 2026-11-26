@@ -8,7 +8,7 @@
 </IfModule>
 
 <IfModule mod_authz_core.c>
-    <FilesMatch "^(lib|config|giveaway_lib|SessionProtocol|libstore)\.php$">
+    <FilesMatch "^(lib|config|giveaway_lib|SessionProtocol|libstore|theme)\.php$">
         Require all denied
     </FilesMatch>
     <FilesMatch "(?i)(\.(pem|key|zip|json|bak|old|log|sqlite|db)$|~$|^\.env)">
@@ -17,7 +17,7 @@
 </IfModule>
 
 <IfModule !mod_authz_core.c>
-    <FilesMatch "^(lib|config|giveaway_lib|SessionProtocol|libstore)\.php$">
+    <FilesMatch "^(lib|config|giveaway_lib|SessionProtocol|libstore|theme)\.php$">
         Order allow,deny
         Deny from all
     </FilesMatch>
