@@ -64,6 +64,8 @@ RewriteRule ^lib/protected/([A-Za-z0-9][A-Za-z0-9._-]{0,79}\.so(?:\.manifest)?)$
 RewriteRule ^lib/token/?$ libtok.php [L]
 ```
 
+   `libtok.php` and `libdl.php` must stay out of the `.htaccess` deny list. `mod_rewrite` maps `/lib/token` onto `libtok.php` and `/lib/protected/<file>` onto `libdl.php`, and `<FilesMatch>` is evaluated against the rewritten name, so denying those two files turns every protected route into a host-level `403` page. Both validate an HMAC before doing anything, exactly like `/connect`, so leaving them reachable directly gives nothing away.
+
 3. `private/libs/` is created on first upload with its own deny rule; `private/lib_secret` (0600) is created the first time the page needs it. Both stay out of the web root on hosts that allow it.
 4. Raise `upload_max_filesize` and `post_max_size` if a build is rejected; a 4 MiB library needs at least 8 MiB of `post_max_size`.
 5. Copy the key into `MainActivity.SECRET`, rebuild the launcher, and test one upload end to end before publishing the APK.
@@ -86,3 +88,5 @@ RewriteRule ^lib/token/?$ libtok.php [L]
 - the admin page: login form, signed-in page, multipart upload, anonymous refusal.
 
 It needs the PHP CLI with `openssl`, `session` and `json`, plus `curl`. It prints `SKIP` when either is missing.
+
+The suite runs on `php -S`, which ignores `.htaccess`, so the rewrite and deny rules themselves are not covered. Check them on the host: `POST https://<host>/lib/token` must answer JSON (`405` or `403` with a `reason`), never a host error page, and `/lib/protected/<file>` without a token must answer `403` from the panel, not from Apache.
