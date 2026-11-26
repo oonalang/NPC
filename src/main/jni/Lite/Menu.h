@@ -381,6 +381,8 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                     lite_widgets::Checkbox("Show AimLine",&Config.ESPMenu.Aimline);
                     lite_widgets::Checkbox("Yellow Wallhack",&Config.ExtraMenu.WallHack);
                     lite_widgets::Checkbox("Red Wallhack",&Config.ExtraMenu.RedWallhack);
+                    if (Config.ExtraMenu.RedWallhack)
+                        lite_widgets::SliderFloat("Red range",&Config.ExtraMenu.RedWallhackRange,5.f,200.f,"%.0f");
                 });
                 Panel("display options", 420, [&] {
                     static const char* boxTypes[]{"Fill","Outline","Corner","3D"};

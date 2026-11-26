@@ -206,6 +206,7 @@ sColorsESPBOT sColorsESPBOT{0};
 		bool ClearDisplay;
 		bool ResetGuest;
 		bool RedWallhack;
+		float RedWallhackRange = 50.f;
     	bool Spread;
     	bool Fire;
         bool NoSprintFire;

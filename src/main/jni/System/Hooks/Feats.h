@@ -350,7 +350,11 @@ float (*orig_GetAccDistance)(void *instance);
 float GetAccDistance(void *instance) {
     if (instance != NULL) {
         if (Config.ExtraMenu.RedWallhack) {
-            return 50.0f;
+            float range = Config.ExtraMenu.RedWallhackRange;
+            if (!(range == range)) range = 50.0f;
+            if (range < 5.0f) range = 5.0f;
+            if (range > 200.0f) range = 200.0f;
+            return range;
         }
     }
     return orig_GetAccDistance(instance);
@@ -961,7 +965,6 @@ inline void hook_Move(void *instance, Vector3 deltaMove, float deltaTime)
         orig_Move(instance, deltaMove, deltaTime);
 }
 
-//-- Unlimited Ammo
 namespace UnlimitedAmmoCfg
 {
     constexpr uintptr_t InfiniteCarriedAmmoRva = 0xC2BAB48;
@@ -1065,7 +1068,6 @@ inline void InitializeAllHooks() {
     //-- Weapon Kinetic
     LICENSE_HOOK_LIB("libunity.so", "0x5385AC8", get_IsKineticArmor, orig_get_IsKineticArmor);
 
-    //-- Unlimited Ammo
     LICENSE_HOOK_LIB("libunity.so", "0xC2BAB48", get_InfiniteCarriedAmmo, orig_get_InfiniteCarriedAmmo);
     LICENSE_HOOK_LIB("libunity.so", "0x6AE86E0", hook_GameInfo_IsNoCostAmmo, orig_GameInfo_IsNoCostAmmo);
 

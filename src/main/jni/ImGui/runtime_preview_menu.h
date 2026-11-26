@@ -236,6 +236,8 @@ inline void RenderEspTab(float childWidth, float childHeight) {
         custom::Checkbox("Show AimLine", &Config.ESPMenu.Aimline);
         custom::Checkbox("Yellow Wallhack", &Config.ExtraMenu.WallHack);
         custom::Checkbox("Red Wallhack", &Config.ExtraMenu.RedWallhack);
+        if (Config.ExtraMenu.RedWallhack)
+            custom::SliderFloat("Red Wallhack Range", &Config.ExtraMenu.RedWallhackRange, 5.0f, 200.0f, "%.0f");
         EndContentChild(left);
     }
     custom::EndGroup();

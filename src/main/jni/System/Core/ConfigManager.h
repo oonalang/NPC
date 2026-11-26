@@ -73,6 +73,8 @@ void LoadConfig() {
         else if (key == "ExtraMenu.NoCrouch") Config.ExtraMenu.NoCrouch = (valueStr == "1");
         else if (key == "ExtraMenu.Diving") Config.ExtraMenu.Diving = (valueStr == "1");
         else if (key == "ExtraMenu.WallHack") Config.ExtraMenu.WallHack = (valueStr == "1");
+        else if (key == "ExtraMenu.RedWallhack") Config.ExtraMenu.RedWallhack = (valueStr == "1");
+        else if (key == "ExtraMenu.RedWallhackRange") Config.ExtraMenu.RedWallhackRange = std::stof(valueStr);
         else if (key == "ExtraMenu.Blueprints") Config.ExtraMenu.Blueprints = (valueStr == "1");
         else if (key == "ExtraMenu.BlueprintTiers") BlueprintTierFilter::SetMask(static_cast<uint32_t>(std::stoul(valueStr)));
         else if (key == "TriggerDot.Radius") TriggerDotStyle::appearance.radius = std::stof(valueStr);
@@ -132,6 +134,8 @@ void SaveConfig() {
     file << "ExtraMenu.NoCrouch " << Config.ExtraMenu.NoCrouch << "\n";
     file << "ExtraMenu.Diving " << Config.ExtraMenu.Diving << "\n";
     file << "ExtraMenu.WallHack " << Config.ExtraMenu.WallHack << "\n";
+    file << "ExtraMenu.RedWallhack " << Config.ExtraMenu.RedWallhack << "\n";
+    file << "ExtraMenu.RedWallhackRange " << Config.ExtraMenu.RedWallhackRange << "\n";
     file << "ExtraMenu.Blueprints " << Config.ExtraMenu.Blueprints << "\n";
     file << "ExtraMenu.BlueprintTiers " << BlueprintTierFilter::GetMask() << "\n";
     TriggerDotStyle::Normalize(TriggerDotStyle::appearance);

@@ -5,12 +5,12 @@
 #include <vector>
 
 namespace ThrowAlertCfg {
-    constexpr uintptr_t PosRva = 0xB4724B4;       // WeaponProjectile.Position
-    constexpr uintptr_t TickRva = 0xB48214C;      // WeaponProjectile.Tick(float)
-    constexpr uintptr_t Exploded = 0xA1;          // WeaponProjectile.bHasExplode
-    constexpr uintptr_t DamageRadius = 0xA8;      // WeaponProjectile.m_DamageRadius
-    constexpr uintptr_t ItemId = 0xE4;            // WeaponProjectile.m_WeaponItemID
-    constexpr uintptr_t LethalRadius = 0x200;     // WeaponProjectile.m_LethalRadius
+    constexpr uintptr_t PosRva = 0xB4724B4;
+    constexpr uintptr_t TickRva = 0xB48214C;
+    constexpr uintptr_t Exploded = 0xA1;
+    constexpr uintptr_t DamageRadius = 0xA8;
+    constexpr uintptr_t ItemId = 0xE4;
+    constexpr uintptr_t LethalRadius = 0x200;
     constexpr float MaxDist = 70.0f;
     constexpr float WarnDist = 35.0f;
 }
