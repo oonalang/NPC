@@ -1,0 +1,70 @@
+ETHNIR PANEL - LIBRARY UPLOAD BUILD
+===================================
+
+WHAT IS IN THIS ARCHIVE
+  setup.php                                         one-time installer, writes config.php
+  config.sample.php                                 configuration template (manual route)
+  admin.php, index.php, connect.php, get-key.php    panel and public pages
+  lib.php, giveaway_lib.php, SessionProtocol.php    shared includes (blocked over HTTP)
+  libs.php                                          protected library upload page
+  libstore.php, libdl.php, libtok.php               library store, download and ticket endpoints
+  .htaccess                                         rewrites and denied paths
+  private/, private/libs/, data/                    protected directories with deny rules
+  LIBRARY_PANEL.md                                  how the upload/download flow works
+  UPDATE_README.md, GIVEAWAY_SETUP.txt, FREE_PREMIUM_GUIDE.txt   older panel notes
+
+WHY admin.php WAS RETURNING 500
+  The panel needs config.php next to admin.php. It was missing on the server, so the
+  very first include failed and PHP answered with a blank 500. A missing config.php now
+  shows a page that says so and links to setup.php instead of a 500.
+
+FIRST RUN ON THIS HOST
+  1. Upload every file here into the panel folder (public_html).
+  2. Open https://YOUR-DOMAIN/setup.php
+       - it lists PHP version, extensions and folder permissions first;
+       - enter the admin username and a password of 10+ characters;
+       - press "Create config.php".
+  3. It reuses private/licence_private.pem when that file is already there, so
+     existing licences and manifests keep working. When no key exists it creates a
+     new one and shows its public key and key ID: the APK pins the public key, so
+     rebuild the launcher with the new one.
+  4. Sign in at admin.php, press "Libraries", upload a build.
+  5. Copy the download key shown on the Libraries page into MainActivity.SECRET
+     and rebuild the launcher.
+  6. Delete setup.php. It locks itself while config.php exists, but it does not
+     need to stay on the server.
+
+UPDATING A PANEL THAT ALREADY RUNS
+  1. Back up config.php, your signing key, data/keys.json and data/giveaway.json.
+  2. Upload every file here, overwriting the old copies, but keep your config.php,
+     keep your private key path and never upload an empty data/ over live data.
+  3. Open admin.php and check that sign-in still works.
+
+MANUAL CONFIG
+  Copy config.sample.php to config.php and fill it in:
+    php -r "echo password_hash('your-password', PASSWORD_DEFAULT), PHP_EOL;"
+  Put the result in admin_hash, change admin_user, point private_key at your key
+  (default private/licence_private.pem) and store at data/keys.json.
+
+REQUIREMENTS
+  PHP 7.4 or newer (8.0+ recommended) with openssl, session and json.
+  upload_max_filesize and post_max_size should be at least twice the largest
+  build you publish; a 4 MiB library needs 8 MiB of post_max_size.
+
+CHECKS AFTER UPLOAD
+  - https://YOUR-DOMAIN/admin.php shows the sign-in form.
+  - https://YOUR-DOMAIN/lib/protected/anything.so returns 404, not a file.
+  - https://YOUR-DOMAIN/config.php and https://YOUR-DOMAIN/private/ are denied.
+  - The Libraries page lists an upload with a working five-minute link.
+
+IF A PAGE STILL RETURNS 500
+  1. Open https://YOUR-DOMAIN/setup.php first. If setup.php itself is a 500, the
+     problem is the server or .htaccess, not the panel.
+  2. Check the error log: public_html/error_log in the file manager (x10 also has
+     cPanel > Metrics > Errors). The last line names the file and the reason.
+  3. This .htaccess deliberately avoids Options and DirectoryIndex, because a host
+     that does not allow those overrides answers 500 for every page. If you later
+     add "Options -Indexes" or "DirectoryIndex index.php" and the panel goes back
+     to 500, that line is the cause.
+  4. If PHP reports "Undefined constant" or a parse error, the host is running an
+     older PHP than the panel expects; switch the domain to PHP 7.4 or newer.

@@ -55,6 +55,7 @@ The launcher holds the download key in `SECRET`. Copy the value from the panel i
 
 ## Deploy
 
+0. Upload the whole panel folder, then open `setup.php` once. The panel needs `config.php` beside `admin.php`; when that file is missing every page stops with a blank 500. `setup.php` writes it, reuses `private/licence_private.pem` when it is already there, prints the public key ID for the APK, and locks itself while `config.php` exists.
 1. Upload `libs.php`, `libstore.php`, `libdl.php` and `libtok.php` next to `admin.php`, and replace `.htaccess`.
 2. The host must allow these rewrites in the panel root:
 

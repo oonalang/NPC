@@ -4,7 +4,38 @@ declare(strict_types=1);
 
 const LICENCE_NEVER = 4102444800;
 
-$config = require __DIR__ . '/config.php';
+$licenceConfigPath = __DIR__ . '/config.php';
+
+if (!is_file($licenceConfigPath)) {
+    http_response_code(503);
+    if (basename((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === 'connect.php') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['status' => false, 'reason' => 'Licence service is not configured']);
+        exit;
+    }
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
+    echo '<title>Panel not configured</title>';
+    echo '<div style="max-width:44rem;margin:0 auto;padding:2.5rem 1.25rem;font:16px/1.65 system-ui,sans-serif;background:#101216;color:#e7e9ee">';
+    echo '<h1 style="font-size:1.5rem">Panel not configured</h1>';
+    echo '<p style="margin:.8rem 0"><code>config.php</code> is missing from the panel folder, so every page here stops at this step.</p>';
+    echo '<p style="margin:.8rem 0">Open <a style="color:#8fa8ff" href="setup.php">setup.php</a> once to create it together with your administrator login. If you already have a <code>config.php</code> from another host, upload it next to <code>admin.php</code> instead.</p>';
+    echo '</div>';
+    exit;
+}
+
+$config = require $licenceConfigPath;
+unset($licenceConfigPath);
+
+if (!is_array($config)) {
+    http_response_code(503);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Panel not configured</title>';
+    echo '<div style="max-width:44rem;margin:0 auto;padding:2.5rem 1.25rem;font:16px/1.65 system-ui,sans-serif;background:#101216;color:#e7e9ee">';
+    echo '<p><code>config.php</code> has to return an array. Open <a style="color:#8fa8ff" href="setup.php">setup.php</a> to rebuild it.</p>';
+    echo '</div>';
+    exit;
+}
 
 function licence_config(): array
 {
