@@ -220,7 +220,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         font::icomoon_page=font::inter_semibold;
         F50=F107=font::inter_semibold;
         io.FontDefault=font::inter_semibold;
-        io.Fonts->Build();
+        lite_fonts::Build(*io.Fonts);
         Config={};
         Config.ExtraMenu.ClearDisplay = true;
         Config.sColorsESPPLAYER.LinePLAYER = CREATE_COLOR(255, 0, 0, 255);
@@ -319,6 +319,7 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     ++frames;
     const float seconds=std::chrono::duration<float>(now-sampledAt).count();
     if(seconds>=1.f) {fps=frames/seconds;frames=0;sampledAt=now;}
+    sakuga::Configure(reducedMotion,fps);
     char expiry[48]="No active license";
     const auto until=static_cast<time_t>(license::LicenseUntil());
     if(until>0) {std::tm date{};if(gmtime_r(&until,&date)) std::strftime(expiry,sizeof(expiry),"%Y-%m-%d %H:%M UTC",&date);}
@@ -326,14 +327,6 @@ EGLBoolean hook_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     view.authorized=authorized;view.pending=g_LoginPending;view.ready=ready;
     view.interactive=presentation.interactive;view.startup=presentation;
     lite_ui::PreparePlacement(g_LiteState,view);
-    if (ready && !g_LiteState.minimized) {
-        const auto layout=lite_ui::MenuLayout(g_LiteState,io.DisplaySize);
-        const auto position=g_LiteState.placement.Position(io.DisplaySize,layout.size);
-        const auto texture=lite_blur::Capture({position.x,position.y,layout.sidebar,layout.size.y},
-            g_GlWidth,g_GlHeight,std::chrono::duration<double>(now-appStartTime).count());
-        view.sidebarTexture=reinterpret_cast<ImTextureID>(static_cast<std::uintptr_t>(texture.id));
-        view.sidebarUv0={texture.u0,texture.v1};view.sidebarUv1={texture.u1,texture.v0};
-    }
     view.preparation=stage/3.f;view.fps=fps;
     view.uptime=static_cast<std::uint64_t>(std::chrono::duration<double>(now-appStartTime).count());
     view.error=err.c_str();view.expiry=expiry;

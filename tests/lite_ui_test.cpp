@@ -302,7 +302,7 @@ void ValidateBindings() {
 }
 void ValidateBudget() {
     auto& io = ImGui::GetIO(); io.DisplaySize = {1280,720}; state = {}; view.ready = true;
-    for (int i = 0; i < 40; ++i) Frame();
+    for (int i = 0; i < 150; ++i) Frame();
     const auto previous = allocations;
     const int vertices = ImGui::GetDrawData()->TotalVtxCount;
     const auto start = std::chrono::steady_clock::now();
@@ -445,7 +445,7 @@ int main(int argc, char** argv) {
         icons = Read(root/"src/main/jni/Assets/lite-icons.ttf");
     const auto fonts = lite_fonts::Load(*io.Fonts,body.data(),body.size(),title.data(),title.size(),icons.data(),icons.size());
     assert(fonts.body && fonts.title); io.FontDefault = fonts.body; view.titleFont = fonts.title;
-    io.Fonts->Build();
+    lite_fonts::Build(*io.Fonts);
     for (ImWchar icon : {0xf013,0xf015,0xf05b,0xf07b,0xf0e7,0xf1fc,0xf500}) assert(fonts.body->FindGlyphNoFallback(icon));
     assert(io.Fonts->TexWidth*io.Fonts->TexHeight*4 <= 2*1024*1024);
     std::printf("Font atlas: %dx%d (%d bytes RGBA), source text fonts with merged sidebar icons\n",io.Fonts->TexWidth,io.Fonts->TexHeight,io.Fonts->TexWidth*io.Fonts->TexHeight*4);

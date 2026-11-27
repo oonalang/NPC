@@ -29,24 +29,25 @@ inline void Card() {
     auto* window = ImGui::GetCurrentWindow();
     auto* draw = window->DrawList;
     draw->PushClipRect(window->OuterRectClipped.Min,window->OuterRectClipped.Max,false);
-    draw->AddRectFilled(window->Pos,window->Pos+window->Size,Ink(17),16);
-    draw->AddRect(window->Pos+ImVec2(.5f,.5f),window->Pos+window->Size-ImVec2(.5f,.5f),Ink(43),16);
+    draw->AddRectFilled(window->Pos,window->Pos+window->Size,lite_colors::MenuBg,16);
+    draw->AddRect(window->Pos+ImVec2(.5f,.5f),window->Pos+window->Size-ImVec2(.5f,.5f),lite_widgets::Fade(lite_colors::CardBorder),16);
     draw->PopClipRect();
 }
 inline bool Secondary(const char* label, ImVec2 size) {
     const auto lo = ImGui::GetCursorScreenPos();
     const bool pressed = lite_widgets::Tap(ImGui::InvisibleButton(label,size));
     auto* draw = ImGui::GetWindowDrawList();
-    draw->AddRectFilled(lo,lo+size,Ink(ImGui::IsItemHovered()?32:23),6);
-    draw->AddRect(lo,lo+size,Ink(43),6);
-    Centered(nullptr,13,{lo.x+size.x*.5f,lo.y+(size.y-13.f)*.5f},label,Ink(181));
+    draw->AddRectFilled(lo,lo+size,ImGui::IsItemHovered()?lite_widgets::Fade(lite_colors::BindItemBg):lite_widgets::Fade(lite_colors::Card),8);
+    draw->AddRect(lo,lo+size,lite_widgets::Fade(ImGui::IsItemHovered()?lite_colors::Accent:lite_colors::CardBorder),8);
+    Centered(nullptr,13,{lo.x+size.x*.5f,lo.y+(size.y-13.f)*.5f},label,Ink(210));
     return pressed;
 }
 inline bool Primary(const char* label, bool pending, bool reduced, ImVec2 size) {
     const auto lo = ImGui::GetCursorScreenPos();
     const bool pressed = lite_widgets::Tap(ImGui::InvisibleButton("Authenticate",size));
     auto* draw = ImGui::GetWindowDrawList();
-    draw->AddRectFilled(lo,lo+size,Ink(ImGui::IsItemActive()?215:242),7);
+    draw->AddRectFilled(lo,lo+size,ImGui::IsItemActive()?lite_colors::AccentHover:lite_colors::Accent,9);
+    draw->AddRect(lo,lo+size,lite_colors::AccentHover,9,0,ImMax(1.f,1.4f*ImGui::GetStyle().Alpha));
     if (pending) {
         const auto center = lo+size*.5f;
         const float time = reduced ? 0.f : float(ImGui::GetTime());
@@ -54,7 +55,7 @@ inline bool Primary(const char* label, bool pending, bool reduced, ImVec2 size) 
             const float pulse = reduced ? 1.f : .5f+.5f*std::sin(time*2.f*pi/authenticatePulseSeconds-index*.9f);
             draw->AddCircleFilled(center+ImVec2((index-1)*10.f,-2.5f*pulse),2.f+.5f*pulse,Ink(24),12);
         }
-    } else Centered(nullptr,15,{lo.x+size.x*.5f,lo.y+(size.y-15.f)*.5f},label,Ink(19));
+    } else Centered(nullptr,15,{lo.x+size.x*.5f,lo.y+(size.y-15.f)*.5f},label,lite_colors::AccentInk);
     return pressed;
 }
 inline void Arc(ImDrawList* draw, ImVec2 center, float radius, float angle, float length, ImU32 color, float width) {
@@ -83,7 +84,7 @@ inline void Mark(ImVec2 center, const Frame& frame) {
         draw->AddConvexPolyFilled(points,4,Ink(240,alpha));
     }
     if (frame.finish > 0) {
-        draw->AddCircleFilled(center,29.f*Ease(ImClamp(frame.finish*3.f,0.f,1.f)),Ink(242,finish),48);
+        draw->AddCircleFilled(center,29.f*Ease(ImClamp(frame.finish*3.f,0.f,1.f)),lite_widgets::Fade(lite_colors::Section),48);
         const float trace = Ease(ImClamp((frame.finish-.12f)/.42f,0.f,1.f));
         const ImVec2 a=center+ImVec2(-10,0), b=center+ImVec2(-3,7), c=center+ImVec2(12,-8);
         if (trace > 0) {

@@ -1,6 +1,7 @@
 #pragma once
 #include "../ImGui/imgui.h"
 #include <cstddef>
+#include "SakugaArt.h"
 
 extern "C" {
 extern const unsigned char lite_body_start[], lite_body_end[];
@@ -13,6 +14,7 @@ struct Fonts { ImFont* body; ImFont* title; };
 inline Fonts Load(ImFontAtlas& atlas, const void* body, std::size_t bodySize,
                   const void* title, std::size_t titleSize,
                   const void* icons, std::size_t iconsSize) {
+    sakuga_art::Register(atlas);
     ImFontConfig config;
     config.FontDataOwnedByAtlas = false;
     config.OversampleH = config.OversampleV = 1;
@@ -27,5 +29,9 @@ inline Fonts Load(ImFontAtlas& atlas, const void* body, std::size_t bodySize,
     auto* heading = atlas.AddFontFromMemoryTTF(const_cast<void*>(title), static_cast<int>(titleSize), 30.f,
         &config, atlas.GetGlyphRangesDefault());
     return {regular, heading};
+}
+inline void Build(ImFontAtlas& atlas) {
+    atlas.Build();
+    sakuga_art::Build(atlas);
 }
 }
