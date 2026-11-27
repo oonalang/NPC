@@ -2,6 +2,7 @@
 #include "Lease.h"
 
 namespace license {
+inline constexpr bool isLogin = true;
 enum class Failure { None, Transient, Rejected };
 struct Response {
     Failure failure = Failure::Rejected;
