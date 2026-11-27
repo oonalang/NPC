@@ -2,16 +2,16 @@
 namespace PanelLicense {
 inline constexpr char kPublicKey[] =
     "-----BEGIN PUBLIC KEY-----\n"
-    "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAruXFzlpGWO3Duh48KKwJ\n"
-    "d5wPBqyAtZkTJkXKL4e8ue4k8bArfjdAiLP6X0d4EQeGh+BYVHexOTILPX42bKrq\n"
-    "gjWogLwJ0RhrYq0VVjdUw/lMAkHfwjupHPv27ZTNUaXyOUKCS73EL1MxfY5VTG1+\n"
-    "GipNJAAB6+btB99h9M7FxYC8xR3/5oVnqglaKze1WsA/L11ZF9fFfnOSUd/EMTm4\n"
-    "hieMld2abfglJb4A4W0NZpSEZrkPhp8f4zHp0pvNLA1g4enXjj3ZpNeX1WV+LEcD\n"
-    "x9hgfAOtxkhIDtnjU9IgWjNUjyPlZdV1RVxFU3NtGgL1+efox0G+MplTrIlKnNyS\n"
-    "4cwtzcPbbfMSCZQsxi2Gbz5eogmJZZ+l5fY0I5danuGOA4xn6Upo3bqZd6vZaBiL\n"
-    "9+uwhi2Lw7YXlnDBs7IdaaAbYuesKXevWyFcS3OWdKN3p3si4r2BG3YkUITtyY4c\n"
-    "cA1MTMbFAWbAADs/GUSh6r21ABhryuOmydUmYKk+skUNAgMBAAE=\n"
+    "MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAlqn8ECEi4Uyr5eNBVhRF\n"
+    "8Ax9Js1NDvEQpq1qTA245XDZVyPpTiK8G6E8leuzpytvad6XBuHORx/0LvIf6Cu6\n"
+    "2HqvpCf6R4j6thv1KRjOebuYKB18fx1EeVIAJgwXAsPbU/I8WYyPpIZkJLM73pQp\n"
+    "9yKrE4thbmFF/zKzstn6/ahPsAkVXVnmRDtMTYJaG5E/8mk/hGsfKpnvDqxCXu/i\n"
+    "prooPF5wthp96x87ODTGRL6c76CSMVpZ/rc+320FtwgENHT/J1i5G+L5OCMRUBSS\n"
+    "hUvTWepQOnG1MXPzzPNDeMU6ngnjL5M0bk1mQaJ0Z1lE2zY95iRxF5YytBF89pGM\n"
+    "sGTjEL3cCD9qbjO5RF6Ysae58WWWbzHbC/FCZc3RL2uK+DIwbFVw0MZ/WJGmKBfM\n"
+    "V9AfWtrxG5Dg8P1quGNlc0ezvH3eAvgJYPSxCcwrOrRj4SwE9rGxEOlQx/iw7MV8\n"
+    "3hOkyOoRwbF4oELxWOk0UkiUuewtO4lpLbVN0ZmjYSyLAgMBAAE=\n"
     "-----END PUBLIC KEY-----\n"
 ;
-inline constexpr char kKeyId[] = "633d2d8518e4c4fadc09d54bb833c9c0e212b2164da19d1e1e3f110a59cd53b7";
+inline constexpr char kKeyId[] = "e304bbe097190ec5c50fc612509552714e7a62b6e5fe03fbbf1765129f2aa026";
 }
