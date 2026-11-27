@@ -414,25 +414,30 @@ static license::Response FetchLicense(const license::Request& request) {
     curl_easy_setopt(curl,CURLOPT_FOLLOWLOCATION,0L);
     const auto result=curl_easy_perform(curl);
     long status=0;curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
-    if(result!=CURLE_OK||status>=500) {
-        response.failure=license::Failure::Transient;response.error="License connection unavailable";
-    } else if(status!=200) {
-        response.error="License server rejected the request";
-    } else {
-        const auto value=json::parse(chunk.memory,chunk.memory+chunk.size,nullptr,false);
-        if(!value.is_object()||!value.contains("status")||!value["status"].is_boolean()) {
-            response.error="Invalid license response";
-        } else if(!value["status"].get<bool>()) {
-            response.error=value.contains("reason")&&value["reason"].is_string()?value["reason"].get<std::string>():"License rejected";
-            if(response.error.size()>256) response.error="License rejected";
-        } else if(value.contains("data")&&value["data"].is_object()) {
-            const auto& data=value["data"];
-            if(data.contains("payload")&&data["payload"].is_string()&&data.contains("sig")&&data["sig"].is_string()) {
-                response.payload=data["payload"].get<std::string>();response.signature=data["sig"].get<std::string>();
-                response.failure=license::Failure::None;
-            } else response.error="Client and license panel must both support session protocol v2";
-        } else response.error="Invalid license response";
+    const auto value=json::parse(chunk.memory,chunk.memory+chunk.size,nullptr,false);
+    const bool shaped=value.is_object()&&value.contains("status")&&value["status"].is_boolean();
+    std::string reason;
+    if(value.is_object()&&value.contains("reason")&&value["reason"].is_string()) {
+        reason=value["reason"].get<std::string>();
+        if(reason.size()>256) reason.clear();
     }
+    if(result!=CURLE_OK||status>=500) {
+        response.failure=license::Failure::Transient;
+        response.error=reason.empty()?"License connection unavailable":reason;
+    } else if(status!=200) {
+        response.error=!shaped||value["status"].get<bool>()||reason.empty()
+            ?"License host answered HTTP "+std::to_string(status)+" without a license":reason;
+    } else if(!shaped) {
+        response.error="Invalid license response";
+    } else if(!value["status"].get<bool>()) {
+        response.error=reason.empty()?"License rejected":reason;
+    } else if(value.contains("data")&&value["data"].is_object()) {
+        const auto& data=value["data"];
+        if(data.contains("payload")&&data["payload"].is_string()&&data.contains("sig")&&data["sig"].is_string()) {
+            response.payload=data["payload"].get<std::string>();response.signature=data["sig"].get<std::string>();
+            response.failure=license::Failure::None;
+        } else response.error="Client and license panel must both support session protocol v2";
+    } else response.error="Invalid license response";
     curl_slist_free_all(headers);curl_easy_cleanup(curl);free(chunk.memory);
     return response;
 }

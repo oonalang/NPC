@@ -18,6 +18,19 @@ Grants last at most 180 seconds, bounded by the license expiry. Revalidation run
 
 Acceptance also records a deadline against `CLOCK_BOOTTIME`, including device suspend, bounded from the start of the request. Changing the phone's wall clock cannot extend an accepted grant. Pending generations and nonce matching reject replayed responses and late workers after a newer login. Neither finishing the loading animation nor assigning a local presentation flag creates a session. A verified renewal can resume an already opened menu after a connection interruption; an explicit new login resets the startup presentation. The device clock must be within 30 seconds of the signing server at verification.
 
+## Rejected requests
+
+Every refusal is a JSON body carrying `status: false` and a `reason`, with the HTTP status set: `400` malformed fields, `403` access key rejected/expired/device limit reached, `405` and `413` for the wrong method or oversized body, `426` client update required, `503` panel not configured or service unavailable. The native client shows that `reason` verbatim, because the key owner is the only one who can act on it; a non-JSON body (host block page, parking page, captive portal) is reported as `License host answered HTTP <code> without a license` so it is not mistaken for a bad key, and `5xx` plus transport failures stay transient and retryable.
+
+The same key working for the operator and failing for a user means one of these, all visible in `admin.php` under the key's **Details**:
+
+- **Devices `2 of 1`** — the serial is `UUID(user_key + ANDROID_ID + MODEL + BRAND)`, so a second phone, a factory reset or a changed `ro.product.model` claims a new slot and the one-seat key refuses the third device. Clear devices, raise the limit, or issue a new key.
+- **Status `expired`** — giveaway keys last ten hours; the operator's own premium key usually never expires, which is why only some users hit this.
+- **Status `revoked`, or no such key** — a typo, a deleted key, or a key from an older panel generation.
+- **`Client update required`** — the APK's `license::build` does not match the panel's configured build.
+
+Old clients cannot distinguish these because they replaced the reason with one generic string, so tell the affected user their exact text before rebuilding.
+
 ## Native enforcement
 
 `Security/Lease.h` constructs immutable grants only after verifying the signature and claims. `Security/LicenseRuntime.cpp` owns the active session and renewal worker. Native entry points consult authorization independently of menu presentation. Preferences remain separate from authorization.
