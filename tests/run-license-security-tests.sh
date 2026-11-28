@@ -4,6 +4,9 @@ project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 output=$(mktemp -d "${TMPDIR:-/tmp}/npc-license-tests.XXXXXX")
 trap 'rm -rf "$output"' EXIT HUP INT TERM
 "${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
+    "$project_dir/tests/license_response_test.cpp" -lcrypto -lpthread -o "$output/response"
+ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$output/response"
+"${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
     "$project_dir/tests/license_session_test.cpp" -lcrypto -lpthread -o "$output/session"
 ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" "$output/session"
 "${CXX:-c++}" -std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
