@@ -62,7 +62,7 @@ void ValidateMenuSize() {
     auto& io=ImGui::GetIO();view.ready=view.authorized=view.interactive=true;view.startup={};
     for(const ImVec2 size:{ImVec2(1280,720),ImVec2(960,540),ImVec2(640,360),ImVec2(360,780),ImVec2(320,568),ImVec2(1920,1080)}) {
         io.DisplaySize=size;state={};state.tab=lite_ui::Tab::Settings;Frame();Frame();
-        auto* root=Find("ETHNIR LITE##menu");auto* sidebar=Find("##sidebar");assert(root && sidebar);
+        auto* root=Find("SHAINIME##menu");auto* sidebar=Find("##sidebar");assert(root && sidebar);
         const auto full=root->Size,side=sidebar->Size;
         state.zoom=.85f;Frame();Frame();
         assert(root->Size.x<full.x && root->Size.y<full.y);
@@ -76,7 +76,7 @@ void ValidateMenuSize() {
     io.DisplaySize={1920,1080};state={};state.tab=lite_ui::Tab::Settings;Frame();Frame();
     const bool trickle=io.ConfigInputTrickleEventQueue;lite_touch::Input::Configure(io);
     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);
-    auto* root=Find("ETHNIR LITE##menu");auto* panel=Find("/menu_");assert(root && panel);
+    auto* root=Find("SHAINIME##menu");auto* panel=Find("/menu_");assert(root && panel);
     const auto original=root->Size;
     const auto line=panel->DC.CursorStartPos+ImVec2(0,20.f*lite_widgets::scale+2.f+8.f*lite_widgets::scale);
     const ImVec2 start(panel->WorkRect.Min.x+panel->WorkRect.GetWidth()*.5f,line.y);

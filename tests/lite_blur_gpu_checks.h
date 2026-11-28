@@ -127,7 +127,7 @@ void ValidateSidebarReference() {
     glClearColor(.12f,.13f,.14f,1);glClear(GL_COLOR_BUFFER_BIT);
     const auto layout=lite_ui::MenuLayout(state,io.DisplaySize);
     const auto pos=(io.DisplaySize-layout.size)*.5f;
-    const auto texture=lite_blur::Capture({pos.x,pos.y,layout.sidebar,layout.size.y},1280,720,10.);
+    const auto texture=lite_blur::Capture({pos.x,pos.y,layout.rail,layout.size.y},1280,720,10.);
     assert(texture.id);
     const auto pixels=ReadBlur(texture);
     const auto center=(std::size_t(texture.height/2)*texture.width+texture.width/2)*4;
@@ -137,20 +137,15 @@ void ValidateSidebarReference() {
     }
     state={};view.ready=view.authorized=true;view.startup={};
     view.sidebarTexture=allowedTexture=reinterpret_cast<ImTextureID>(static_cast<std::uintptr_t>(texture.id));
-    view.sidebarUv0={texture.u0,texture.v1};view.sidebarUv1={texture.u1,texture.v0};
+    view.sidebarUv0=ImVec2(texture.u0,texture.v1);view.sidebarUv1=ImVec2(texture.u1,texture.v0);
     Frame();Frame();
     glClearColor(.12f,.13f,.14f,1);glClear(GL_COLOR_BUFFER_BIT);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     unsigned char actual[4];
-    glReadPixels(int(pos.x+layout.sidebar*.5f),720-int(pos.y+layout.size.y-20.f),1,1,GL_RGBA,GL_UNSIGNED_BYTE,actual);
+    glReadPixels(int(pos.x+layout.rail*.5f),720-int(pos.y+layout.size.y-layout.footer-20.f),1,1,GL_RGBA,GL_UNSIGNED_BYTE,actual);
     for(int channel=0;channel<3;++channel) {
         double expected=pixels[center+channel];
-        for(int index=12;index>=1;--index) {
-            const double t=double(index)/12.;
-            const int alpha=int(.18*(1.-t)*(1.-t)*255.);
-            expected=std::round(expected*(1.-double(alpha)/255.));
-        }
-        expected=std::round(expected*(1.-160./255.)+(channel==2?10.:8.)*(160./255.));
+        expected=std::round(expected*(1.-155./255.)+(channel==2?32.:channel==1?12.:14.)*(155./255.));
         assert(std::fabs(actual[channel]-expected)<=3.);
     }
     lite_blur::Release();
@@ -167,7 +162,7 @@ void ValidateSidebarReference() {
     assert(at(edge,edgePixels,300)<=2);
     assert(glGetError()==GL_NO_ERROR);
     lite_blur::Release();view.sidebarTexture=allowedTexture=nullptr;
-    std::puts("Sidebar reference: original 13-tap brightness, 12-layer shadow/tint color within 3/255, padded crop UVs and filtering beyond both pane edges passed");
+    std::puts("Sidebar reference: original 13-tap brightness, single-layer shadow/tint color within 3/255, padded crop UVs and filtering beyond both pane edges passed");
 }
 void PrepareSidebar() {
     view.sidebarTexture=allowedTexture=nullptr;
@@ -175,9 +170,9 @@ void PrepareSidebar() {
     Backdrop();
     const auto layout=lite_ui::MenuLayout(state,ImGui::GetIO().DisplaySize);
     const auto pos=state.placement.Position(ImGui::GetIO().DisplaySize,layout.size);
-    const auto texture=lite_blur::Capture({pos.x,pos.y,layout.sidebar,layout.size.y},
+    const auto texture=lite_blur::Capture({pos.x,pos.y,layout.rail,layout.size.y},
         int(ImGui::GetIO().DisplaySize.x),int(ImGui::GetIO().DisplaySize.y),ImGui::GetTime());
     assert(texture.id);
     view.sidebarTexture=allowedTexture=reinterpret_cast<ImTextureID>(static_cast<std::uintptr_t>(texture.id));
-    view.sidebarUv0={texture.u0,texture.v1};view.sidebarUv1={texture.u1,texture.v0};
+    view.sidebarUv0=ImVec2(texture.u0,texture.v1);view.sidebarUv1=ImVec2(texture.u1,texture.v0);
 }

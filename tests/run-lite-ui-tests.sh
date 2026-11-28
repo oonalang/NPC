@@ -23,5 +23,6 @@ fi
     "$project_dir/src/main/jni/Trigger/TriggerRuntime.cpp" \
     "$project_dir/src/main/jni/ImGui/imgui.cpp" "$project_dir/src/main/jni/ImGui/imgui_draw.cpp" \
     "$project_dir/src/main/jni/ImGui/imgui_widgets.cpp" "$project_dir/src/main/jni/ImGui/imgui_tables.cpp" \
+    "$project_dir/src/main/jni/ImGui/stb_image.cpp" \
     $extra_sources -Wl,--gc-sections -lpthread $extra_libraries -o "$test_binary"
 ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=0}" MESA_SHADER_CACHE_DISABLE=true "$test_binary" "$project_dir" "${1:-${TMPDIR:-/tmp}/ethnir-lite-frames}"

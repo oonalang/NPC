@@ -1,6 +1,7 @@
 #pragma once
 #include "Widgets.h"
 #include "SidebarStyle.h"
+#include "LogoVideo.h"
 #include "RestoreGesture.h"
 #include "WindowPlacement.h"
 #include "StartupView.h"
@@ -194,12 +195,14 @@ inline void Rail(State& state, const View& view) {
     const float width = ImGui::GetContentRegionAvail().x;
     const float logo = 26.f * scale;
     const ImVec2 logoLo(origin.x + (width - logo) * .5f, origin.y + 14.f * scale);
-    draw->AddRectFilled(logoLo, logoLo + ImVec2(logo, logo), Fade(lite_colors::Accent), 8.f * scale);
-    const auto* font = ImGui::GetFont();
-    const auto measured = font->CalcTextSizeA(15.f * scale, FLT_MAX, 0, "E");
-    draw->AddText(font, 15.f * scale,
-        ImVec2(logoLo.x + (logo - measured.x) * .5f, logoLo.y + (logo - measured.y) * .5f),
-        Fade(lite_colors::AccentInk), "E");
+    const ImVec2 logoHi = logoLo + ImVec2(logo, logo);
+    const float logoRounding = 8.f * scale;
+    if (const auto texture = lite_logo::Ensure()) {
+        ImVec2 uv0, uv1;
+        lite_logo::Uv(lite_logo::Frame(ImGui::GetTime(), view.startup.reducedMotion), uv0, uv1);
+        draw->AddImageRounded(texture, logoLo, logoHi, uv0, uv1, IM_COL32_WHITE, logoRounding);
+    } else draw->AddRectFilled(logoLo, logoHi, Fade(lite_colors::Card), logoRounding);
+    draw->AddRect(logoLo, logoHi, Fade(lite_colors::CardBorder), logoRounding, 0, ImMax(1.f, scale));
     const float pitch = 42.f * scale;
     float y = origin.y + 54.f * scale;
     for (int index = 0; index < 7; ++index) {
@@ -285,7 +288,7 @@ inline float Header(State& state, const Layout& layout) {
     return y > origin.y + 40.f * scale ? 118.f * scale : 76.f * scale;
 }
 
-inline void Footer(State& state, const View& view) {
+inline void Footer(State& state, const View&) {
     const auto scale = lite_widgets::scale;
     auto* draw = ImGui::GetWindowDrawList();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -293,21 +296,25 @@ inline void Footer(State& state, const View& view) {
     draw->AddLine(origin, {origin.x + size.x, origin.y}, Fade(lite_colors::CardBorder));
     const auto* font = ImGui::GetFont();
     const float middle = origin.y + size.y * .5f;
-    const auto baseline = [&](float size12) { return middle - size12 * .5f; };
-    draw->AddText(font, 12.f * scale, {origin.x + 18.f * scale, baseline(12.f * scale)},
-        Fade(lite_colors::TextBright), "ethnir lite");
-    const float nameWidth = font->CalcTextSizeA(12.f * scale, FLT_MAX, 0, "ethnir lite").x;
-    draw->AddText(font, 12.f * scale, {origin.x + 18.f * scale + nameWidth + 12.f * scale, baseline(12.f * scale)},
-        Fade(lite_colors::TextDim), "Version 1.0");
+    const char* name = "SHAINIME";
+    const auto nameSize = font->CalcTextSizeA(12.f * scale, FLT_MAX, 0, name);
+    draw->AddText(font, 12.f * scale, {origin.x + 18.f * scale, middle - nameSize.y * .5f},
+        Fade(lite_colors::TextBright), name);
+    const char* version = "v1.0";
+    const auto versionSize = font->CalcTextSizeA(11.f * scale, FLT_MAX, 0, version);
+    draw->AddText(font, 11.f * scale,
+        {origin.x + 18.f * scale + nameSize.x + 12.f * scale, middle - versionSize.y * .5f},
+        Fade(lite_colors::TextDim), version);
     const char* hint = "swipe up from the bottom";
-    const float hintWidth = font->CalcTextSizeA(11.f * scale, FLT_MAX, 0, hint).x;
-    const bool showHint = size.x > hintWidth + 190.f * scale;
-    if (showHint) draw->AddText(font, 11.f * scale, {origin.x + size.x - 18.f * scale - hintWidth, baseline(11.f * scale)},
+    const auto hintSize = font->CalcTextSizeA(11.f * scale, FLT_MAX, 0, hint);
+    const bool showHint = size.x > hintSize.x + 190.f * scale;
+    if (showHint) draw->AddText(font, 11.f * scale,
+        {origin.x + size.x - 18.f * scale - hintSize.x, middle - hintSize.y * .5f},
         Fade(lite_colors::TextDim), hint);
     const char* label = "Hide";
-    const float labelWidth = font->CalcTextSizeA(11.f * scale, FLT_MAX, 0, label).x;
-    const ImVec2 badge(labelWidth + 20.f * scale, 22.f * scale);
-    ImGui::SetCursorScreenPos({origin.x + size.x - 18.f * scale - (showHint ? hintWidth + 12.f * scale : 0.f) - badge.x,
+    const auto labelSize = font->CalcTextSizeA(11.f * scale, FLT_MAX, 0, label);
+    const ImVec2 badge(labelSize.x + 20.f * scale, 22.f * scale);
+            ImGui::SetCursorScreenPos({origin.x + size.x - 18.f * scale - (showHint ? hintSize.x + 12.f * scale : 0.f) - badge.x,
         middle - badge.y * .5f});
     const bool pressed = lite_widgets::Tap(ImGui::InvisibleButton("##hide_lite", badge));
     const bool hovered = ImGui::IsItemHovered();
@@ -315,7 +322,7 @@ inline void Footer(State& state, const View& view) {
     draw->AddRectFilled(badgeLo, badgeLo + badge, hovered ? IM_COL32(255, 255, 255, 16) : IM_COL32(255, 255, 255, 8),
         7.f * scale);
     draw->AddRect(badgeLo, badgeLo + badge, Fade(lite_colors::CardBorder), 7.f * scale);
-    draw->AddText(font, 11.f * scale, {badgeLo.x + 10.f * scale, badgeLo.y + (badge.y - 11.f * scale * 1.1f) * .5f},
+    draw->AddText(font, 11.f * scale, {badgeLo.x + 10.f * scale, badgeLo.y + (badge.y - labelSize.y) * .5f},
         Fade(hovered ? lite_colors::TextBright : lite_colors::Text), label);
     if (pressed) { state.minimized = true; keyboard = false; }
 }
@@ -332,14 +339,6 @@ inline void StatusPanel(const View& view) {
     lite_widgets::InfoRow("Plan", view.plan && *view.plan ? view.plan : "Free", lite_colors::Accent);
     lite_widgets::InfoRow("Expires", view.expiry && *view.expiry ? view.expiry : "No active license",
         lite_colors::Text);
-}
-
-inline void ShortcutsPanel() {
-    lite_widgets::InfoRow("Move", "drag the title", lite_colors::Text);
-    lite_widgets::InfoRow("Resize", "menu size", lite_colors::Text);
-    lite_widgets::InfoRow("Hide", "swipe up", lite_colors::Text);
-    ImGui::Dummy({0, 6.f * lite_widgets::scale});
-    ImGui::TextWrapped("Settings keep the interface readable on small screens.");
 }
 
 inline void Combo(const char* label, int& value, const char* const* items, int count) {
@@ -413,50 +412,49 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
     if (!view.ready) {
         const auto display = ImGui::GetIO().DisplaySize;
         const bool error = view.error && *view.error;
-        const ImVec2 size(ImMin(view.authorized?340.f:380.f,display.x-24.f),
-            ImMin(view.authorized?288.f:(error?344.f:302.f),display.y-24.f));
+        const ImVec2 size(ImMin(view.authorized?360.f:440.f,display.x-24.f),
+            ImMin(view.authorized?300.f:(error?374.f:330.f),display.y-24.f));
         const float alpha = view.authorized && view.startup.active && !view.startup.reducedMotion ?
             lite_startup::Ease(float(view.startup.elapsed/lite_startup::introFadeSeconds))*(1.f-lite_startup::Ease((view.startup.finish-.88f)/.12f)) : 1.f;
         ImGui::SetNextWindowPos(display*.5f, ImGuiCond_Always, {.5f,.5f});
         ImGui::SetNextWindowSize(size, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {24,22});
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha,ImGui::GetStyle().Alpha*alpha);
-        ImGui::Begin("ETHNIR LITE##login", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+        ImGui::Begin("SHAINIME##login", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground);
         ImGui::SetWindowFontScale(1.f);
         lite_widgets::scale = 1.f;
-        lite_startup::Card();
+        lite_startup::Card(view.startup.reducedMotion);
         if (view.authorized) lite_startup::Loading(view.titleFont,view.preparation,view.startup);
         else {
             const auto pos = ImGui::GetWindowPos();
             const ImVec2 center(pos.x+size.x*.5f,pos.y);
-            lite_startup::Centered(view.titleFont,26,{center.x,pos.y+23},"ETHNIR",lite_startup::Ink(242));
-            lite_startup::Edition(center,pos.y+56);
-            lite_startup::Centered(nullptr,12,{center.x,pos.y+80},view.pending?"Checking your access":"Sign in to continue",lite_startup::Ink(136));
-            ImGui::SetCursorPos({24,105});
+            lite_startup::Header(view.titleFont,view.pending);
+            ImGui::SetCursorPos({24,118});
             ImGui::BeginDisabled(view.pending);
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,{12,10});
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,6.f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,10.f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize,1.6f);
             Input("Access key",key,capacity);
-            ImGui::PopStyleVar(2);
-            ImGui::SetCursorPos({24,171});
+            ImGui::PopStyleVar(3);
+            ImGui::SetCursorPos({24,184});
             const float half = (ImGui::GetContentRegionAvail().x-8.f)*.5f;
             actions.paste = lite_startup::Secondary("Paste key",{half,28});
             ImGui::SameLine(0,8);
             actions.loadKey = lite_startup::Secondary("Load saved",{half,28});
             ImGui::EndDisabled();
-            ImGui::SetCursorPos({24,211});
+            ImGui::SetCursorPos({24,226});
             ImGui::PushItemFlag(ImGuiItemFlags_Disabled,view.pending);
             actions.submit = lite_startup::Primary("Authenticate",view.pending,view.startup.reducedMotion,
                 {ImGui::GetContentRegionAvail().x,38});
             ImGui::PopItemFlag();
             if (error) {
-                ImGui::SetCursorPos({24,263});
-                ImGui::BeginChild("##login_error",{size.x-48,ImMax(20.f,size.y-275)},false,
+                ImGui::SetCursorPos({24,284});
+                ImGui::BeginChild("##login_error",{size.x-48,ImMax(20.f,size.y-296)},false,
                     ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
                 ImGui::TextWrapped("%s",view.error);
                 ImGui::EndChild();
-            } else lite_startup::Centered(nullptr,11,{center.x,pos.y+270},"Secure access",lite_startup::Ink(100));
+            } else lite_startup::Centered(nullptr,11,{center.x,pos.y+294},"Secure access",lite_startup::Ink(100));
         }
         ImGui::End();
         ImGui::PopStyleVar(2);
@@ -467,13 +465,13 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::SetNextWindowPos(menuPos,ImGuiCond_Always);
         ImGui::SetNextWindowSize(layout.size, ImGuiCond_Always);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0,0});
-        ImGui::Begin("ETHNIR LITE##menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGui::Begin("SHAINIME##menu", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove |
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBringToFrontOnFocus);
         lite_widgets::SetFontScale();
         const auto pos = ImGui::GetWindowPos();
-        lite_sidebar::Surface(pos,layout.size,layout.rail,view.sidebarTexture,view.sidebarUv0,view.sidebarUv1);
         const float bodyHeight = ImMax(1.f, layout.size.y - layout.footer);
+        lite_sidebar::Surface(pos,layout.size,layout.rail,bodyHeight,view.sidebarTexture,view.sidebarUv0,view.sidebarUv1);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
         ImGui::BeginChild("##sidebar", {layout.rail,bodyHeight}, false,
             ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding);
@@ -494,7 +492,7 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         const bool skins = state.tab == Tab::Skins;
         const float topHeight = skins ? ImMin(220.f*layout.scale, ImMax(150.f*layout.scale, cardHeight*.46f)) : cardHeight;
         const auto fit = [&](float) { return topHeight; };
-        const float sideHeight = skins ? topHeight : ImMin(184.f*layout.scale, (cardHeight - 14.f*layout.scale)*.48f);
+        const float sideHeight = skins ? topHeight : (layout.narrow ? ImMin(200.f*layout.scale, cardHeight) : cardHeight);
         const float cardGap = 10.f*layout.scale;
         const int columns = layout.narrow ? 1 : 2;
         ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(0,0));
@@ -631,20 +629,12 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
                     });
                     break;
             }
-            const float shortcuts = ImMax(60.f*layout.scale, cardHeight - sideHeight - 14.f*layout.scale);
             if (columns > 1) {
                 ImGui::TableNextColumn();
                 ImGui::SetCursorScreenPos(ImGui::GetCursorScreenPos() + ImVec2(cardGap, 0));
                 if (lite_widgets::BeginPanel("status", {0, sideHeight}, 0, "Status")) StatusPanel(view);
                 lite_widgets::EndPanel();
-                if (!skins) {
-                    if (lite_widgets::BeginPanel("shortcuts", {0, shortcuts}, 0, "Shortcuts")) ShortcutsPanel();
-                    lite_widgets::EndPanel();
-                }
-            } else if (!skins) {
-                Panel("status", "Status", sideHeight, [&] { StatusPanel(view); });
-                Panel("shortcuts", "Shortcuts", shortcuts, [] { ShortcutsPanel(); });
-            }
+            } else Panel("status", "Status", sideHeight, [&] { StatusPanel(view); });
             ImGui::EndTable();
         }
         ImGui::PopStyleVar();
@@ -664,7 +654,7 @@ inline Actions Draw(State& state, const View& view, char* key, std::size_t capac
         ImGui::PopStyleVar();
         ImGui::PopItemFlag();
         if (view.startup.reveal < 1.f) for (auto* window : GImGui->Windows) {
-            if (!window->Active || std::strcmp(window->RootWindow->Name,"ETHNIR LITE##menu")) continue;
+            if (!window->Active || std::strcmp(window->RootWindow->Name,"SHAINIME##menu")) continue;
             for (auto& vertex : window->DrawList->VtxBuffer) {
                 const unsigned alpha = static_cast<unsigned>((vertex.col>>24)*view.startup.reveal);
                 vertex.col = (vertex.col&0x00ffffffu)|(alpha<<24);

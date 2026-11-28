@@ -52,7 +52,8 @@ void CheckFrame() {
         for (const auto& vertex : list->VtxBuffer) assert(std::isfinite(vertex.pos.x) && std::isfinite(vertex.pos.y));
         for (const auto& command : list->CmdBuffer) {
             assert(command.UserCallback == nullptr);
-            assert(command.TextureId == ImGui::GetIO().Fonts->TexID || (allowedTexture && command.TextureId == allowedTexture));
+            assert(command.TextureId == ImGui::GetIO().Fonts->TexID || (allowedTexture && command.TextureId == allowedTexture) ||
+                (lite_logo::Texture() && command.TextureId == lite_logo::Texture()));
             assert(command.IdxOffset + command.ElemCount <= static_cast<unsigned>(list->IdxBuffer.Size));
             for (unsigned at = command.IdxOffset; at < command.IdxOffset + command.ElemCount; ++at)
                 assert(list->IdxBuffer[at] + command.VtxOffset < static_cast<unsigned>(list->VtxBuffer.Size));
@@ -94,13 +95,13 @@ void ValidateLayouts() {
             for (int tab = 0; tab < 7; ++tab) {
                 state.tab = static_cast<lite_ui::Tab>(tab);
                 Frame(); Frame();
-                auto* root = Find("ETHNIR LITE##menu");
+                auto* root = Find("SHAINIME##menu");
                 assert(root && root->Pos.x >= 0 && root->Pos.y >= 0);
                 assert(root->Pos.x + root->Size.x <= size.x && root->Pos.y + root->Size.y <= size.y);
                 assert(root->Flags & ImGuiWindowFlags_NoMove);
                 assert(!Find("ESP PREVIEW"));
                 for (const auto* child : GImGui->Windows) if (child->Active && child->ParentWindow &&
-                    std::strstr(child->Name,"ETHNIR LITE##menu/"))
+                    std::strstr(child->Name,"SHAINIME##menu/"))
                     assert(std::fabs(child->CalcFontSize()-17.f*lite_widgets::scale)<.1f);
             }
         }
@@ -176,7 +177,7 @@ void ValidateStartup() {
     for (bool pending : {false,true}) {
         view.pending = pending;
         Frame(); Frame();
-        const auto* login = Find("ETHNIR LITE##login");
+        const auto* login = Find("SHAINIME##login");
         assert(login);
         const auto center = login->Pos + login->Size*.5f;
         assert(ImLengthSqr(center-io.DisplaySize*.5f) < 1.f);
@@ -186,9 +187,9 @@ void ValidateStartup() {
         }
     }
     view.authorized = true; view.pending = false; view.preparation = 2.f/3.f;
-    Frame(); assert(!Find("ETHNIR LITE##menu"));
+    Frame(); assert(!Find("SHAINIME##menu"));
     assert(previousMusic == musicCalls && previousSkins == skinCalls);
-    view.ready = true; Frame(); assert(Find("ETHNIR LITE##menu"));
+    view.ready = true; Frame(); assert(Find("SHAINIME##menu"));
     std::puts("Login stays centered, pending controls stay blocked, and menu callbacks wait for feature preparation");
 }
 ImRect checkRect, sliderRect, buttonRect, inputRect, comboRect, choiceRect;
@@ -300,6 +301,19 @@ void ValidateBindings() {
     state = {}; Frame(); Frame();
     std::puts("Source-derived controls bind the existing Config fields; the visual-work gate includes style-only ESP");
 }
+void ValidateLogoVideo() {
+    assert(lite_logo::Frame(0., false) == 0);
+    assert(lite_logo::Frame(1.2, true) == 0);
+    assert(lite_logo::Frame(lite_logo::duration * 54.5 / lite_logo::frameCount, false) == 54);
+    assert(lite_logo::Frame(lite_logo::duration - .001, false) == lite_logo::frameCount - 1);
+    assert(lite_logo::Frame(lite_logo::duration + .01, false) == 0);
+    ImVec2 lo, hi;
+    lite_logo::Uv(0, lo, hi);
+    assert(lo.x >= 0.f && lo.y >= 0.f && lo.x < hi.x && lo.y < hi.y);
+    lite_logo::Uv(lite_logo::frameCount - 1, lo, hi);
+    assert(hi.x <= 1.f && hi.y <= 1.f && lo.x < hi.x && lo.y < hi.y);
+}
+
 void ValidateBudget() {
     auto& io = ImGui::GetIO(); io.DisplaySize = {1280,720}; state = {}; view.ready = true;
     for (int i = 0; i < 150; ++i) Frame();
@@ -460,7 +474,7 @@ int main(int argc, char** argv) {
     } else
 #endif
     {
-    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateKeyboard(); ValidateMenuSize(); ValidateBudget();
+    ValidateLayouts(); ValidateMotion(); ValidateStartup(); ValidateTouch(); ValidatePolledTouch(); ValidateNestedPan(); ValidateRestore(); ValidateRouting(); ValidateMenuDrag(); ValidateBindings(); ValidateDiagnostics(); ValidateKeyboard(); ValidateMenuSize(); ValidateLogoVideo(); ValidateBudget();
 #ifdef LITE_GPU_TEST
     assert(argc >= 3); const std::filesystem::path output = argv[2]; std::filesystem::create_directories(output);
     ValidateBlur();ValidateSidebarReference();

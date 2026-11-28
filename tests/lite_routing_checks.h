@@ -59,7 +59,7 @@ void ValidateMenuDrag() {
     auto& io=ImGui::GetIO();io.DisplaySize={1280,720};
     const bool trickle=io.ConfigInputTrickleEventQueue;lite_touch::Input::Configure(io);
     io.AddMouseSourceEvent(ImGuiMouseSource_TouchScreen);state={};view.ready=view.authorized=view.interactive=true;view.startup={};
-    Frame();Frame();auto* root=Find("ETHNIR LITE##menu");assert(root);
+    Frame();Frame();auto* root=Find("SHAINIME##menu");assert(root);
     const auto original=root->Pos;
     const auto start=original+ImVec2(35,35);
     io.AddMousePosEvent(start.x,start.y);io.AddMouseButtonEvent(0,true);Frame();
