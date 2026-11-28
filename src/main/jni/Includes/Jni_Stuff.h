@@ -377,6 +377,21 @@ inline CURLcode LoadAndroidTrustStore(CURL *  , void *sslContext, void *
     return loaded > 0 ? CURLE_OK : CURLE_SSL_CACERT;
 }
 
+static std::string LicenseResponseDiagnostic(const char* reason, long status, const char* contentType, const char* body, size_t length) {
+    const std::string type=contentType?contentType:"";
+    const char* media=type.empty()?"none":type.find("json")!=std::string::npos?"json":
+        type.find("html")!=std::string::npos?"html":type.find("text/")!=std::string::npos?"text":"other";
+    const char* shape="other";
+    size_t start=0;
+    while(start<length&&(body[start]==' '||body[start]=='\t'||body[start]=='\r'||body[start]=='\n')) ++start;
+    if(start==length) shape="empty";
+    else if(length>=2&&static_cast<unsigned char>(body[0])==0x1f&&static_cast<unsigned char>(body[1])==0x8b) shape="gzip";
+    else if(body[start]=='<') shape="markup";
+    else if(body[start]=='{'||body[start]=='[') shape="json-like";
+    return std::string("Invalid license response [YH-")+reason+", HTTP "+std::to_string(status)+
+        ", "+std::to_string(length)+" B, "+media+"/"+shape+"]";
+}
+
 static license::Response FetchLicense(const license::Request& request) {
     license::Response response;
     MemoryStruct chunk{};
@@ -419,9 +434,11 @@ static license::Response FetchLicense(const license::Request& request) {
     } else if(status!=200) {
         response.error="License server rejected the request";
     } else {
+        char* contentType=nullptr;
+        curl_easy_getinfo(curl,CURLINFO_CONTENT_TYPE,&contentType);
         const auto value=json::parse(chunk.memory,chunk.memory+chunk.size,nullptr,false);
         if(!value.is_object()||!value.contains("status")||!value["status"].is_boolean()) {
-            response.error="Invalid license response";
+            response.error=LicenseResponseDiagnostic(value.is_discarded()?"D1":"D2",status,contentType,chunk.memory,chunk.size);
         } else if(!value["status"].get<bool>()) {
             response.error=value.contains("reason")&&value["reason"].is_string()?value["reason"].get<std::string>():"License rejected";
             if(response.error.size()>256) response.error="License rejected";
@@ -431,7 +448,7 @@ static license::Response FetchLicense(const license::Request& request) {
                 response.payload=data["payload"].get<std::string>();response.signature=data["sig"].get<std::string>();
                 response.failure=license::Failure::None;
             } else response.error="Client and license panel must both support session protocol v2";
-        } else response.error="Invalid license response";
+        } else response.error=LicenseResponseDiagnostic("D3",status,contentType,chunk.memory,chunk.size);
     }
     curl_slist_free_all(headers);curl_easy_cleanup(curl);free(chunk.memory);
     return response;
